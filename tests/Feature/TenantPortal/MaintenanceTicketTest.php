@@ -122,7 +122,7 @@ test('tenant cannot submit a maintenance ticket without an active lease', functi
             'title' => 'Leaking faucet',
             'location_type' => 'unit',
         ])
-        ->assertStatus(422);
+        ->assertSessionHasErrors(['title']);
 
     expect(MaintenanceTicket::count())->toBe(0);
 });

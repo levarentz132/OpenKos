@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\TenantPortal;
 
+use App\Enums\MaintenancePriority;
 use App\Enums\MaintenanceStatus;
 use App\Events\Maintenance\MaintenanceTicketCreated;
 use App\Models\MaintenanceTicket;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -57,7 +59,11 @@ class MaintenanceTicketController extends TenantPortalController
         $tenant = $this->tenant($request);
         $lease = $tenant->leases()->active()->with('unit')->first();
 
-        abort_unless($lease, 422, __('You need an active lease to report maintenance.'));
+        if (! $lease) {
+            throw ValidationException::withMessages([
+                'title' => __('You need an active lease to report maintenance.'),
+            ]);
+        }
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -74,7 +80,7 @@ class MaintenanceTicketController extends TenantPortalController
             'location' => $isUnit ? null : $validated['location'],
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
-            'priority' => 'medium',
+            'priority' => MaintenancePriority::Medium->value,
             'status' => MaintenanceStatus::Reported->value,
             'created_by' => $request->user()->id,
         ]);
@@ -93,7 +99,7 @@ class MaintenanceTicketController extends TenantPortalController
     {
         $tenant = $this->tenant($request);
         
-        abort_unless((int) $ticket->created_by === $request->user()->id, 403);
+        abort_unless($ticket->created_by === $request->user()->id, 403);
 
         $ticket->load(['property:id,name', 'unit:id,name', 'assignee:id,name']);
 
