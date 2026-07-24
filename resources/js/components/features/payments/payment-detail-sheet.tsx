@@ -37,7 +37,10 @@ export default function PaymentDetailSheet({
                 <SheetHeader>
                     <SheetTitle>
                         {payment?.invoice
-                            ? formatPeriod(payment.invoice.period_start, 'id-ID')
+                            ? formatPeriod(
+                                  payment.invoice.period_start,
+                                  'id-ID',
+                              )
                             : 'Payment'}
                     </SheetTitle>
                 </SheetHeader>
@@ -83,7 +86,9 @@ export default function PaymentDetailSheet({
                                     />
                                     <DetailRow
                                         label="Reference"
-                                        value={payment.invoice?.reference ?? '—'}
+                                        value={
+                                            payment.invoice?.reference ?? '—'
+                                        }
                                     />
                                     <DetailRow
                                         label="Confirmed by"
@@ -121,7 +126,10 @@ export default function PaymentDetailSheet({
                                                     variant="outline"
                                                     size="xs"
                                                     onClick={() =>
-                                                        onPreview(payment, proof)
+                                                        onPreview(
+                                                            payment,
+                                                            proof,
+                                                        )
                                                     }
                                                 >
                                                     <FileText className="size-3" />

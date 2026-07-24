@@ -83,9 +83,9 @@ export default function InviteToAppSheet({
                 <SheetHeader>
                     <SheetTitle>Invite to App</SheetTitle>
                     <SheetDescription>
-                        Add an email to send this tenant notifications. Optionally
-                        invite them to activate a portal account for payments,
-                        invoices, and lease details.
+                        Add an email to send this tenant notifications.
+                        Optionally invite them to activate a portal account for
+                        payments, invoices, and lease details.
                     </SheetDescription>
                 </SheetHeader>
 
@@ -112,9 +112,9 @@ export default function InviteToAppSheet({
                                     Send activation invite
                                 </Label>
                                 <p className="text-xs text-muted-foreground">
-                                    Emails the tenant a link to set a password and
-                                    access the portal. Leave off to only save the
-                                    email for notifications.
+                                    Emails the tenant a link to set a password
+                                    and access the portal. Leave off to only
+                                    save the email for notifications.
                                 </p>
                             </div>
                             <Switch

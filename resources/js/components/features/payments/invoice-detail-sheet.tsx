@@ -14,11 +14,7 @@ import { formatDate, formatPeriod, formatPrice } from '@/lib/formatters';
 import leases from '@/routes/leases';
 import leaseInvoices from '@/routes/leases/workspace/invoices';
 import paymentRoutes from '@/routes/payments';
-import type {
-    NeedsAttentionInvoice,
-    Payment,
-    PaymentProof,
-} from '@/types';
+import type { NeedsAttentionInvoice, Payment, PaymentProof } from '@/types';
 import PaymentDetailSheet from './payment-detail-sheet';
 
 export default function InvoiceDetailSheet({
@@ -43,19 +39,23 @@ export default function InvoiceDetailSheet({
         name: string;
     } | null>(null);
     const canVerify = auth.permissions.includes('payments.verify');
-    const selectedPaymentData = invoice?.payments?.find((payment) => payment.id === selectedPaymentId);
-    const selectedPayment = (selectedPaymentData && invoice
-        ? {
-              ...selectedPaymentData,
-              invoice: {
-                  id: invoice.id,
-                  reference: invoice.reference,
-                  period_start: invoice.period_start,
-                  period_end: invoice.period_end,
-                  status: invoice.status,
-              },
-          }
-        : null) as Payment | null;
+    const selectedPaymentData = invoice?.payments?.find(
+        (payment) => payment.id === selectedPaymentId,
+    );
+    const selectedPayment = (
+        selectedPaymentData && invoice
+            ? {
+                  ...selectedPaymentData,
+                  invoice: {
+                      id: invoice.id,
+                      reference: invoice.reference,
+                      period_start: invoice.period_start,
+                      period_end: invoice.period_end,
+                      status: invoice.status,
+                  },
+              }
+            : null
+    ) as Payment | null;
     const paymentDetailOpen =
         selectedPaymentId !== null && selectedPayment !== null;
 
@@ -138,9 +138,7 @@ export default function InvoiceDetailSheet({
                                         />
                                         <DetailRow
                                             label="Due date"
-                                            value={formatDate(
-                                                invoice.due_date,
-                                            )}
+                                            value={formatDate(invoice.due_date)}
                                         />
                                         <DetailRow
                                             label="Lease"

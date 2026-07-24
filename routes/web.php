@@ -50,6 +50,12 @@ Route::middleware(['auth', 'verified'])->prefix('portal')->name('portal.')->grou
             Route::get('/', [TenantPortalLeaseController::class, 'show'])->name('show');
         });
     });
+
+    Route::prefix('maintenance-tickets')->name('maintenance-tickets.')->group(function () {
+        Route::get('/', [App\Http\Controllers\TenantPortal\MaintenanceTicketController::class, 'index'])->name('index');
+        Route::post('/', [App\Http\Controllers\TenantPortal\MaintenanceTicketController::class, 'store'])->name('store');
+        Route::get('{ticket}', [App\Http\Controllers\TenantPortal\MaintenanceTicketController::class, 'show'])->name('show');
+    });
 });
 
 Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(function () {

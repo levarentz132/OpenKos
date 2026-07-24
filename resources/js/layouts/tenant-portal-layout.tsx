@@ -29,6 +29,7 @@ const navigationItems = [
     { title: 'Dashboard', href: dashboard(), exact: true },
     { title: 'Leases', href: leases() },
     { title: 'Billing', href: billing() },
+    { title: 'Maintenance', href: '/portal/maintenance-tickets' },
 ];
 
 export default function TenantPortalLayout({ children }: AppLayoutProps) {

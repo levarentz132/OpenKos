@@ -47,7 +47,10 @@ const activeItemStyles =
     'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';
 
 export function AppHeader({ breadcrumbs = [] }: Props) {
-    const { auth, setting } = usePage<{ auth: Auth; setting: { site_name: string } }>().props;
+    const { auth, setting } = usePage<{
+        auth: Auth;
+        setting: { site_name: string };
+    }>().props;
     const getInitials = useInitials();
     const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
 
@@ -95,7 +98,6 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                                 </Link>
                                             ))}
                                         </div>
-
                                     </div>
                                 </div>
                             </SheetContent>
@@ -153,7 +155,6 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                             >
                                 <Search className="!size-5 opacity-80 group-hover:opacity-100" />
                             </Button>
-
                         </div>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>

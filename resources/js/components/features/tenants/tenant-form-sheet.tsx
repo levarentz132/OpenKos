@@ -138,9 +138,9 @@ export default function TenantFormSheet({
                                         Send activation invite
                                     </Label>
                                     <p className="text-xs text-muted-foreground">
-                                        Emails a link to set a password and access
-                                        the portal. Leave off to only save the email
-                                        for notifications.
+                                        Emails a link to set a password and
+                                        access the portal. Leave off to only
+                                        save the email for notifications.
                                     </p>
                                 </div>
                                 <Switch

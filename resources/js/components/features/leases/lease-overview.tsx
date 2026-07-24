@@ -190,7 +190,10 @@ export default function LeaseOverview({ lease }: { lease: Lease }) {
                                     Billing strategy
                                 </span>
                                 <span className="text-xs font-medium">
-                                    {BILLING_STRATEGIES.find((s) => s.value === lease.billing_strategy)?.label ?? 'Advance (due within period)'}
+                                    {BILLING_STRATEGIES.find(
+                                        (s) =>
+                                            s.value === lease.billing_strategy,
+                                    )?.label ?? 'Advance (due within period)'}
                                 </span>
                             </div>
                             <div className="flex items-center justify-between text-sm">

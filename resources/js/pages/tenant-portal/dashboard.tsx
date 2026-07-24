@@ -80,7 +80,9 @@ export default function Dashboard({
 
             <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 p-4">
                 <div>
-                    <h1 className="text-xl font-semibold text-balance">Dashboard</h1>
+                    <h1 className="text-xl font-semibold text-balance">
+                        Dashboard
+                    </h1>
                     <p className="mt-1 text-sm text-muted-foreground">
                         Overview of your stay and billing.
                     </p>
@@ -139,9 +141,13 @@ function CurrentPaymentCard({
                     </div>
                     {nextAction.pending_payment && (
                         <p className="text-sm text-muted-foreground">
-                            A payment of {formatPrice(nextAction.pending_payment.amount)}
-                            {' '}submitted {formatDate(nextAction.pending_payment.payment_date)}
-                            {' '}is awaiting verification.
+                            A payment of{' '}
+                            {formatPrice(nextAction.pending_payment.amount)}{' '}
+                            submitted{' '}
+                            {formatDate(
+                                nextAction.pending_payment.payment_date,
+                            )}{' '}
+                            is awaiting verification.
                         </p>
                     )}
                     <Button asChild size="sm">
@@ -164,9 +170,12 @@ function CurrentPaymentCard({
                 <CardContent className="space-y-3 px-5">
                     <StatusBadge domain="tenant_payment" value="pending" />
                     <p className="text-sm text-muted-foreground">
-                        Your payment of {formatPrice(nextAction.pending_payment.amount)}
-                        {' '}submitted {formatDate(nextAction.pending_payment.payment_date)}
-                        {' '}is being reviewed. You do not need to do anything right now.
+                        Your payment of{' '}
+                        {formatPrice(nextAction.pending_payment.amount)}{' '}
+                        submitted{' '}
+                        {formatDate(nextAction.pending_payment.payment_date)} is
+                        being reviewed. You do not need to do anything right
+                        now.
                     </p>
                     <Button asChild size="sm" variant="outline">
                         <Link href={billingIndex()}>
@@ -260,7 +269,13 @@ function AccountSummaryCard({
     );
 }
 
-function ActiveStayCard({ lease, className }: { lease: Lease; className: string }) {
+function ActiveStayCard({
+    lease,
+    className,
+}: {
+    lease: Lease;
+    className: string;
+}) {
     return (
         <Card className={`gap-4 py-5 ${className}`}>
             <CardHeader className="px-5 pb-0">
@@ -269,7 +284,8 @@ function ActiveStayCard({ lease, className }: { lease: Lease; className: string 
             <CardContent className="space-y-3 px-5">
                 <div className="flex items-start justify-between gap-3">
                     <p className="font-medium">
-                        {lease.unit?.name ?? '—'} · {lease.unit?.property?.name ?? '—'}
+                        {lease.unit?.name ?? '—'} ·{' '}
+                        {lease.unit?.property?.name ?? '—'}
                     </p>
                     <StatusBadge domain="lease" value={lease.status} />
                 </div>
