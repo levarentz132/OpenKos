@@ -306,15 +306,18 @@ export default function Index({
 
                         {!t.deleted_at && <DropdownMenuSeparator />}
 
-                        {permissions.includes('tenants.invite') && !t.deleted_at && !t.user_id && (
-                            <DropdownMenuItem
-                                onClick={() => setInviteTenant(t)}
-                            >
-                                <MailPlus className="size-4" />
-                                Invite to App
-                            </DropdownMenuItem>
-                        )}
-                        {permissions.includes('tenants.invite') && !t.deleted_at &&
+                        {permissions.includes('tenants.invite') &&
+                            !t.deleted_at &&
+                            !t.user_id && (
+                                <DropdownMenuItem
+                                    onClick={() => setInviteTenant(t)}
+                                >
+                                    <MailPlus className="size-4" />
+                                    Invite to App
+                                </DropdownMenuItem>
+                            )}
+                        {permissions.includes('tenants.invite') &&
+                            !t.deleted_at &&
                             inviteActionLabel(appAccessStatus(t.user)) && (
                                 <DropdownMenuItem
                                     onClick={() => resendInvitation(t)}
@@ -323,7 +326,8 @@ export default function Index({
                                     {inviteActionLabel(appAccessStatus(t.user))}
                                 </DropdownMenuItem>
                             )}
-                        {permissions.includes('tenants.invite') && !t.deleted_at &&
+                        {permissions.includes('tenants.invite') &&
+                            !t.deleted_at &&
                             ['invited', 'active'].includes(
                                 appAccessStatus(t.user),
                             ) && (
@@ -416,12 +420,15 @@ export default function Index({
                 onMoveOut={openMoveOut}
                 onDocuments={openDocuments}
                 onInvite={
-                    viewingTenant?.user_id || !permissions.includes('tenants.invite') ? undefined : () => {
-                        if (viewingTenant) {
-                            setDetailOpen(false);
-                            setInviteTenant(viewingTenant);
-                        }
-                    }
+                    viewingTenant?.user_id ||
+                    !permissions.includes('tenants.invite')
+                        ? undefined
+                        : () => {
+                              if (viewingTenant) {
+                                  setDetailOpen(false);
+                                  setInviteTenant(viewingTenant);
+                              }
+                          }
                 }
                 onResend={
                     viewingTenant && permissions.includes('tenants.invite')

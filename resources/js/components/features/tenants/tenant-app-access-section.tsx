@@ -82,11 +82,7 @@ export default function TenantAppAccessSection({
                     <p className="text-xs text-muted-foreground">
                         Receives notifications. No portal access yet.
                     </p>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleResend}
-                    >
+                    <Button variant="outline" size="sm" onClick={handleResend}>
                         Send Invitation
                     </Button>
                 </div>
@@ -130,11 +126,7 @@ export default function TenantAppAccessSection({
                     <p className="text-xs text-muted-foreground">
                         Access disabled. Still receives notifications.
                     </p>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleResend}
-                    >
+                    <Button variant="outline" size="sm" onClick={handleResend}>
                         Re-invite
                     </Button>
                 </div>

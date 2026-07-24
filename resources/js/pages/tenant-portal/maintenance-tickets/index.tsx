@@ -108,10 +108,13 @@ export default function MaintenanceTickets({ tickets, activeLease }: Props) {
                                                         ? `${ticket.property_name} · ${ticket.unit_name}`
                                                         : ticket.location
                                                           ? `${ticket.property_name} · ${ticket.location}`
-                                                          : ticket.property_name ?? '—'}
+                                                          : (ticket.property_name ??
+                                                            '—')}
                                                 </span>
                                                 <span>
-                                                    {formatDate(ticket.created_at)}
+                                                    {formatDate(
+                                                        ticket.created_at,
+                                                    )}
                                                 </span>
                                             </div>
                                         </CardContent>
@@ -185,10 +188,7 @@ function PortalTicketFormSheet({
                     <div className="space-y-6">
                         <div className="grid gap-2">
                             <Label>Property</Label>
-                            <Input
-                                value={activeLease.property_name}
-                                disabled
-                            />
+                            <Input value={activeLease.property_name} disabled />
                         </div>
 
                         <div className="grid gap-2">

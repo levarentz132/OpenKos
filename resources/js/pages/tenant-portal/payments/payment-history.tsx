@@ -77,8 +77,8 @@ export default function PaymentHistory({
                                     ] ?? payment.payment_method) + ' payment'}
                                 </p>
                                 <p className="text-muted-foreground">
-                                    Paid on {formatDate(payment.payment_date)}{' '}
-                                    · {formatPeriod(payment.invoice.period_start)}{' '}
+                                    Paid on {formatDate(payment.payment_date)} ·{' '}
+                                    {formatPeriod(payment.invoice.period_start)}{' '}
                                     rent
                                     {payment.invoice.reference && (
                                         <>
@@ -96,7 +96,11 @@ export default function PaymentHistory({
                                     domain="tenant_payment"
                                     value={payment.status}
                                 />
-                                <Button variant="link" className="h-8 px-2" asChild>
+                                <Button
+                                    variant="link"
+                                    className="h-8 px-2"
+                                    asChild
+                                >
                                     <Link href={showInvoice(payment.invoice)}>
                                         View invoice
                                         <ChevronRight className="size-4 sm:hidden" />

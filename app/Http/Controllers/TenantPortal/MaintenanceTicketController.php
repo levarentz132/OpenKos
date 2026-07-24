@@ -98,7 +98,7 @@ class MaintenanceTicketController extends TenantPortalController
     public function show(Request $request, MaintenanceTicket $ticket): Response
     {
         $tenant = $this->tenant($request);
-        
+
         abort_unless($ticket->created_by === $request->user()->id, 403);
 
         $ticket->load(['property:id,name', 'unit:id,name', 'assignee:id,name']);

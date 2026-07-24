@@ -1,9 +1,18 @@
 import { Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
-import { PropertyFormSheet, TenantFormSheet, TicketFormSheet } from '@/components/features';
+import {
+    PropertyFormSheet,
+    TenantFormSheet,
+    TicketFormSheet,
+} from '@/components/features';
 import { formatRupiah } from '@/lib/formatters';
 import { dashboard } from '@/routes';
-import type { Finance, PropertyStats, RecentActivityEntry, Stats } from '@/types';
+import type {
+    Finance,
+    PropertyStats,
+    RecentActivityEntry,
+    Stats,
+} from '@/types';
 
 interface Attention {
     overdue_invoices: { count: number; amount: number };
@@ -48,7 +57,6 @@ export default function Overview({
         <>
             <Head title="Dashboard" />
             <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto rounded-xl p-4">
-
                 <section>
                     <h2 className="mb-4 text-sm font-medium tracking-wider text-muted-foreground uppercase">
                         Today&apos;s Attention
@@ -105,8 +113,14 @@ export default function Overview({
                             label="Report Maintenance"
                             onClick={() => setTicketSheetOpen(true)}
                         />
-                        <QuickAccessLink label="Assign Tenant" href="/tenants" />
-                        <QuickAccessLink label="Collect Rent" href="/dashboard/rent" />
+                        <QuickAccessLink
+                            label="Assign Tenant"
+                            href="/tenants"
+                        />
+                        <QuickAccessLink
+                            label="Collect Rent"
+                            href="/dashboard/rent"
+                        />
                     </div>
                 </section>
 
@@ -166,7 +180,9 @@ export default function Overview({
                                         className="flex items-center gap-3 text-sm"
                                     >
                                         <div className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground/40" />
-                                        <span className="text-foreground">{entry.description}</span>
+                                        <span className="text-foreground">
+                                            {entry.description}
+                                        </span>
                                         <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
                                             {relativeTime(entry.created_at)}
                                         </span>

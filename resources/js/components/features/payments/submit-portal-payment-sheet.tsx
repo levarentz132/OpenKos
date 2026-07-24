@@ -23,7 +23,8 @@ export default function SubmitPortalPaymentSheet({
                 <SheetHeader>
                     <SheetTitle>Submit Payment</SheetTitle>
                     <SheetDescription>
-                        Your payment will be reviewed before it is applied to this invoice.
+                        Your payment will be reviewed before it is applied to
+                        this invoice.
                     </SheetDescription>
                 </SheetHeader>
 

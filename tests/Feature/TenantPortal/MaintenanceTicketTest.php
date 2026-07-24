@@ -2,7 +2,6 @@
 
 use App\Enums\MaintenancePriority;
 use App\Enums\MaintenanceStatus;
-use App\Models\Invoice;
 use App\Models\Lease;
 use App\Models\MaintenanceTicket;
 use App\Models\Tenant;
@@ -113,7 +112,7 @@ test('tenant can submit a maintenance ticket for common area if they have an act
 test('tenant cannot submit a maintenance ticket without an active lease', function () {
     $user = User::factory()->create();
     $tenant = Tenant::factory()->withUser($user)->create();
-    
+
     // Non-active lease
     Lease::factory()->terminated()->create(['primary_tenant_id' => $tenant->id]);
 

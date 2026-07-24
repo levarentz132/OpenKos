@@ -18,7 +18,9 @@ export default function AppSidebarLayout({
         <div
             style={
                 banner.visible
-                    ? ({ '--app-banner-height': '2.75rem' } as React.CSSProperties)
+                    ? ({
+                          '--app-banner-height': '2.75rem',
+                      } as React.CSSProperties)
                     : undefined
             }
         >

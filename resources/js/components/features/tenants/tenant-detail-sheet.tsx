@@ -310,7 +310,9 @@ export default function TenantDetailSheet({
                                             >
                                                 <Send className="size-4" />
                                                 {inviteActionLabel(
-                                                    appAccessStatus(tenant.user),
+                                                    appAccessStatus(
+                                                        tenant.user,
+                                                    ),
                                                 )}
                                             </Button>
                                         )}
