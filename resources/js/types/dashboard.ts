@@ -113,4 +113,15 @@ export type RecentActivityEntry = {
     description: string;
     created_at: string;
     subject_type: string | null;
+    subject_id?: number | null;
+    actor_name?: string | null;
+    action_url?: string | null;
+};
+
+export type AttentionData = {
+    overdue_invoices: { count: number; amount: number };
+    due_today: number;
+    open_maintenance: number;
+    leases_ending_soon: number;
+    pending_payment_verification: number;
 };

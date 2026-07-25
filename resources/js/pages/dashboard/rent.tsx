@@ -19,6 +19,7 @@ import type { TableColumn } from '@/components/data-table';
 import { SearchInput } from '@/components/data-table/search-input';
 import InvoiceDetailSheet from '@/components/features/payments/invoice-detail-sheet';
 import QueuePaymentSheet from '@/components/features/payments/queue-payment-sheet';
+import { MetricCard } from '@/components/shared/metric-card';
 import { Button } from '@/components/ui/button';
 import {
     Collapsible,
@@ -419,105 +420,87 @@ export default function CollectionQueue({
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
                 {/* Header cards */}
-                <h1 className="text-lg font-semibold">Collection Queue</h1>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-                    <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                        <AlertTriangle className="size-8 shrink-0 text-red-500" />
-                        <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">
-                                Overdue
-                            </p>
-                            <p className="text-xl font-bold tabular-nums">
-                                {tabCounts.overdue}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                        <CalendarClock className="size-8 shrink-0 text-amber-500" />
-                        <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">
-                                Due Today
-                            </p>
-                            <p className="text-xl font-bold tabular-nums">
-                                {tabCounts.due_today}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                        <Bell className="size-8 shrink-0 text-blue-500" />
-                        <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">
-                                Upcoming
-                            </p>
-                            <p className="text-xl font-bold tabular-nums">
-                                {tabCounts.upcoming}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                        <Bell className="size-8 shrink-0 text-violet-600" />
-                        <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">
-                                Pending Review
-                            </p>
-                            <p className="text-xl font-bold tabular-nums">
-                                {tabCounts.pending_review}
-                            </p>
-                        </div>
-                    </div>
+                <div className="flex items-center justify-between">
+                    <h1 className="text-lg font-semibold tracking-tight">
+                        Collection Queue
+                    </h1>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <MetricCard
+                        label="Overdue"
+                        value={tabCounts.overdue}
+                        variant="red"
+                        emphasis="attention"
+                        icon={AlertTriangle}
+                    />
+                    <MetricCard
+                        label="Due Today"
+                        value={tabCounts.due_today}
+                        variant="amber"
+                        emphasis="subtle"
+                        icon={CalendarClock}
+                    />
+                    <MetricCard
+                        label="Upcoming"
+                        value={tabCounts.upcoming}
+                        variant="blue"
+                        emphasis="subtle"
+                        icon={Bell}
+                    />
+                    <MetricCard
+                        label="Pending Review"
+                        value={tabCounts.pending_review}
+                        variant="purple"
+                        emphasis="subtle"
+                        icon={Bell}
+                    />
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                        <Banknote className="size-8 shrink-0 text-green-600" />
-                        <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">
-                                Outstanding
-                            </p>
-                            <p className="truncate text-xl font-bold tabular-nums">
-                                {formatRupiah(outstanding.amount)}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                        <Clock className="size-8 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">
-                                Last Payment
-                            </p>
-                            <p className="text-xl font-bold tabular-nums">
-                                {lastPaymentAgo ?? '—'}
-                            </p>
-                        </div>
-                    </div>
+                    <MetricCard
+                        label="Outstanding Balance"
+                        value={formatRupiah(outstanding.amount)}
+                        subtext={`${outstanding.count} invoice${outstanding.count !== 1 ? 's' : ''} unpaid`}
+                        variant="amber"
+                        emphasis="subtle"
+                        icon={Banknote}
+                    />
+                    <MetricCard
+                        label="Last Payment Recorded"
+                        value={lastPaymentAgo ?? '—'}
+                        variant="neutral"
+                        icon={Clock}
+                    />
                 </div>
 
                 {/* Progress */}
                 {progress.total > 0 && (
-                    <div className="rounded-lg border p-4">
+                    <div className="rounded-xl border border-border/70 bg-card p-4 shadow-xs">
                         <div className="mb-2 flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
-                                <TrendingUp className="size-4 text-green-600" />
-                                <span className="font-medium">
+                                <div className="flex size-6 items-center justify-center rounded-md bg-surface-green-icon/80 text-surface-green-foreground">
+                                    <TrendingUp className="size-3.5" />
+                                </div>
+                                <span className="font-semibold text-foreground">
                                     Collection Progress
                                 </span>
                             </div>
-                            <span className="text-muted-foreground tabular-nums">
+                            <span className="text-xs font-medium text-muted-foreground tabular-nums">
                                 {progress.processed} / {progress.total}{' '}
                                 processed
                             </span>
                         </div>
-                        <div className="h-2 rounded-full bg-muted">
+                        <div className="h-2 overflow-hidden rounded-full bg-muted">
                             <div
-                                className="h-full rounded-full bg-green-600 transition-all"
+                                className="h-full rounded-full bg-surface-green-foreground transition-all duration-300"
                                 style={{ width: `${progressPercent}%` }}
                             />
                         </div>
-                        <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-                            <span className="tabular-nums">
+                        <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                            <span className="font-medium tabular-nums">
                                 {formatRupiah(progress.amount_collected)}{' '}
                                 collected
                             </span>
-                            <span className="tabular-nums">
+                            <span className="font-bold text-foreground tabular-nums">
                                 {progressPercent}%
                             </span>
                         </div>

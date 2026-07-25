@@ -400,3 +400,19 @@ export type WorkspaceUnit = {
 export type PropertyRef = { id: number; name: string };
 
 export type RoleOption = { value: string; label: string };
+
+export type MaintenanceProperty = {
+    id: number;
+    name: string;
+};
+
+export type MaintenanceUnit = {
+    id: number;
+    slug: string;
+    name: string;
+    property_id: number;
+    status: string;
+    active_lease_count: number;
+    has_maintenance_transfer?: number;
+    leases?: { tenants: { id: number; name: string }[] }[];
+};

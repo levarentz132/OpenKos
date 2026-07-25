@@ -8,3 +8,5 @@ export { default as PasswordInput } from './password-input';
 export { default as PhoneInput } from './phone-input';
 export { default as SearchableSelect } from './searchable-select';
 export { default as TextLink } from './text-link';
+export { MetricCard } from './metric-card';
+export { StatusBadge } from './status-badge';

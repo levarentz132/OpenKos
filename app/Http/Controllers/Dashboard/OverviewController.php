@@ -107,6 +107,7 @@ class OverviewController extends Controller
         ];
 
         $recentActivity = AuditLog::query()
+            ->with(['actor'])
             ->when(! $request->user()->isOwner(), fn (Builder $q) => $q
                 ->where('actor_type', $request->user()->getMorphClass())
                 ->where('actor_id', $request->user()->id),
@@ -119,6 +120,9 @@ class OverviewController extends Controller
                 'description' => $this->describeAudit($log),
                 'created_at' => $log->created_at->toISOString(),
                 'subject_type' => $log->auditable_type,
+                'subject_id' => $log->auditable_id,
+                'actor_name' => $log->actor?->name ?? 'System',
+                'action_url' => $this->resolveActionUrl($log),
             ])
             ->values()
             ->toArray();
@@ -201,5 +205,44 @@ class OverviewController extends Controller
         }
 
         return ucfirst($log->operation);
+    }
+
+    private function resolveActionUrl(AuditLog $log): ?string
+    {
+        if (! $log->auditable_type) {
+            return null;
+        }
+
+        $baseName = class_basename($log->auditable_type);
+
+        if ($baseName === 'Payment' && $log->auditable_id) {
+            /** @var Payment|null $payment */
+            $payment = Payment::query()->with('invoice')->find($log->auditable_id);
+            $leaseId = $payment?->invoice?->lease_id;
+
+            return $leaseId ? route('leases.workspace.payments', $leaseId) : route('dashboard.rent');
+        }
+
+        if ($baseName === 'Invoice' && $log->auditable_id) {
+            /** @var Invoice|null $invoice */
+            $invoice = Invoice::query()->find($log->auditable_id);
+            $leaseId = $invoice?->lease_id;
+            if ($leaseId) {
+                return route('leases.workspace.invoices.show', [
+                    'lease' => $leaseId,
+                    'invoice' => $invoice->id,
+                ]);
+            }
+
+            return route('dashboard.rent');
+        }
+
+        return match ($baseName) {
+            'Lease' => $log->auditable_id ? route('leases.show', $log->auditable_id) : route('leases.index'),
+            'Tenant' => $log->auditable_id ? route('tenants.show', $log->auditable_id) : route('tenants.index'),
+            'MaintenanceTicket' => route('maintenance-tickets.index'),
+            'Property' => route('properties.index'),
+            default => null,
+        };
     }
 }

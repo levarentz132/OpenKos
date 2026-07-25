@@ -1,5 +1,6 @@
 export * from './app';
 export * from './auth';
+export * from './dashboard';
 export * from './leases';
 export * from './maintenance';
 export * from './payments';
