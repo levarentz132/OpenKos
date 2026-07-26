@@ -13,6 +13,7 @@ import type { TableColumn } from '@/components/data-table';
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { SearchInput } from '@/components/data-table/search-input';
 import { Heading, InputError } from '@/components/shared';
+import { StatusBadge as SharedStatusBadge } from '@/components/shared/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -79,15 +80,7 @@ type PageProps = {
 };
 
 function StatusBadge({ user }: { user: ManagedUser }) {
-    if (user.status === 'invited') {
-        return <Badge variant="outline">Invited</Badge>;
-    }
-
-    if (user.status === 'active') {
-        return <Badge className="bg-green-600">Active</Badge>;
-    }
-
-    return <Badge variant="secondary">Disabled</Badge>;
+    return <SharedStatusBadge domain="user" value={user.status} />;
 }
 
 function formatDate(value: string | null) {

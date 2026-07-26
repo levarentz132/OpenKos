@@ -130,7 +130,7 @@ export default function LeaseDetailSheet({
                                                                           {t
                                                                               .pivot
                                                                               ?.is_primary && (
-                                                                              <span className="ml-2 text-[10px] font-medium text-blue-600 uppercase">
+                                                                              <span className="ml-2 text-[10px] font-medium text-primary uppercase">
                                                                                   Primary
                                                                               </span>
                                                                           )}

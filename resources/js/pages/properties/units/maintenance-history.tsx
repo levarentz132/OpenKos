@@ -14,10 +14,10 @@ import type {
 import { UnitLayout } from './layout';
 
 const priorityColors: Record<string, string> = {
-    low: 'bg-slate-100 text-slate-700',
-    medium: 'bg-yellow-100 text-yellow-700',
-    high: 'bg-orange-100 text-orange-700',
-    urgent: 'bg-red-100 text-red-700',
+    low: 'bg-muted text-muted-foreground border-border',
+    medium: 'bg-surface-blue/70 text-surface-blue-foreground border-surface-blue-border/80',
+    high: 'bg-surface-amber/70 text-surface-amber-foreground border-surface-amber-border/80',
+    urgent: 'bg-surface-red/70 text-surface-red-foreground border-surface-red-border/80',
 };
 
 const priorityLabel: Record<string, string> = {

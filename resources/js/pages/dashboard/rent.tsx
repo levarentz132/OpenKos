@@ -96,22 +96,24 @@ function urgencyLabel(
     status: string,
 ): { text: string; color: string } {
     if (status === 'paid') {
-        return { text: 'Paid', color: 'text-green-600' };
+        return {
+            text: 'Paid',
+            color: 'text-surface-green-foreground font-medium',
+        };
     }
 
     if (status === 'partial') {
-        return { text: 'Partial', color: 'text-blue-600' };
+        return {
+            text: 'Partial',
+            color: 'text-surface-blue-foreground font-medium',
+        };
     }
 
     if (urgency === 'overdue' && daysOverdue !== null) {
         const color =
-            daysOverdue > 90
-                ? 'text-red-700'
-                : daysOverdue > 30
-                  ? 'text-red-500'
-                  : daysOverdue > 7
-                    ? 'text-orange-500'
-                    : 'text-amber-500';
+            daysOverdue > 30
+                ? 'text-surface-red-foreground font-medium'
+                : 'text-surface-amber-foreground font-medium';
 
         return {
             text: `Overdue \u00B7 ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''}`,
@@ -120,11 +122,17 @@ function urgencyLabel(
     }
 
     if (urgency === 'due_today') {
-        return { text: 'Due today', color: 'text-amber-600' };
+        return {
+            text: 'Due today',
+            color: 'text-surface-amber-foreground font-medium',
+        };
     }
 
     if (urgency === 'due_tomorrow') {
-        return { text: 'Due tomorrow', color: 'text-amber-500' };
+        return {
+            text: 'Due tomorrow',
+            color: 'text-surface-amber-foreground font-medium',
+        };
     }
 
     return { text: 'Upcoming', color: 'text-muted-foreground' };
@@ -319,7 +327,7 @@ export default function CollectionQueue({
             render: (entry) => {
                 if (currentUrgency === 'pending_review') {
                     return (
-                        <span className="text-sm text-violet-600">
+                        <span className="text-sm font-medium text-surface-purple-foreground">
                             {pendingReviewLabel(
                                 entry.pending_payment_review_count,
                             )}
@@ -564,7 +572,7 @@ export default function CollectionQueue({
 
                         return (
                             <button
-                                key={tab.key}
+                                key={tab.key || 'all'}
                                 type="button"
                                 onClick={() =>
                                     applyTab(tab.key === '' ? '' : tab.key)
@@ -640,9 +648,11 @@ export default function CollectionQueue({
                         <CollapsibleContent>
                             {recentPayments.length > 0 && (
                                 <div className="divide-y rounded-lg border">
-                                    {recentPayments.map((payment) => (
+                                    {recentPayments.map((payment, index) => (
                                         <div
-                                            key={payment.id}
+                                            key={
+                                                payment.id ?? `payment-${index}`
+                                            }
                                             className="flex items-center justify-between px-4 py-3 text-sm"
                                         >
                                             <div className="min-w-0 flex-1">
@@ -687,9 +697,12 @@ export default function CollectionQueue({
                         <CollapsibleContent>
                             {recentReminders.length > 0 && (
                                 <div className="divide-y rounded-lg border">
-                                    {recentReminders.map((reminder) => (
+                                    {recentReminders.map((reminder, index) => (
                                         <div
-                                            key={reminder.id}
+                                            key={
+                                                reminder.id ??
+                                                `reminder-${index}`
+                                            }
                                             className="flex items-center justify-between px-4 py-3 text-sm"
                                         >
                                             <div className="min-w-0 flex-1">
@@ -716,6 +729,11 @@ export default function CollectionQueue({
             </div>
 
             <InvoiceDetailSheet
+                key={
+                    detailInvoice
+                        ? `detail-invoice-${detailInvoice.id}`
+                        : 'detail-invoice-idle'
+                }
                 invoice={detailInvoice}
                 open={detailInvoice !== null}
                 onOpenChange={(open) => {
@@ -727,7 +745,11 @@ export default function CollectionQueue({
             />
 
             <QueuePaymentSheet
-                key={paymentSheetInvoice?.id}
+                key={
+                    paymentSheetInvoice
+                        ? `payment-sheet-${paymentSheetInvoice.id}`
+                        : 'payment-sheet-idle'
+                }
                 invoice={paymentSheetInvoice}
                 open={paymentSheetInvoice !== null}
                 onOpenChange={(open) => {

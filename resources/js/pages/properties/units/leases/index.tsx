@@ -63,7 +63,7 @@ export default function Index({
                         </p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto rounded-lg border">
+                    <div className="overflow-x-auto rounded-lg border bg-card text-card-foreground shadow-xs">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b bg-muted/50 text-left text-muted-foreground">
@@ -114,7 +114,7 @@ export default function Index({
                                                               {t.name}
                                                               {t.pivot
                                                                   ?.is_primary && (
-                                                                  <span className="ml-1 text-[10px] font-medium text-blue-600 uppercase">
+                                                                  <span className="ml-1 text-[10px] font-medium text-primary uppercase">
                                                                       Primary
                                                                   </span>
                                                               )}

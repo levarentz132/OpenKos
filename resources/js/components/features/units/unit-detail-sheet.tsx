@@ -171,7 +171,7 @@ export default function UnitDetailSheet({
                                                             </span>
                                                             {t.pivot
                                                                 ?.is_primary && (
-                                                                <span className="text-[10px] font-medium text-blue-600 uppercase">
+                                                                <span className="text-[10px] font-medium text-primary uppercase">
                                                                     Primary
                                                                 </span>
                                                             )}

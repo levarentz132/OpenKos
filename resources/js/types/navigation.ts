@@ -13,3 +13,8 @@ export type NavItem = {
     isActive?: boolean;
     children?: NavItem[];
 };
+
+export type NavSection = {
+    title: string;
+    items: NavItem[];
+};

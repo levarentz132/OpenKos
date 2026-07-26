@@ -23,7 +23,6 @@ import {
 } from '@/components/features';
 import { Heading } from '@/components/shared';
 import { StatusBadge } from '@/components/shared/status-badge';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -114,8 +113,8 @@ export default function Index({
                             className="relative inline-flex size-2"
                             title={`${lease.pending_payment_review_count} payment review pending`}
                         >
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-600 opacity-75" />
-                            <span className="relative inline-flex size-2 rounded-full bg-violet-600" />
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-surface-purple-foreground opacity-75" />
+                            <span className="relative inline-flex size-2 rounded-full bg-surface-purple-foreground" />
                         </span>
                     ) : null}
                 </div>
@@ -142,7 +141,7 @@ export default function Index({
                                 onClick={(e: React.MouseEvent) =>
                                     e.stopPropagation()
                                 }
-                                className="text-blue-600 hover:underline"
+                                className="text-primary hover:underline"
                             >
                                 {lease.unit.name}
                             </Link>
@@ -191,17 +190,9 @@ export default function Index({
             label: 'Payment',
             render: (lease) =>
                 lease.status === 'active' && lease.payment_status ? (
-                    <Badge
-                        className={
-                            lease.payment_status === 'paid'
-                                ? 'bg-green-600 text-white'
-                                : 'bg-red-600 text-white'
-                        }
-                    >
-                        {lease.payment_status === 'paid' ? 'Paid' : 'Overdue'}
-                    </Badge>
+                    <StatusBadge domain="rent" value={lease.payment_status} />
                 ) : (
-                    <span className="text-muted-foreground">—</span>
+                    '—'
                 ),
         },
         {

@@ -366,7 +366,7 @@ export default function AssignUnitSheet({
                                         </div>
                                     </div>
                                 ) : (
-                                    <p className="mt-4 text-xs text-amber-600">
+                                    <p className="mt-4 text-xs text-surface-amber-foreground">
                                         No pricing configured for this unit.
                                         Enter a custom rent below or set up unit
                                         rates first.

@@ -228,7 +228,7 @@ export default function Index({
             label: 'Lease',
             render: (t) =>
                 (t.active_leases_count ?? 0) > 0 ? (
-                    <Badge className="bg-green-600">Active</Badge>
+                    <StatusBadge status="active" />
                 ) : (
                     <Badge variant="outline">None</Badge>
                 ),

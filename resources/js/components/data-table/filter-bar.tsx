@@ -70,7 +70,7 @@ function SelectFilter({
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className="w-full justify-between font-normal md:w-48"
+                    className="w-full justify-between bg-card font-normal md:w-48"
                 >
                     <span className="truncate">
                         {selectedLabels || `All ${filter.label.toLowerCase()}`}
@@ -78,7 +78,7 @@ function SelectFilter({
                     <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-56 p-0" align="start">
+            <PopoverContent className="w-56 bg-card p-0" align="start">
                 <Command>
                     <CommandInput
                         placeholder={`Search ${filter.label.toLowerCase()}...`}
@@ -158,7 +158,7 @@ export function FilterBar({
                     <Button
                         variant={open ? 'default' : 'outline'}
                         size="icon"
-                        className="relative shrink-0"
+                        className="relative shrink-0 bg-card"
                         onClick={() => setOpen((v) => !v)}
                         aria-label="Toggle filters"
                     >

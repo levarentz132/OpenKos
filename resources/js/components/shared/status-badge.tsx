@@ -243,16 +243,19 @@ const STATUS_CONFIGS: Record<string, Record<string, StatusConfig>> = {
 };
 
 export function StatusBadge({
-    domain,
+    domain = 'lease',
     value,
+    status,
 }: {
-    domain: keyof typeof STATUS_CONFIGS;
-    value: string;
+    domain?: keyof typeof STATUS_CONFIGS;
+    value?: string;
+    status?: string;
 }) {
-    const config = STATUS_CONFIGS[domain]?.[value];
+    const val = value ?? status ?? '';
+    const config = STATUS_CONFIGS[domain]?.[val];
 
     if (!config) {
-        return <Badge variant="outline">{value}</Badge>;
+        return <Badge variant="outline">{val}</Badge>;
     }
 
     if (config.variant) {

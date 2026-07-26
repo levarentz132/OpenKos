@@ -316,7 +316,7 @@ export default function AssignTenantSheet({
                                     </div>
                                 </div>
                             ) : (
-                                <p className="mt-4 text-xs text-amber-600">
+                                <p className="mt-4 text-xs text-surface-amber-foreground">
                                     No pricing configured for this unit. Please
                                     set up unit rates first.
                                 </p>
