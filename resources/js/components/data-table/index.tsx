@@ -54,7 +54,7 @@ export function DataTable<T>({
                     onCreate={empty.onCreate}
                 />
             ) : (
-                <div className="overflow-x-auto rounded-lg border">
+                <div className="overflow-x-auto rounded-lg border bg-card text-card-foreground shadow-xs">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b bg-muted/50 text-left text-muted-foreground">

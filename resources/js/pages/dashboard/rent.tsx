@@ -19,6 +19,7 @@ import type { TableColumn } from '@/components/data-table';
 import { SearchInput } from '@/components/data-table/search-input';
 import InvoiceDetailSheet from '@/components/features/payments/invoice-detail-sheet';
 import QueuePaymentSheet from '@/components/features/payments/queue-payment-sheet';
+import { MetricCard } from '@/components/shared/metric-card';
 import { Button } from '@/components/ui/button';
 import {
     Collapsible,
@@ -95,22 +96,24 @@ function urgencyLabel(
     status: string,
 ): { text: string; color: string } {
     if (status === 'paid') {
-        return { text: 'Paid', color: 'text-green-600' };
+        return {
+            text: 'Paid',
+            color: 'text-surface-green-foreground font-medium',
+        };
     }
 
     if (status === 'partial') {
-        return { text: 'Partial', color: 'text-blue-600' };
+        return {
+            text: 'Partial',
+            color: 'text-surface-blue-foreground font-medium',
+        };
     }
 
     if (urgency === 'overdue' && daysOverdue !== null) {
         const color =
-            daysOverdue > 90
-                ? 'text-red-700'
-                : daysOverdue > 30
-                  ? 'text-red-500'
-                  : daysOverdue > 7
-                    ? 'text-orange-500'
-                    : 'text-amber-500';
+            daysOverdue > 30
+                ? 'text-surface-red-foreground font-medium'
+                : 'text-surface-amber-foreground font-medium';
 
         return {
             text: `Overdue \u00B7 ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''}`,
@@ -119,11 +122,17 @@ function urgencyLabel(
     }
 
     if (urgency === 'due_today') {
-        return { text: 'Due today', color: 'text-amber-600' };
+        return {
+            text: 'Due today',
+            color: 'text-surface-amber-foreground font-medium',
+        };
     }
 
     if (urgency === 'due_tomorrow') {
-        return { text: 'Due tomorrow', color: 'text-amber-500' };
+        return {
+            text: 'Due tomorrow',
+            color: 'text-surface-amber-foreground font-medium',
+        };
     }
 
     return { text: 'Upcoming', color: 'text-muted-foreground' };
@@ -318,7 +327,7 @@ export default function CollectionQueue({
             render: (entry) => {
                 if (currentUrgency === 'pending_review') {
                     return (
-                        <span className="text-sm text-violet-600">
+                        <span className="text-sm font-medium text-surface-purple-foreground">
                             {pendingReviewLabel(
                                 entry.pending_payment_review_count,
                             )}
@@ -419,105 +428,87 @@ export default function CollectionQueue({
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
                 {/* Header cards */}
-                <h1 className="text-lg font-semibold">Collection Queue</h1>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-                    <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                        <AlertTriangle className="size-8 shrink-0 text-red-500" />
-                        <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">
-                                Overdue
-                            </p>
-                            <p className="text-xl font-bold tabular-nums">
-                                {tabCounts.overdue}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                        <CalendarClock className="size-8 shrink-0 text-amber-500" />
-                        <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">
-                                Due Today
-                            </p>
-                            <p className="text-xl font-bold tabular-nums">
-                                {tabCounts.due_today}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                        <Bell className="size-8 shrink-0 text-blue-500" />
-                        <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">
-                                Upcoming
-                            </p>
-                            <p className="text-xl font-bold tabular-nums">
-                                {tabCounts.upcoming}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                        <Bell className="size-8 shrink-0 text-violet-600" />
-                        <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">
-                                Pending Review
-                            </p>
-                            <p className="text-xl font-bold tabular-nums">
-                                {tabCounts.pending_review}
-                            </p>
-                        </div>
-                    </div>
+                <div className="flex items-center justify-between">
+                    <h1 className="text-lg font-semibold tracking-tight">
+                        Collection Queue
+                    </h1>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <MetricCard
+                        label="Overdue"
+                        value={tabCounts.overdue}
+                        variant="red"
+                        emphasis="attention"
+                        icon={AlertTriangle}
+                    />
+                    <MetricCard
+                        label="Due Today"
+                        value={tabCounts.due_today}
+                        variant="amber"
+                        emphasis="subtle"
+                        icon={CalendarClock}
+                    />
+                    <MetricCard
+                        label="Upcoming"
+                        value={tabCounts.upcoming}
+                        variant="blue"
+                        emphasis="subtle"
+                        icon={Bell}
+                    />
+                    <MetricCard
+                        label="Pending Review"
+                        value={tabCounts.pending_review}
+                        variant="purple"
+                        emphasis="subtle"
+                        icon={Bell}
+                    />
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                        <Banknote className="size-8 shrink-0 text-green-600" />
-                        <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">
-                                Outstanding
-                            </p>
-                            <p className="truncate text-xl font-bold tabular-nums">
-                                {formatRupiah(outstanding.amount)}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                        <Clock className="size-8 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">
-                                Last Payment
-                            </p>
-                            <p className="text-xl font-bold tabular-nums">
-                                {lastPaymentAgo ?? '—'}
-                            </p>
-                        </div>
-                    </div>
+                    <MetricCard
+                        label="Outstanding Balance"
+                        value={formatRupiah(outstanding.amount)}
+                        subtext={`${outstanding.count} invoice${outstanding.count !== 1 ? 's' : ''} unpaid`}
+                        variant="amber"
+                        emphasis="subtle"
+                        icon={Banknote}
+                    />
+                    <MetricCard
+                        label="Last Payment Recorded"
+                        value={lastPaymentAgo ?? '—'}
+                        variant="neutral"
+                        icon={Clock}
+                    />
                 </div>
 
                 {/* Progress */}
                 {progress.total > 0 && (
-                    <div className="rounded-lg border p-4">
+                    <div className="rounded-xl border border-border/70 bg-card p-4 shadow-xs">
                         <div className="mb-2 flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
-                                <TrendingUp className="size-4 text-green-600" />
-                                <span className="font-medium">
+                                <div className="flex size-6 items-center justify-center rounded-md bg-surface-green-icon/80 text-surface-green-foreground">
+                                    <TrendingUp className="size-3.5" />
+                                </div>
+                                <span className="font-semibold text-foreground">
                                     Collection Progress
                                 </span>
                             </div>
-                            <span className="text-muted-foreground tabular-nums">
+                            <span className="text-xs font-medium text-muted-foreground tabular-nums">
                                 {progress.processed} / {progress.total}{' '}
                                 processed
                             </span>
                         </div>
-                        <div className="h-2 rounded-full bg-muted">
+                        <div className="h-2 overflow-hidden rounded-full bg-muted">
                             <div
-                                className="h-full rounded-full bg-green-600 transition-all"
+                                className="h-full rounded-full bg-surface-green-foreground transition-all duration-300"
                                 style={{ width: `${progressPercent}%` }}
                             />
                         </div>
-                        <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-                            <span className="tabular-nums">
+                        <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                            <span className="font-medium tabular-nums">
                                 {formatRupiah(progress.amount_collected)}{' '}
                                 collected
                             </span>
-                            <span className="tabular-nums">
+                            <span className="font-bold text-foreground tabular-nums">
                                 {progressPercent}%
                             </span>
                         </div>
@@ -581,7 +572,7 @@ export default function CollectionQueue({
 
                         return (
                             <button
-                                key={tab.key}
+                                key={tab.key || 'all'}
                                 type="button"
                                 onClick={() =>
                                     applyTab(tab.key === '' ? '' : tab.key)
@@ -657,9 +648,11 @@ export default function CollectionQueue({
                         <CollapsibleContent>
                             {recentPayments.length > 0 && (
                                 <div className="divide-y rounded-lg border">
-                                    {recentPayments.map((payment) => (
+                                    {recentPayments.map((payment, index) => (
                                         <div
-                                            key={payment.id}
+                                            key={
+                                                payment.id ?? `payment-${index}`
+                                            }
                                             className="flex items-center justify-between px-4 py-3 text-sm"
                                         >
                                             <div className="min-w-0 flex-1">
@@ -704,9 +697,12 @@ export default function CollectionQueue({
                         <CollapsibleContent>
                             {recentReminders.length > 0 && (
                                 <div className="divide-y rounded-lg border">
-                                    {recentReminders.map((reminder) => (
+                                    {recentReminders.map((reminder, index) => (
                                         <div
-                                            key={reminder.id}
+                                            key={
+                                                reminder.id ??
+                                                `reminder-${index}`
+                                            }
                                             className="flex items-center justify-between px-4 py-3 text-sm"
                                         >
                                             <div className="min-w-0 flex-1">
@@ -733,6 +729,11 @@ export default function CollectionQueue({
             </div>
 
             <InvoiceDetailSheet
+                key={
+                    detailInvoice
+                        ? `detail-invoice-${detailInvoice.id}`
+                        : 'detail-invoice-idle'
+                }
                 invoice={detailInvoice}
                 open={detailInvoice !== null}
                 onOpenChange={(open) => {
@@ -744,7 +745,11 @@ export default function CollectionQueue({
             />
 
             <QueuePaymentSheet
-                key={paymentSheetInvoice?.id}
+                key={
+                    paymentSheetInvoice
+                        ? `payment-sheet-${paymentSheetInvoice.id}`
+                        : 'payment-sheet-idle'
+                }
                 invoice={paymentSheetInvoice}
                 open={paymentSheetInvoice !== null}
                 onOpenChange={(open) => {

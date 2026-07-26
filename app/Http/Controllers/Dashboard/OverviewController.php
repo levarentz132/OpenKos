@@ -22,6 +22,7 @@ use App\Models\Unit;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -106,19 +107,43 @@ class OverviewController extends Controller
             'pending_payment_verification' => $pendingPaymentVerification,
         ];
 
-        $recentActivity = AuditLog::query()
+        $auditLogs = AuditLog::query()
+            ->with(['actor'])
             ->when(! $request->user()->isOwner(), fn (Builder $q) => $q
                 ->where('actor_type', $request->user()->getMorphClass())
                 ->where('actor_id', $request->user()->id),
             )
             ->latest()
             ->take(10)
-            ->get()
+            ->get();
+
+        $paymentIds = $auditLogs
+            ->filter(fn (AuditLog $log) => $log->auditable_type && class_basename($log->auditable_type) === 'Payment' && $log->auditable_id)
+            ->pluck('auditable_id')
+            ->unique();
+
+        $payments = $paymentIds->isNotEmpty()
+            ? Payment::query()->with('invoice')->whereIn('id', $paymentIds)->get()->keyBy('id')
+            : collect();
+
+        $invoiceIds = $auditLogs
+            ->filter(fn (AuditLog $log) => $log->auditable_type && class_basename($log->auditable_type) === 'Invoice' && $log->auditable_id)
+            ->pluck('auditable_id')
+            ->unique();
+
+        $invoices = $invoiceIds->isNotEmpty()
+            ? Invoice::query()->whereIn('id', $invoiceIds)->get()->keyBy('id')
+            : collect();
+
+        $recentActivity = $auditLogs
             ->map(fn (AuditLog $log) => [
                 'id' => $log->id,
                 'description' => $this->describeAudit($log),
                 'created_at' => $log->created_at->toISOString(),
                 'subject_type' => $log->auditable_type,
+                'subject_id' => $log->auditable_id,
+                'actor_name' => $log->actor?->name ?? 'System',
+                'action_url' => $this->resolveActionUrl($log, $payments, $invoices),
             ])
             ->values()
             ->toArray();
@@ -201,5 +226,44 @@ class OverviewController extends Controller
         }
 
         return ucfirst($log->operation);
+    }
+
+    private function resolveActionUrl(AuditLog $log, Collection $payments, Collection $invoices): ?string
+    {
+        if (! $log->auditable_type) {
+            return null;
+        }
+
+        $baseName = class_basename($log->auditable_type);
+
+        if ($baseName === 'Payment' && $log->auditable_id) {
+            /** @var Payment|null $payment */
+            $payment = $payments->get($log->auditable_id);
+            $leaseId = $payment?->invoice?->lease_id;
+
+            return $leaseId ? route('leases.workspace.payments', $leaseId) : route('dashboard.rent');
+        }
+
+        if ($baseName === 'Invoice' && $log->auditable_id) {
+            /** @var Invoice|null $invoice */
+            $invoice = $invoices->get($log->auditable_id);
+            $leaseId = $invoice?->lease_id;
+            if ($leaseId) {
+                return route('leases.workspace.invoices.show', [
+                    'lease' => $leaseId,
+                    'invoice' => $invoice->id,
+                ]);
+            }
+
+            return route('dashboard.rent');
+        }
+
+        return match ($baseName) {
+            'Lease' => $log->auditable_id ? route('leases.show', $log->auditable_id) : route('leases.index'),
+            'Tenant' => $log->auditable_id ? route('tenants.show', $log->auditable_id) : route('tenants.index'),
+            'MaintenanceTicket' => route('maintenance-tickets.index'),
+            'Property' => route('properties.index'),
+            default => null,
+        };
     }
 }

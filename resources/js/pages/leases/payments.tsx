@@ -125,7 +125,7 @@ export default function LeasePayments({
                     <Link
                         href={leaseInvoices.show.url([lease, payment.invoice])}
                         onClick={(event) => event.stopPropagation()}
-                        className="text-blue-600 hover:underline"
+                        className="text-primary hover:underline"
                     >
                         {payment.invoice.reference ?? '—'}
                     </Link>

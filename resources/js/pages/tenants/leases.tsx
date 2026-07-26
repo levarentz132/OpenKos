@@ -1,8 +1,8 @@
 import { router } from '@inertiajs/react';
 import type { TableColumn } from '@/components/data-table';
 import { PluginRegion } from '@/components/shared/plugin-region';
+import { StatusBadge } from '@/components/shared/status-badge';
 import { WorkspaceTable } from '@/components/shared/workspace-table';
-import { Badge } from '@/components/ui/badge';
 import { formatDate, formatPrice } from '@/lib/formatters';
 import type { Lease, PaginatedData, TableMeta } from '@/types';
 import type { WorkspaceTenant } from '@/types';
@@ -19,48 +19,36 @@ const columns: TableColumn<Lease>[] = [
     {
         key: '_unit',
         label: 'Unit',
-        className: 'font-medium',
-        render: (l) =>
-            l.unit
-                ? `${l.unit.name}${l.unit.property ? ` — ${l.unit.property.name}` : ''}`
-                : '—',
+        render: (l) => l.unit?.name ?? '—',
+    },
+    {
+        key: '_property',
+        label: 'Property',
+        render: (l) => l.unit?.property?.name ?? '—',
     },
     {
         key: 'start_date',
         label: 'Start',
         sortable: true,
-        className: 'text-muted-foreground tabular-nums',
         render: (l) => formatDate(l.start_date),
     },
     {
         key: 'end_date',
         label: 'End',
         sortable: true,
-        className: 'text-muted-foreground tabular-nums',
-        render: (l) => (l.end_date ? formatDate(l.end_date) : 'ongoing'),
+        render: (l) => formatDate(l.end_date),
     },
     {
         key: 'rent_amount',
         label: 'Rent',
         sortable: true,
-        className: 'tabular-nums',
-        render: (l) => formatPrice(l.rent_amount),
+        render: (l) => `${formatPrice(l.rent_amount)} ${l.billing_label ?? ''}`,
     },
     {
         key: 'status',
         label: 'Status',
         sortable: true,
-        render: (l) => (
-            <Badge
-                className={
-                    l.status === 'active'
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-400 text-white'
-                }
-            >
-                {l.status}
-            </Badge>
-        ),
+        render: (l) => <StatusBadge status={l.status} />,
     },
 ];
 

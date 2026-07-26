@@ -20,7 +20,7 @@ export function NotificationSetupBanner({
     }
 
     return (
-        <div className="fixed inset-x-0 top-0 z-50 flex h-11 items-center gap-3 border-b border-amber-500/40 bg-amber-50 px-4 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+        <div className="fixed inset-x-0 top-0 z-50 flex h-11 items-center gap-3 border-b border-surface-amber-border/60 bg-surface-amber/80 px-4 text-sm text-surface-amber-foreground">
             <TriangleAlert className="size-4 shrink-0" />
             <p className="flex-1 truncate">
                 Set up email or WhatsApp so tenants can receive rent reminders

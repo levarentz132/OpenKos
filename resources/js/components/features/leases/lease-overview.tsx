@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/shared/status-badge';
 import {
     Collapsible,
     CollapsibleContent,
@@ -11,7 +11,6 @@ import { formatDate, formatPrice } from '@/lib/formatters';
 import type { Lease } from '@/types';
 
 export default function LeaseOverview({ lease }: { lease: Lease }) {
-    const isActive = lease.status === 'active';
     const unitLabel = lease.unit?.name ?? '—';
     const propertyName = lease.unit?.property?.name ?? '—';
     const city = lease.unit?.property?.city;
@@ -21,15 +20,7 @@ export default function LeaseOverview({ lease }: { lease: Lease }) {
     return (
         <div className="space-y-6">
             <div>
-                <Badge
-                    className={
-                        isActive
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-400 text-white'
-                    }
-                >
-                    {isActive ? 'Active' : 'Terminated'}
-                </Badge>
+                <StatusBadge status={lease.status} />
             </div>
 
             <Collapsible defaultOpen>
@@ -56,7 +47,7 @@ export default function LeaseOverview({ lease }: { lease: Lease }) {
                                                   <span className="text-sm font-medium">
                                                       {t.name}
                                                       {t.pivot?.is_primary && (
-                                                          <span className="ml-2 text-[10px] font-medium text-blue-600 uppercase">
+                                                          <span className="ml-2 text-[10px] font-medium text-primary uppercase">
                                                               Primary
                                                           </span>
                                                       )}

@@ -100,7 +100,7 @@ export default function LeaseEditSheet({
                                                                   .name
                                                           }
                                                       </span>
-                                                      <span className="text-[10px] font-medium text-blue-600 uppercase">
+                                                      <span className="text-[10px] font-medium text-primary uppercase">
                                                           Primary
                                                       </span>
                                                   </div>
