@@ -25,7 +25,7 @@ export function NavMain({
     sections?: NavSection[];
     items?: NavItem[];
 }) {
-    const { isCurrentUrl, isCurrentOrParentUrl, currentUrl } = useCurrentUrl();
+    const { isCurrentUrl, isCurrentOrParentUrl } = useCurrentUrl();
 
     const displaySections: NavSection[] =
         sections.length > 0
@@ -41,17 +41,6 @@ export function NavMain({
     function checkItemActive(item: NavItem): boolean {
         if (item.isActive !== undefined) {
             return item.isActive;
-        }
-
-        if (item.title === 'Units') {
-            return currentUrl.includes('/units');
-        }
-
-        if (item.title === 'Properties') {
-            return (
-                isCurrentOrParentUrl(item.href ?? '') &&
-                !currentUrl.includes('/units')
-            );
         }
 
         if (item.title === 'Dashboard') {

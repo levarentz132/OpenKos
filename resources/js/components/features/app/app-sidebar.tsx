@@ -2,7 +2,6 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     Building2,
     DollarSign,
-    DoorOpen,
     FileText,
     LayoutGrid,
     Receipt,
@@ -161,17 +160,6 @@ export function AppSidebar() {
                                               title: 'Properties',
                                               href: properties.index(),
                                               icon: Building2,
-                                          },
-                                      ]
-                                    : []),
-                                ...(isOwner ||
-                                permissions.includes('units.view') ||
-                                permissions.includes('properties.view')
-                                    ? [
-                                          {
-                                              title: 'Units',
-                                              href: properties.index(),
-                                              icon: DoorOpen,
                                           },
                                       ]
                                     : []),
