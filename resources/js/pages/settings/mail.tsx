@@ -126,7 +126,7 @@ export default function Mail({
 
                         {Object.keys(fields).length > 0 ? (
                             Object.entries(fields).map(([key, field]) => {
-                                const fieldKey = `mail_config.${key}` as keyof typeof data.mail_config;
+                                const fieldKey = key as keyof typeof data.mail_config;
                                 const errorKey = `mail_config.${key}` as keyof typeof errors;
 
                                 if (field.type === 'select' && field.options) {
