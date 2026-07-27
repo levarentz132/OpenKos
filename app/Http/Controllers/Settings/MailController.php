@@ -5,24 +5,43 @@ namespace App\Http\Controllers\Settings;
 use App\Actions\Settings\UpdateSettings;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\MailManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
+use OpenKOS\Platform\Notification\NotificationDriverRegistration;
+use OpenKOS\Platform\Notification\NotificationRegistry;
 
 class MailController extends Controller
 {
     public function __construct(
         private UpdateSettings $updateSettings,
+        private NotificationRegistry $registry,
+        private MailManager $mailManager,
     ) {}
 
     public function edit(): Response
     {
+        $drivers = collect($this->registry->forChannel('mail'))
+            ->map(function (NotificationDriverRegistration $registration) {
+                $class = $registration->driverClass;
+                $instance = new $class([]);
+
+                return [
+                    'name' => $registration->name,
+                    'label' => $registration->label,
+                    'configuration_schema' => method_exists($instance, 'configurationSchema') ? $instance->configurationSchema() : [],
+                ];
+            })
+            ->values();
+
         $mailConfig = Setting::effectiveMailConfig();
         unset($mailConfig['password']);
 
         return Inertia::render('settings/mail', [
+            'drivers' => $drivers,
             'settings' => [
                 'mail_config' => $mailConfig,
             ],

@@ -12,6 +12,11 @@ class LogMailDriver implements MailDriver
 {
     public function __construct(private array $config = []) {}
 
+    public function configurationSchema(): array
+    {
+        return [];
+    }
+
     public function send(MailMessage $message): MailSendResult
     {
         $recipients = array_map(fn ($addr) => $addr->address, $message->to);

@@ -17,6 +17,7 @@ describe('Mail settings page', function () {
             ->assertInertia(fn ($page) => $page
                 ->component('settings/mail')
                 ->has('settings.mail_config')
+                ->has('drivers')
             );
     });
 

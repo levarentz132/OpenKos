@@ -22,35 +22,47 @@ import {
     update as updateMail,
     test as testMail,
 } from '@/routes/settings/mail';
+import type { Driver } from '@/types';
 
 interface MailConfig {
     driver?: string;
     host?: string;
-    port?: number;
+    port?: number | string;
     username?: string;
     encryption?: string;
     from_address?: string;
     from_name?: string;
+    from?: { address?: string; name?: string };
+    drivers?: Record<string, Record<string, string>>;
 }
 
 export default function Mail({
+    drivers = [],
     settings,
 }: {
+    drivers?: Driver[];
     settings: { mail_config: MailConfig | null };
 }) {
     const config = settings.mail_config ?? {};
 
+    const initialDriver = config.driver ?? 'openkos/smtp';
+
     const { data, setData, submit, processing, errors } = useForm({
         mail_config: {
+            driver: initialDriver,
             host: config.host ?? '',
-            port: config.port != null ? String(config.port) : '',
+            port: config.port != null ? String(config.port) : '587',
             username: config.username ?? '',
             password: '',
             encryption: config.encryption ?? 'null',
-            from_address: config.from_address ?? '',
-            from_name: config.from_name ?? '',
+            from_address: config.from_address ?? config.from?.address ?? '',
+            from_name: config.from_name ?? config.from?.name ?? '',
         },
     });
+
+    const activeDriverName = data.mail_config.driver;
+    const currentDriver = drivers.find((d) => d.name === activeDriverName) ?? drivers.find((d) => d.name === 'openkos/smtp');
+    const fields = currentDriver?.configuration_schema ?? {};
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -62,178 +74,186 @@ export default function Mail({
             <div>
                 <h2 className="text-lg font-medium">Mail settings</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Configure SMTP settings for sending emails.
+                    Configure the active mail driver, sender address, and credentials.
                 </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle>SMTP Configuration</CardTitle>
+                        <CardTitle>Mail Driver</CardTitle>
                         <CardDescription>
-                            Leave empty to use the default log driver (emails
-                            will not be sent).
+                            Select the active mail transport driver and configure its settings.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="grid max-w-xs gap-2">
-                            <Label htmlFor="mail_config[host]">SMTP Host</Label>
-                            <Input
-                                id="mail_config[host]"
-                                name="mail_config[host]"
-                                type="text"
-                                value={data.mail_config.host}
-                                onChange={(e) =>
-                                    setData('mail_config.host', e.target.value)
-                                }
-                                placeholder="smtp.example.com"
-                            />
-                            {errors['mail_config.host'] && (
-                                <p className="text-sm text-red-600">
-                                    {errors['mail_config.host']}
-                                </p>
-                            )}
-                        </div>
+                        {drivers.length > 0 && (
+                            <div className="grid max-w-xs gap-2">
+                                <Label htmlFor="mail_config_driver">Driver</Label>
+                                <Select
+                                    value={data.mail_config.driver}
+                                    onValueChange={(value) =>
+                                        setData('mail_config', {
+                                            ...data.mail_config,
+                                            driver: value,
+                                        })
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {drivers.map((d) => (
+                                            <SelectItem key={d.name} value={d.name}>
+                                                {d.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors['mail_config.driver'] && (
+                                    <p className="text-sm text-red-600">
+                                        {errors['mail_config.driver']}
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
-                        <div className="grid max-w-xs gap-2">
-                            <Label htmlFor="mail_config[port]">Port</Label>
-                            <Input
-                                id="mail_config[port]"
-                                name="mail_config[port]"
-                                type="number"
-                                value={data.mail_config.port}
-                                onChange={(e) =>
-                                    setData('mail_config.port', e.target.value)
-                                }
-                                placeholder="587"
-                            />
-                            {errors['mail_config.port'] && (
-                                <p className="text-sm text-red-600">
-                                    {errors['mail_config.port']}
-                                </p>
-                            )}
-                        </div>
+                        {Object.keys(fields).length > 0 && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                Values set via environment variables override the fields below and cannot be changed here.
+                            </div>
+                        )}
 
-                        <div className="grid max-w-xs gap-2">
-                            <Label htmlFor="mail_config[username]">
-                                Username
-                            </Label>
-                            <Input
-                                id="mail_config[username]"
-                                name="mail_config[username]"
-                                type="text"
-                                value={data.mail_config.username}
-                                onChange={(e) =>
-                                    setData(
-                                        'mail_config.username',
-                                        e.target.value,
-                                    )
-                                }
-                                placeholder="user@example.com"
-                            />
-                            {errors['mail_config.username'] && (
-                                <p className="text-sm text-red-600">
-                                    {errors['mail_config.username']}
-                                </p>
-                            )}
-                        </div>
+                        {Object.keys(fields).length > 0 ? (
+                            Object.entries(fields).map(([key, field]) => {
+                                const fieldKey = `mail_config.${key}` as keyof typeof data.mail_config;
+                                const errorKey = `mail_config.${key}` as keyof typeof errors;
 
-                        <div className="grid max-w-xs gap-2">
-                            <Label htmlFor="mail_config[password]">
-                                Password
-                            </Label>
-                            <Input
-                                id="mail_config[password]"
-                                name="mail_config[password]"
-                                type="password"
-                                value={data.mail_config.password}
-                                onChange={(e) =>
-                                    setData(
-                                        'mail_config.password',
-                                        e.target.value,
-                                    )
+                                if (field.type === 'select' && field.options) {
+                                    return (
+                                        <div key={key} className="grid max-w-xs gap-2">
+                                            <Label htmlFor={`mail_config_${key}`}>
+                                                {field.label}
+                                                {field.required && <span className="text-destructive"> *</span>}
+                                            </Label>
+                                            <Select
+                                                value={(data.mail_config[fieldKey] as string) || 'null'}
+                                                onValueChange={(val) =>
+                                                    setData('mail_config', {
+                                                        ...data.mail_config,
+                                                        [key]: val,
+                                                    })
+                                                }
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {field.options.map((opt) => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {errors[errorKey] && (
+                                                <p className="text-sm text-red-600">
+                                                    {errors[errorKey]}
+                                                </p>
+                                            )}
+                                        </div>
+                                    );
                                 }
-                                placeholder="Enter SMTP password"
-                            />
-                            {errors['mail_config.password'] && (
-                                <p className="text-sm text-red-600">
-                                    {errors['mail_config.password']}
-                                </p>
-                            )}
-                        </div>
 
-                        <div className="grid max-w-xs gap-2">
-                            <Label htmlFor="mail_config[encryption]">
-                                Encryption
-                            </Label>
-                            <Select
-                                value={data.mail_config.encryption}
-                                onValueChange={(value) =>
-                                    setData('mail_config.encryption', value)
-                                }
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="None" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="null">None</SelectItem>
-                                    <SelectItem value="tls">TLS</SelectItem>
-                                    <SelectItem value="ssl">SSL</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            {errors['mail_config.encryption'] && (
-                                <p className="text-sm text-red-600">
-                                    {errors['mail_config.encryption']}
-                                </p>
-                            )}
-                        </div>
+                                return (
+                                    <div key={key} className="grid max-w-xs gap-2">
+                                        <Label htmlFor={`mail_config_${key}`}>
+                                            {field.label}
+                                            {field.required && <span className="text-destructive"> *</span>}
+                                        </Label>
+                                        <Input
+                                            id={`mail_config_${key}`}
+                                            name={`mail_config[${key}]`}
+                                            type={
+                                                field.type === 'password'
+                                                    ? 'password'
+                                                    : field.type === 'number'
+                                                      ? 'number'
+                                                      : 'text'
+                                            }
+                                            value={(data.mail_config[fieldKey] as string) ?? ''}
+                                            onChange={(e) =>
+                                                setData('mail_config', {
+                                                    ...data.mail_config,
+                                                    [key]: e.target.value,
+                                                })
+                                            }
+                                            placeholder={field.placeholder ?? ''}
+                                        />
+                                        {errors[errorKey] && (
+                                            <p className="text-sm text-red-600">
+                                                {errors[errorKey]}
+                                            </p>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <p className="text-sm text-muted-foreground">
+                                The Log driver does not require any credential configuration. Outgoing emails will be logged to storage/logs/mail.log.
+                            </p>
+                        )}
 
-                        <div className="grid max-w-xs gap-2">
-                            <Label htmlFor="mail_config[from_address]">
-                                From Address
-                            </Label>
-                            <Input
-                                id="mail_config[from_address]"
-                                name="mail_config[from_address]"
-                                type="email"
-                                value={data.mail_config.from_address}
-                                onChange={(e) =>
-                                    setData(
-                                        'mail_config.from_address',
-                                        e.target.value,
-                                    )
-                                }
-                                placeholder="noreply@openkos.app"
-                            />
-                            {errors['mail_config.from_address'] && (
-                                <p className="text-sm text-red-600">
-                                    {errors['mail_config.from_address']}
-                                </p>
-                            )}
-                        </div>
+                        <div className="pt-4 border-t space-y-4">
+                            <h3 className="text-sm font-medium">Default Sender Information</h3>
 
-                        <div className="grid max-w-xs gap-2">
-                            <Label htmlFor="mail_config[from_name]">
-                                From Name
-                            </Label>
-                            <Input
-                                id="mail_config[from_name]"
-                                name="mail_config[from_name]"
-                                type="text"
-                                value={data.mail_config.from_name}
-                                onChange={(e) =>
-                                    setData(
-                                        'mail_config.from_name',
-                                        e.target.value,
-                                    )
-                                }
-                                placeholder="OpenKOS"
-                            />
-                            {errors['mail_config.from_name'] && (
-                                <p className="text-sm text-red-600">
-                                    {errors['mail_config.from_name']}
-                                </p>
-                            )}
+                            <div className="grid max-w-xs gap-2">
+                                <Label htmlFor="mail_config[from_address]">
+                                    From Address
+                                </Label>
+                                <Input
+                                    id="mail_config[from_address]"
+                                    name="mail_config[from_address]"
+                                    type="email"
+                                    value={data.mail_config.from_address}
+                                    onChange={(e) =>
+                                        setData('mail_config', {
+                                            ...data.mail_config,
+                                            from_address: e.target.value,
+                                        })
+                                    }
+                                    placeholder="noreply@openkos.app"
+                                />
+                                {errors['mail_config.from_address'] && (
+                                    <p className="text-sm text-red-600">
+                                        {errors['mail_config.from_address']}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="grid max-w-xs gap-2">
+                                <Label htmlFor="mail_config[from_name]">
+                                    From Name
+                                </Label>
+                                <Input
+                                    id="mail_config[from_name]"
+                                    name="mail_config[from_name]"
+                                    type="text"
+                                    value={data.mail_config.from_name}
+                                    onChange={(e) =>
+                                        setData('mail_config', {
+                                            ...data.mail_config,
+                                            from_name: e.target.value,
+                                        })
+                                    }
+                                    placeholder="OpenKOS"
+                                />
+                                {errors['mail_config.from_name'] && (
+                                    <p className="text-sm text-red-600">
+                                        {errors['mail_config.from_name']}
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     </CardContent>
                     <CardFooter>
@@ -244,21 +264,20 @@ export default function Mail({
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Test Email</CardTitle>
+                    <CardTitle>Test Mail Connection</CardTitle>
                     <CardDescription>
-                        Send a test email to verify your SMTP configuration.
+                        Verify that the active mail driver is configured correctly.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <p className="text-sm text-muted-foreground">
-                        A test email will be sent to the configured{' '}
-                        <strong>From Address</strong>.
+                        A connection health check will be performed on the active mail driver.
                     </p>
                 </CardContent>
                 <CardFooter>
                     <Button variant="secondary" asChild>
                         <Link href={testMail.url()} method="post" as="button">
-                            Send Test Email
+                            Test Connection
                         </Link>
                     </Button>
                 </CardFooter>
