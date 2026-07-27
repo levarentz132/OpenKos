@@ -1,0 +1,95 @@
+<?php
+
+use App\Contracts\MailChannelNotification;
+use App\Data\Mail\MailContent;
+use App\Data\Mail\MailSendResult;
+use App\Data\Reminder\ReminderEvent;
+use App\Enums\ReminderType;
+use App\Models\Lease;
+use App\Models\Setting;
+use App\Notifications\Channels\LogChannel;
+use App\Notifications\Channels\MailChannel;
+use App\Notifications\RentReminder;
+use App\Services\MailManager;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Log;
+use Tests\TestCase;
+
+uses(TestCase::class, RefreshDatabase::class);
+
+test('MailChannel rejects notifications without MailChannelNotification interface', function () {
+    $channel = app(MailChannel::class);
+    $notifiable = (object) ['email' => 'user@example.com'];
+    $invalidNotification = new class extends Notification {};
+
+    expect(fn () => $channel->send($notifiable, $invalidNotification))->toThrow(InvalidArgumentException::class);
+});
+
+test('MailChannel logs warning and skips sending when notifiable has no email route', function () {
+    Log::spy();
+
+    $channel = app(MailChannel::class);
+    $notifiable = (object) ['name' => 'No Email User'];
+
+    $notification = new class extends Notification implements MailChannelNotification
+    {
+        public function toMailChannel(object $notifiable): MailContent
+        {
+            return new MailContent('Subject', 'Body');
+        }
+    };
+
+    $channel->send($notifiable, $notification);
+
+    Log::shouldHaveReceived('warning')->once();
+});
+
+test('MailChannel normalizes string and array recipient routes', function () {
+    Setting::set('mail_config', ['driver' => 'log']);
+    $managerMock = Mockery::mock(MailManager::class);
+    $managerMock->shouldReceive('send')->once()->withArgs(function ($message) {
+        return count($message->to) === 2
+            && $message->to[0]->address === 'one@example.com'
+            && $message->to[1]->address === 'two@example.com'
+            && $message->to[1]->name === 'User Two';
+    })->andReturn(new MailSendResult('test-id', 'Sent'));
+
+    $channel = new MailChannel($managerMock);
+    $notifiable = new class
+    {
+        public function routeNotificationForMail(): array
+        {
+            return ['one@example.com', 'two@example.com' => 'User Two'];
+        }
+    };
+
+    $notification = new class extends Notification implements MailChannelNotification
+    {
+        public function toMailChannel(object $notifiable): MailContent
+        {
+            return new MailContent('Subject', 'Body');
+        }
+    };
+
+    $channel->send($notifiable, $notification);
+});
+
+test('RentReminder via returns only configured channels', function () {
+    Setting::set('reminder_channels', ['mail', 'log']);
+
+    $lease = new Lease;
+    $event = new ReminderEvent(
+        lease: $lease,
+        type: ReminderType::Upcoming,
+        periodStart: '2026-08-01',
+        periodEnd: '2026-08-31',
+        dueDate: '2026-08-01',
+        amount: 1500000,
+    );
+
+    $reminder = new RentReminder($event);
+    $via = $reminder->via((object) []);
+
+    expect($via)->toBe([LogChannel::class, MailChannel::class]);
+});

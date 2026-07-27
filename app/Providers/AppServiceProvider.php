@@ -23,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SettingManager::class);
+        $this->app->singleton(MailManager::class);
         $this->app->singleton(WhatsAppManager::class);
 
         Connection::resolverFor('pgsql', fn ($pdo, $database, $prefix, $config) => new PostgresConnection($pdo, $database, $prefix, $config));

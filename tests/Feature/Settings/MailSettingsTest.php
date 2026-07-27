@@ -134,7 +134,7 @@ describe('Mail settings page', function () {
 
         Setting::set('mail_config', ['driver' => 'smtp']);
 
-        expect(Setting::effectiveMailConfig()['driver'])->toBe('smtp');
+        expect(Setting::effectiveMailConfig()['driver'])->toBe('openkos/smtp');
     });
 
     it('sends test email using effective config', function () {

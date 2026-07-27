@@ -1,53 +1,69 @@
 <?php
 
+use App\Notifications\Drivers\LogMailDriver;
+use App\Notifications\Drivers\SmtpMailDriver;
 use OpenKOS\Platform\Notification\NotificationDriverRegistration;
 use OpenKOS\Platform\Notification\NotificationRegistry;
 
-function reg(string $name, string $channel = 'whatsapp'): NotificationDriverRegistration
-{
-    return new NotificationDriverRegistration(
-        name: $name,
-        channel: $channel,
-        driverClass: 'App\\Notifications\\Drivers\\WhatsappLogDriver',
-        label: ucfirst($name),
-        config: ['token' => 'secret'],
+test('it registers drivers into channel-scoped storage', function () {
+    $registry = new NotificationRegistry;
+
+    $reg1 = new NotificationDriverRegistration(
+        name: 'openkos/smtp',
+        channel: 'mail',
+        driverClass: SmtpMailDriver::class,
+        label: 'SMTP',
     );
-}
 
-it('registers and looks up drivers', function () {
-    $registry = new NotificationRegistry;
-    $log = reg('log');
+    $reg2 = new NotificationDriverRegistration(
+        name: 'openkos/log',
+        channel: 'mail',
+        driverClass: LogMailDriver::class,
+        label: 'Log',
+    );
 
-    $registry->registerDriver($log);
+    $registry->registerDriver($reg1);
+    $registry->registerDriver($reg2);
 
-    expect($registry->get('log'))->toBe($log)
-        ->and($registry->has('log'))->toBeTrue()
-        ->and($registry->has('missing'))->toBeFalse()
-        ->and($registry->get('missing'))->toBeNull();
+    expect($registry->driver('mail', 'openkos/smtp'))->toBe($reg1);
+    expect($registry->driver('mail', 'openkos/log'))->toBe($reg2);
+    expect($registry->forChannel('mail'))->toHaveCount(2);
 });
 
-it('filters drivers by channel', function () {
+test('it allows identical re-registrations', function () {
     $registry = new NotificationRegistry;
-    $registry->registerDriver(reg('log', 'whatsapp'))
-        ->registerDriver(reg('smtp', 'email'));
 
-    expect($registry->forChannel('whatsapp'))->toHaveCount(1)
-        ->and($registry->forChannel('whatsapp')[0]->name)->toBe('log')
-        ->and($registry->forChannel('sms'))->toBe([]);
+    $reg = new NotificationDriverRegistration(
+        name: 'openkos/smtp',
+        channel: 'mail',
+        driverClass: SmtpMailDriver::class,
+        label: 'SMTP',
+    );
+
+    $registry->registerDriver($reg);
+    $registry->registerDriver($reg);
+
+    expect($registry->forChannel('mail'))->toHaveCount(1);
 });
 
-it('serializes without leaking credentials or class', function () {
+test('it rejects conflicting driver registrations for the same channel and name', function () {
     $registry = new NotificationRegistry;
-    $registry->registerDriver(reg('log'));
 
-    expect($registry->toArray())->toBe([
-        ['name' => 'log', 'channel' => 'whatsapp', 'label' => 'Log'],
-    ]);
+    $reg1 = new NotificationDriverRegistration(
+        name: 'openkos/smtp',
+        channel: 'mail',
+        driverClass: SmtpMailDriver::class,
+        label: 'SMTP',
+    );
+
+    $reg2 = new NotificationDriverRegistration(
+        name: 'openkos/smtp',
+        channel: 'mail',
+        driverClass: LogMailDriver::class,
+        label: 'Conflicting Driver',
+    );
+
+    $registry->registerDriver($reg1);
+
+    expect(fn () => $registry->registerDriver($reg2))->toThrow(InvalidArgumentException::class);
 });
-
-it('throws on duplicate driver names', function () {
-    $registry = new NotificationRegistry;
-    $registry->registerDriver(reg('log'));
-
-    $registry->registerDriver(reg('log'));
-})->throws(InvalidArgumentException::class, 'Notification driver [log] is already registered.');
