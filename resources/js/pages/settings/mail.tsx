@@ -33,7 +33,6 @@ interface MailConfig {
     from_address?: string;
     from_name?: string;
     from?: { address?: string; name?: string };
-    drivers?: Record<string, Record<string, string>>;
 }
 
 export default function Mail({

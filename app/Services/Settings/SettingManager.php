@@ -66,7 +66,7 @@ class SettingManager
 
         $driver = match ($rawDriver) {
             'smtp' => 'openkos/smtp',
-            'log' => 'openkos/log',
+            'log', 'array', 'sendmail', 'testing' => 'openkos/log',
             default => $rawDriver,
         };
 
