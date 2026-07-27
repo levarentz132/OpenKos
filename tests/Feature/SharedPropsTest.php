@@ -23,6 +23,11 @@ it('does not leak mail or whatsapp secrets in shared props', function () {
 });
 
 it('exposes notification channel readiness as booleans only', function () {
+    config(['mail.mailers.smtp.host' => null]);
+    putenv('MAIL_HOST=');
+    $_ENV['MAIL_HOST'] = '';
+    $_SERVER['MAIL_HOST'] = '';
+
     $owner = User::factory()->owner()->create();
 
     $props = $this->actingAs($owner)->get(route('dashboard'))->viewData('page')['props'];

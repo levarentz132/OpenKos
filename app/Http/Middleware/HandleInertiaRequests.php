@@ -45,7 +45,7 @@ class HandleInertiaRequests extends Middleware
                 ->except(['mail_config', 'whatsapp_config'])
                 ->all(),
             'notificationChannels' => fn () => [
-                'mail' => filled(data_get(Setting::get('mail_config'), 'host')),
+                'mail' => filled(data_get(Setting::effectiveMailConfig(), 'host')),
                 'whatsapp' => filled(Setting::get('whatsapp_driver')),
             ],
             'auth' => [

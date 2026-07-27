@@ -19,13 +19,13 @@ class MailController extends Controller
 
     public function edit(): Response
     {
-        $settings = Setting::some(['mail_config']);
-        if (isset($settings['mail_config'])) {
-            unset($settings['mail_config']['password']);
-        }
+        $mailConfig = Setting::effectiveMailConfig();
+        unset($mailConfig['password']);
 
         return Inertia::render('settings/mail', [
-            'settings' => $settings,
+            'settings' => [
+                'mail_config' => $mailConfig,
+            ],
         ]);
     }
 
@@ -59,9 +59,9 @@ class MailController extends Controller
 
     public function test(): RedirectResponse
     {
-        $config = Setting::get('mail_config') ?? [];
+        $config = Setting::effectiveMailConfig();
 
-        if (! ($config['host'] ?? null)) {
+        if (! filled($config['host'] ?? null)) {
             Inertia::flash('toast', ['type' => 'error', 'message' => __('Configure SMTP host before testing.')]);
 
             return back();

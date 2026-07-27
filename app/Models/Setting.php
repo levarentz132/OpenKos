@@ -28,6 +28,11 @@ class Setting extends Model
         return app(SettingManager::class)->some($keys);
     }
 
+    public static function effectiveMailConfig(): array
+    {
+        return app(SettingManager::class)->getEffectiveMailConfig();
+    }
+
     public function resolveValue(): mixed
     {
         return app(SettingCaster::class)->deserialize($this->value, $this->type);
