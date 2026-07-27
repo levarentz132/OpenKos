@@ -53,7 +53,7 @@ class SettingManager
     public function getEffectiveMailConfig(): array
     {
         try {
-            $stored = Setting::get('mail_config');
+            $stored = Setting::get('mail_config') ?? [];
         } catch (\Throwable) {
             $stored = [];
         }
@@ -62,7 +62,14 @@ class SettingManager
             $stored = [];
         }
 
-        $envDriver = config('mail.default') ?: env('MAIL_MAILER', 'log');
+        $rawDriver = $stored['driver'] ?? config('mail.default') ?: env('MAIL_MAILER', 'log');
+
+        $driver = match ($rawDriver) {
+            'smtp' => 'openkos/smtp',
+            'log' => 'openkos/log',
+            default => $rawDriver,
+        };
+
         $envHost = config('mail.mailers.smtp.host') ?: env('MAIL_HOST');
         $envPort = config('mail.mailers.smtp.port') ?: env('MAIL_PORT');
         $envUsername = config('mail.mailers.smtp.username') ?: env('MAIL_USERNAME');
@@ -71,16 +78,68 @@ class SettingManager
         $envFromAddress = config('mail.from.address') ?: env('MAIL_FROM_ADDRESS');
         $envFromName = config('mail.from.name') ?: env('MAIL_FROM_NAME');
 
-        return [
-            'driver' => filled(data_get($stored, 'driver')) ? $stored['driver'] : ($envDriver ?: 'log'),
-            'host' => filled(data_get($stored, 'host')) ? (string) $stored['host'] : (string) ($envHost ?: ''),
-            'port' => filled(data_get($stored, 'port')) ? (int) $stored['port'] : ($envPort ? (int) $envPort : 587),
-            'username' => filled(data_get($stored, 'username')) ? (string) $stored['username'] : (string) ($envUsername ?: ''),
-            'password' => filled(data_get($stored, 'password')) ? (string) $stored['password'] : (string) ($envPassword ?: ''),
-            'encryption' => filled(data_get($stored, 'encryption')) ? (string) $stored['encryption'] : (string) ($envEncryption ?: 'null'),
-            'from_address' => filled(data_get($stored, 'from_address')) ? (string) $stored['from_address'] : (string) ($envFromAddress ?: ''),
-            'from_name' => filled(data_get($stored, 'from_name')) ? (string) $stored['from_name'] : (string) ($envFromName ?: ''),
-        ];
+        $fromAddress = filled(data_get($stored, 'from_address')) ? $stored['from_address'] : $envFromAddress;
+        $fromName = filled(data_get($stored, 'from_name')) ? $stored['from_name'] : $envFromName;
+
+        $host = filled(data_get($stored, 'host')) ? (string) $stored['host'] : ($envHost ?: null);
+        $port = filled(data_get($stored, 'port')) ? (int) $stored['port'] : ($envPort ? (int) $envPort : 587);
+        $username = filled(data_get($stored, 'username')) ? (string) $stored['username'] : ($envUsername ?: null);
+        $password = filled(data_get($stored, 'password')) ? (string) $stored['password'] : ($envPassword ?: null);
+        $encryption = filled(data_get($stored, 'encryption')) ? (string) $stored['encryption'] : ($envEncryption ?: null);
+
+        if (isset($stored['drivers']) && is_array($stored['drivers'])) {
+            $config = $stored;
+            $config['driver'] = $driver;
+            $config['host'] ??= $host;
+            $config['port'] ??= $port;
+            $config['username'] ??= $username;
+            $config['password'] ??= $password;
+            $config['encryption'] ??= $encryption;
+            $config['from_address'] ??= $fromAddress;
+            $config['from_name'] ??= $fromName;
+        } else {
+            $config = [
+                'driver' => $driver,
+                'from' => array_filter([
+                    'address' => $fromAddress ?: null,
+                    'name' => $fromName ?: null,
+                ], static fn ($value) => $value !== null),
+                'drivers' => [
+                    'openkos/smtp' => array_filter([
+                        'host' => $host,
+                        'port' => $port,
+                        'username' => $username,
+                        'password' => $password,
+                        'encryption' => $encryption,
+                    ], static fn ($value) => $value !== null),
+                    'openkos/log' => [
+                        'log_body' => false,
+                    ],
+                ],
+                'host' => $host,
+                'port' => $port,
+                'username' => $username,
+                'password' => $password,
+                'encryption' => $encryption,
+                'from_address' => $fromAddress,
+                'from_name' => $fromName,
+            ];
+        }
+
+        foreach ($config['drivers'] ?? [] as $key => $driverConfig) {
+            if (
+                isset($driverConfig['encryption']) &&
+                (($driverConfig['encryption'] === 'null') || ($driverConfig['encryption'] === ''))
+            ) {
+                $config['drivers'][$key]['encryption'] = null;
+            }
+        }
+
+        if (($config['encryption'] ?? null) === 'null' || ($config['encryption'] ?? null) === '') {
+            $config['encryption'] = null;
+        }
+
+        return $config;
     }
 
     private function allWithDefaults(): array

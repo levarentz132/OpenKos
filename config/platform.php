@@ -1,5 +1,6 @@
 <?php
 
+use OpenKOS\Plugins\Mail\MailPlugin;
 use OpenKOS\Plugins\WhatsApp\WhatsAppPlugin;
 
 // Reference plugin, disabled by default (see below):
@@ -31,7 +32,8 @@ return [
     */
 
     'plugins' => [
-        // Core: registers the built-in WhatsApp drivers into NotificationRegistry.
+        // Core: registers the built-in Mail and WhatsApp drivers into NotificationRegistry.
+        MailPlugin::class,
         WhatsAppPlugin::class,
 
         // Reference plugin (src/Plugins/Example) — a live demo of every consumed

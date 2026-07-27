@@ -2,18 +2,20 @@
 
 namespace App\Notifications;
 
+use App\Contracts\MailChannelNotification;
+use App\Data\Mail\MailContent;
 use App\Data\Reminder\ReminderEvent;
 use App\Enums\ReminderType;
 use App\Models\Setting;
 use App\Notifications\Channels\LogChannel;
+use App\Notifications\Channels\MailChannel;
 use App\Notifications\Channels\WhatsAppChannel;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class RentReminder extends Notification implements ShouldQueue
+class RentReminder extends Notification implements MailChannelNotification, ShouldQueue
 {
     use Queueable;
 
@@ -24,7 +26,7 @@ class RentReminder extends Notification implements ShouldQueue
         $map = [
             'log' => LogChannel::class,
             'whatsapp' => WhatsAppChannel::class,
-            'mail' => 'mail',
+            'mail' => MailChannel::class,
         ];
 
         $channels = Setting::get('reminder_channels') ?? ['log'];
@@ -32,7 +34,7 @@ class RentReminder extends Notification implements ShouldQueue
         return array_values(array_intersect_key($map, array_flip($channels)));
     }
 
-    public function toMail(object $notifiable): MailMessage
+    public function toMailChannel(object $notifiable): MailContent
     {
         $subject = match ($this->event->type) {
             ReminderType::Upcoming => __('Rent Reminder'),
@@ -40,10 +42,13 @@ class RentReminder extends Notification implements ShouldQueue
             ReminderType::Overdue => __('Rent Overdue'),
         };
 
-        return (new MailMessage)
-            ->subject($subject)
-            ->greeting(__('Hi :name', ['name' => $notifiable->name]))
-            ->line($this->renderMessage($notifiable));
+        $messageText = $this->renderMessage($notifiable);
+
+        return new MailContent(
+            subject: $subject,
+            htmlBody: '<div>'.e($messageText).'</div>',
+            plainTextBody: $messageText,
+        );
     }
 
     public function toLog(object $notifiable): string
