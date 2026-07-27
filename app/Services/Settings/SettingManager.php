@@ -50,6 +50,39 @@ class SettingManager
         return $result;
     }
 
+    public function getEffectiveMailConfig(): array
+    {
+        try {
+            $stored = Setting::get('mail_config');
+        } catch (\Throwable) {
+            $stored = [];
+        }
+
+        if (! is_array($stored)) {
+            $stored = [];
+        }
+
+        $envDriver = config('mail.default') ?: env('MAIL_MAILER', 'log');
+        $envHost = config('mail.mailers.smtp.host') ?: env('MAIL_HOST');
+        $envPort = config('mail.mailers.smtp.port') ?: env('MAIL_PORT');
+        $envUsername = config('mail.mailers.smtp.username') ?: env('MAIL_USERNAME');
+        $envPassword = config('mail.mailers.smtp.password') ?: env('MAIL_PASSWORD');
+        $envEncryption = config('mail.mailers.smtp.encryption') ?: env('MAIL_ENCRYPTION');
+        $envFromAddress = config('mail.from.address') ?: env('MAIL_FROM_ADDRESS');
+        $envFromName = config('mail.from.name') ?: env('MAIL_FROM_NAME');
+
+        return [
+            'driver' => filled(data_get($stored, 'driver')) ? $stored['driver'] : ($envDriver ?: 'log'),
+            'host' => filled(data_get($stored, 'host')) ? (string) $stored['host'] : (string) ($envHost ?: ''),
+            'port' => filled(data_get($stored, 'port')) ? (int) $stored['port'] : ($envPort ? (int) $envPort : 587),
+            'username' => filled(data_get($stored, 'username')) ? (string) $stored['username'] : (string) ($envUsername ?: ''),
+            'password' => filled(data_get($stored, 'password')) ? (string) $stored['password'] : (string) ($envPassword ?: ''),
+            'encryption' => filled(data_get($stored, 'encryption')) ? (string) $stored['encryption'] : (string) ($envEncryption ?: 'null'),
+            'from_address' => filled(data_get($stored, 'from_address')) ? (string) $stored['from_address'] : (string) ($envFromAddress ?: ''),
+            'from_name' => filled(data_get($stored, 'from_name')) ? (string) $stored['from_name'] : (string) ($envFromName ?: ''),
+        ];
+    }
+
     private function allWithDefaults(): array
     {
         $defaults = [];

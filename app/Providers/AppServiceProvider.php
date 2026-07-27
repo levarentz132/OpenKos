@@ -65,14 +65,12 @@ class AppServiceProvider extends ServiceProvider
     protected function configureMail(): void
     {
         try {
-            $config = Setting::get('mail_config');
+            $config = Setting::effectiveMailConfig();
         } catch (QueryException) {
             return;
         }
 
-        if (! ($config['host'] ?? null)) {
-            return;
-        }
+        config()->set('mail.default', $config['driver'] ?? 'log');
 
         config()->set('mail.mailers.smtp.host', $config['host'] ?? '');
         config()->set('mail.mailers.smtp.port', $config['port'] ?? 587);
@@ -88,8 +86,6 @@ class AppServiceProvider extends ServiceProvider
             config()->set('mail.from.address', $fromAddress);
             config()->set('mail.from.name', $config['from_name'] ?? '');
         }
-
-        config()->set('mail.default', 'smtp');
     }
 
     protected function configureDomainEvents(): void
