@@ -2,7 +2,7 @@
 
 namespace App\Notifications\Channels;
 
-use App\Notifications\RentReminder;
+use App\Contracts\WhatsAppChannelNotification;
 use App\Services\WhatsAppManager;
 use Illuminate\Notifications\Notification;
 
@@ -12,10 +12,20 @@ class WhatsAppChannel
 
     public function send(object $notifiable, Notification $notification): void
     {
-        /** @var RentReminder $notification */
-        $this->whatsapp->send(
-            $notifiable->routeNotificationForWhatsApp($notification),
-            $notification->toWhatsApp($notifiable),
-        );
+        $phone = $notifiable->routeNotificationForWhatsApp($notification);
+
+        if (! $phone) {
+            return;
+        }
+
+        if ($notification instanceof WhatsAppChannelNotification) {
+            $content = $notification->toWhatsAppChannel($notifiable);
+        } elseif (method_exists($notification, 'toWhatsApp')) {
+            $content = $notification->toWhatsApp($notifiable);
+        } else {
+            return;
+        }
+
+        $this->whatsapp->send($phone, $content);
     }
 }

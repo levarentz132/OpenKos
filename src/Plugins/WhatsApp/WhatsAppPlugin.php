@@ -31,9 +31,18 @@ class WhatsAppPlugin extends Plugin
 
     public function register(OpenKOSManager $platform): void
     {
+        $map = [
+            'log' => 'openkos/whatsapp-log',
+            'baileys' => 'openkos/baileys',
+            'fonnte' => 'openkos/fonnte',
+            'whatsapp_cloud' => 'openkos/whatsapp-cloud',
+        ];
+
         foreach (config('services.whatsapp.drivers', []) as $name => $definition) {
+            $driverName = $map[$name] ?? $name;
+
             $platform->notifications()->registerDriver(new NotificationDriverRegistration(
-                name: $name,
+                name: $driverName,
                 channel: 'whatsapp',
                 driverClass: $definition['class'],
                 label: $definition['label'] ?? $name,

@@ -30,8 +30,17 @@ import {
 } from '@/routes/settings/whatsapp';
 import type { Driver } from '@/types';
 
+const normalizeDriver = (name: string | null | undefined): string => {
+    if (!name) return 'openkos/whatsapp-log';
+    if (name === 'log' || name === 'openkos/log') return 'openkos/whatsapp-log';
+    if (name === 'baileys') return 'openkos/baileys';
+    if (name === 'fonnte') return 'openkos/fonnte';
+    if (name === 'whatsapp_cloud' || name === 'whatsapp_cloud_api') return 'openkos/whatsapp-cloud';
+    return name;
+};
+
 export default function WhatsApp({
-    drivers,
+    drivers = [],
     settings,
     connection,
 }: {
@@ -46,14 +55,15 @@ export default function WhatsApp({
         lastConnected: string | null;
     } | null;
 }) {
+    const initialDriver = normalizeDriver(settings.whatsapp_driver);
+
     const { data, setData, submit, processing, errors } = useForm<{
         whatsapp_driver: string;
         whatsapp_config: Record<string, Record<string, string>>;
     }>({
-        whatsapp_driver: settings.whatsapp_driver ?? 'log',
+        whatsapp_driver: initialDriver,
         whatsapp_config: settings.whatsapp_config ?? {},
     });
-    const driver = data.whatsapp_driver;
 
     const [qrCode, setQrCode] = useState<string | null>(null);
     const [pairingLoading, setPairingLoading] = useState(false);
@@ -70,10 +80,21 @@ export default function WhatsApp({
 
     const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const currentDriver = drivers.find((d) => d.name === driver);
+    const activeDriverName = normalizeDriver(data.whatsapp_driver);
+    const driver = activeDriverName;
+    const currentDriver =
+        drivers.find((d) => d.name === activeDriverName) ??
+        drivers.find((d) => d.name === 'openkos/whatsapp-log') ??
+        drivers[0];
     const fields = currentDriver?.configuration_schema ?? {};
-    const driverConfig = data.whatsapp_config[driver] ?? {};
-    const isBaileys = driver === 'baileys';
+
+    const rawDriverKey = activeDriverName.replace(/^openkos\//, '').replace(/^whatsapp-/, '');
+    const driverConfig =
+        data.whatsapp_config[activeDriverName] ??
+        data.whatsapp_config[rawDriverKey] ??
+        {};
+
+    const isBaileys = activeDriverName === 'openkos/baileys';
     const showDisconnect = isBaileys && connectionStatus === 'connected';
 
     const stopPolling = () => {

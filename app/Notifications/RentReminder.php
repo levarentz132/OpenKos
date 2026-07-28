@@ -3,8 +3,10 @@
 namespace App\Notifications;
 
 use App\Contracts\MailChannelNotification;
+use App\Contracts\WhatsAppChannelNotification;
 use App\Data\Mail\MailContent;
 use App\Data\Reminder\ReminderEvent;
+use App\Data\WhatsApp\WhatsAppContent;
 use App\Enums\ReminderType;
 use App\Models\Setting;
 use App\Notifications\Channels\LogChannel;
@@ -15,7 +17,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class RentReminder extends Notification implements MailChannelNotification, ShouldQueue
+class RentReminder extends Notification implements MailChannelNotification, ShouldQueue, WhatsAppChannelNotification
 {
     use Queueable;
 
@@ -48,6 +50,13 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
             subject: $subject,
             htmlBody: '<div>'.e($messageText).'</div>',
             plainTextBody: $messageText,
+        );
+    }
+
+    public function toWhatsAppChannel(object $notifiable): WhatsAppContent
+    {
+        return new WhatsAppContent(
+            message: $this->renderMessage($notifiable),
         );
     }
 

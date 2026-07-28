@@ -31,10 +31,10 @@ describe('WhatsApp settings page', function () {
         $this->actingAs($owner)
             ->get(route('settings.whatsapp.edit'))
             ->assertInertia(fn ($page) => $page
-                ->where('drivers.0.name', 'log')
-                ->where('drivers.1.name', 'baileys')
-                ->where('drivers.2.name', 'fonnte')
-                ->where('drivers.3.name', 'whatsapp_cloud')
+                ->where('drivers.0.name', 'openkos/whatsapp-log')
+                ->where('drivers.1.name', 'openkos/baileys')
+                ->where('drivers.2.name', 'openkos/fonnte')
+                ->where('drivers.3.name', 'openkos/whatsapp-cloud')
             );
     });
 

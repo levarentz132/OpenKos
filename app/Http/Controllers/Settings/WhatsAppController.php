@@ -64,22 +64,36 @@ class WhatsAppController extends Controller
     {
         $drivers = collect($this->registry->forChannel('whatsapp'))
             ->map(function (NotificationDriverRegistration $registration) {
-                $class = $registration->driverClass;
-                $instance = new $class([]);
+                $schema = [];
+                $supportsPairing = false;
+
+                try {
+                    $class = $registration->driverClass;
+                    $instance = app()->make($class, ['config' => []]);
+                    if (method_exists($instance, 'configurationSchema')) {
+                        $schema = $instance->configurationSchema();
+                    }
+                    if (method_exists($instance, 'supportsPairing')) {
+                        $supportsPairing = $instance->supportsPairing();
+                    }
+                } catch (\Throwable) {
+                }
 
                 return [
                     'name' => $registration->name,
                     'label' => $registration->label,
-                    'configuration_schema' => $instance->configurationSchema(),
-                    'supports_pairing' => $instance->supportsPairing(),
+                    'configuration_schema' => $schema,
+                    'supports_pairing' => $supportsPairing,
                 ];
             })
             ->values();
 
         $settings = Setting::some(['whatsapp_driver', 'whatsapp_config']);
+        $rawDriver = $settings['whatsapp_driver'] ?? 'openkos/whatsapp-log';
+        $settings['whatsapp_driver'] = $this->whatsapp->normalizeDriverId($rawDriver);
 
         $connection = null;
-        if (($settings['whatsapp_driver'] ?? null) === 'baileys') {
+        if (in_array($settings['whatsapp_driver'], ['openkos/baileys', 'baileys'], true)) {
             try {
                 $result = $this->whatsapp->health();
                 $connection = [
@@ -101,13 +115,14 @@ class WhatsAppController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
-        $driverNames = array_map(
+        $registeredDrivers = array_map(
             fn (NotificationDriverRegistration $r) => $r->name,
             $this->registry->forChannel('whatsapp'),
         );
+        $allowedDrivers = array_unique(array_merge($registeredDrivers, ['log', 'baileys', 'fonnte', 'whatsapp_cloud', 'whatsapp_cloud_api']));
 
         $validated = $request->validate([
-            'whatsapp_driver' => ['nullable', 'string', 'in:'.implode(',', $driverNames)],
+            'whatsapp_driver' => ['nullable', 'string', 'in:'.implode(',', $allowedDrivers)],
             'whatsapp_config' => ['nullable', 'array'],
         ]);
 

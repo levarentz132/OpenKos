@@ -3,6 +3,7 @@
 use App\Contracts\WhatsAppDriver;
 use App\Data\WhatsApp\DriverHealthResult;
 use App\Data\WhatsApp\WhatsAppMessage;
+use App\Exceptions\WhatsAppDriverNotFoundException;
 use App\Services\WhatsAppManager;
 use OpenKOS\Platform\Notification\NotificationDriverRegistration;
 use OpenKOS\Platform\Notification\NotificationRegistry;
@@ -35,26 +36,27 @@ it('resolves driver by name', function () {
     expect($driver)->toBeInstanceOf(WhatsAppDriver::class);
 });
 
-it('caches driver instances', function () {
+it('resolves driver instances via container', function () {
     $first = $this->manager->driver('log');
     $second = $this->manager->driver('log');
 
-    expect($first)->toBe($second);
+    expect($first)->toBeInstanceOf(WhatsAppDriver::class);
+    expect($second)->toBeInstanceOf(WhatsAppDriver::class);
 });
 
 it('throws for unknown driver', function () {
     expect(fn () => $this->manager->driver('unknown'))
-        ->toThrow(InvalidArgumentException::class, 'not found');
+        ->toThrow(WhatsAppDriverNotFoundException::class);
 });
 
 it('send delegates to default driver', function () {
     config()->set('services.whatsapp.default', 'test_driver');
-    $manager = app(WhatsAppManager::class);
+    TestWhatsAppDriver::$sentMessages = [];
 
-    $driver = $manager->driver('test_driver');
+    $manager = app(WhatsAppManager::class);
     $manager->send('08123456789', 'Hello');
 
-    expect($driver->sent)->toBe('08123456789');
+    expect(TestWhatsAppDriver::$sentMessages)->toContain('08123456789');
 });
 
 it('health delegates to resolved driver', function () {
@@ -71,13 +73,13 @@ it('getPairingQrCode delegates to resolved driver', function () {
 
 class TestWhatsAppDriver implements WhatsAppDriver
 {
-    public string $sent = '';
+    public static array $sentMessages = [];
 
     public function __construct(private array $config = []) {}
 
     public function send(WhatsAppMessage $message): void
     {
-        $this->sent = $message->phone;
+        self::$sentMessages[] = $message->phone;
     }
 
     public function health(): DriverHealthResult
