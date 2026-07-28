@@ -183,9 +183,10 @@ export default function WhatsApp({
                         </div>
 
                         {Object.keys(fields).length > 0 && (
-                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                                Values set via environment variables override
-                                the fields below and cannot be changed here.
+                            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                                Values saved below override environment defaults.
+                                Leave fields blank to use environment variable
+                                fallbacks.
                             </div>
                         )}
 

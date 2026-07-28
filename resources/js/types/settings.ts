@@ -27,6 +27,7 @@ export type Driver = {
             required?: boolean;
             type?: string;
             placeholder?: string;
+            options?: Array<{ value: string; label: string }>;
         }
     >;
 };
