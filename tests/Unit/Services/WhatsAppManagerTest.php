@@ -35,7 +35,7 @@ describe('WhatsAppManager', function () {
         $registry->registerDriver(new NotificationDriverRegistration(
             name: 'test/whatsapp-custom',
             channel: 'whatsapp',
-            driverClass: TestWhatsAppDriver::class,
+            driverClass: UnitTestWhatsAppDriver::class,
             label: 'Test Driver',
         ));
 
@@ -43,7 +43,7 @@ describe('WhatsAppManager', function () {
 
         $driver = $manager->driver('test/whatsapp-custom');
 
-        expect($driver)->toBeInstanceOf(TestWhatsAppDriver::class);
+        expect($driver)->toBeInstanceOf(UnitTestWhatsAppDriver::class);
     });
 
     it('throws exception when driver is not registered', function () {
@@ -74,7 +74,7 @@ describe('WhatsAppManager', function () {
         $registry->registerDriver(new NotificationDriverRegistration(
             name: 'openkos/failing',
             channel: 'whatsapp',
-            driverClass: FailingWhatsAppDriver::class,
+            driverClass: UnitTestFailingWhatsAppDriver::class,
             label: 'Failing Driver',
         ));
 
@@ -92,7 +92,7 @@ describe('WhatsAppManager', function () {
     });
 });
 
-class TestWhatsAppDriver implements WhatsAppDriver
+class UnitTestWhatsAppDriver implements WhatsAppDriver
 {
     public function __construct(public array $config = []) {}
 
@@ -123,7 +123,7 @@ class TestWhatsAppDriver implements WhatsAppDriver
     public function disconnect(): void {}
 }
 
-class FailingWhatsAppDriver implements WhatsAppDriver
+class UnitTestFailingWhatsAppDriver implements WhatsAppDriver
 {
     public function __construct(public array $config = []) {}
 
