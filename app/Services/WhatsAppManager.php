@@ -4,40 +4,48 @@ namespace App\Services;
 
 use App\Contracts\WhatsAppDriver;
 use App\Data\WhatsApp\DriverHealthResult;
+use App\Data\WhatsApp\WhatsAppContent;
 use App\Data\WhatsApp\WhatsAppMessage;
+use App\Events\WhatsApp\WhatsAppFailed;
+use App\Events\WhatsApp\WhatsAppSent;
+use App\Exceptions\InvalidWhatsAppDriverException;
+use App\Exceptions\WhatsAppDeliveryException;
+use App\Exceptions\WhatsAppDriverNotFoundException;
 use App\Models\Setting;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\QueryException;
-use InvalidArgumentException;
 use OpenKOS\Platform\Notification\NotificationRegistry;
 
 class WhatsAppManager
 {
-    private array $drivers = [];
-
-    public function __construct(private NotificationRegistry $registry) {}
+    public function __construct(
+        private NotificationRegistry $registry,
+        private Container $container,
+    ) {}
 
     public function driver(?string $name = null): WhatsAppDriver
     {
-        $name ??= $this->resolveDefaultDriver();
-
-        if (isset($this->drivers[$name])) {
-            return $this->drivers[$name];
-        }
-
-        $registration = $this->registry->get($name);
-
-        if (! $registration || $registration->channel !== 'whatsapp') {
-            throw new InvalidArgumentException("WhatsApp driver [{$name}] not found.");
-        }
-
-        $class = $registration->driverClass;
-
-        return $this->drivers[$name] = new $class($this->resolveCredentials($name, $registration->config));
+        return $this->resolveDriver($name)[1];
     }
 
-    public function send(string $phone, string $message): void
+    public function send(string $phone, string|WhatsAppContent $content): void
     {
-        $this->driver()->send(new WhatsAppMessage($phone, $message));
+        [$driverId, $driver] = $this->resolveDriver();
+
+        $message = is_string($content) ? $content : $content->message;
+        $mediaUrl = $content instanceof WhatsAppContent ? $content->mediaUrl : null;
+
+        try {
+            $driver->send(new WhatsAppMessage($phone, $message));
+
+            event(new WhatsAppSent($driverId, $phone, $mediaUrl));
+        } catch (\Throwable $exception) {
+            $deliveryException = WhatsAppDeliveryException::from($driverId, $exception);
+
+            event(new WhatsAppFailed($driverId, $phone, $deliveryException));
+
+            throw $deliveryException;
+        }
     }
 
     public function health(): DriverHealthResult
@@ -58,6 +66,44 @@ class WhatsAppManager
     public function disconnect(): void
     {
         $this->driver()->disconnect();
+    }
+
+    /**
+     * @return array{0: string, 1: WhatsAppDriver}
+     */
+    private function resolveDriver(?string $name = null): array
+    {
+        $name ??= $this->resolveDefaultDriver();
+        $normalizedId = $this->normalizeDriverId($name);
+
+        $registration = $this->registry->driver('whatsapp', $normalizedId);
+
+        if (! $registration) {
+            throw WhatsAppDriverNotFoundException::for($normalizedId);
+        }
+
+        $credentials = $this->resolveCredentials($name, $registration->config);
+
+        $driver = $this->container->make($registration->driverClass, [
+            'config' => $credentials,
+        ]);
+
+        if (! $driver instanceof WhatsAppDriver) {
+            throw InvalidWhatsAppDriverException::for($normalizedId, $registration->driverClass);
+        }
+
+        return [$normalizedId, $driver];
+    }
+
+    public function normalizeDriverId(string $name): string
+    {
+        return match ($name) {
+            'log', 'openkos/log' => 'openkos/whatsapp-log',
+            'baileys' => 'openkos/baileys',
+            'fonnte' => 'openkos/fonnte',
+            'whatsapp_cloud', 'whatsapp_cloud_api' => 'openkos/whatsapp-cloud',
+            default => $name,
+        };
     }
 
     private function resolveDefaultDriver(): string
