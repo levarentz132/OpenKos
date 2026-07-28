@@ -88,7 +88,7 @@ class MailManager
     {
         return match ($name) {
             'smtp' => 'openkos/smtp',
-            'log' => 'openkos/log',
+            'log', 'array', 'sendmail', 'testing' => 'openkos/log',
             default => $name,
         };
     }

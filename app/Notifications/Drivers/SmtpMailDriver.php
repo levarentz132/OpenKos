@@ -13,6 +13,21 @@ class SmtpMailDriver implements MailDriver
 {
     public function __construct(private array $config = []) {}
 
+    public function configurationSchema(): array
+    {
+        return [
+            'host' => ['label' => 'SMTP Host', 'type' => 'text', 'required' => true, 'placeholder' => 'smtp.example.com'],
+            'port' => ['label' => 'Port', 'type' => 'number', 'required' => true, 'placeholder' => '587'],
+            'username' => ['label' => 'Username', 'type' => 'text', 'required' => false, 'placeholder' => 'user@example.com'],
+            'password' => ['label' => 'Password', 'type' => 'password', 'required' => false, 'placeholder' => 'Enter SMTP password'],
+            'encryption' => ['label' => 'Encryption', 'type' => 'select', 'options' => [
+                ['value' => 'null', 'label' => 'None'],
+                ['value' => 'tls', 'label' => 'TLS'],
+                ['value' => 'ssl', 'label' => 'SSL'],
+            ]],
+        ];
+    }
+
     public function send(MailMessage $message): MailSendResult
     {
         $this->validateConfig();

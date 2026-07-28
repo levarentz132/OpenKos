@@ -5,24 +5,50 @@ namespace App\Http\Controllers\Settings;
 use App\Actions\Settings\UpdateSettings;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\MailManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
+use OpenKOS\Platform\Notification\NotificationDriverRegistration;
+use OpenKOS\Platform\Notification\NotificationRegistry;
 
 class MailController extends Controller
 {
     public function __construct(
         private UpdateSettings $updateSettings,
+        private NotificationRegistry $registry,
+        private MailManager $mailManager,
     ) {}
 
     public function edit(): Response
     {
+        $drivers = collect($this->registry->forChannel('mail'))
+            ->map(function (NotificationDriverRegistration $registration) {
+                $schema = [];
+                try {
+                    $class = $registration->driverClass;
+                    $instance = app()->make($class, ['config' => []]);
+                    if (method_exists($instance, 'configurationSchema')) {
+                        $schema = $instance->configurationSchema();
+                    }
+                } catch (\Throwable) {
+                    $schema = [];
+                }
+
+                return [
+                    'name' => $registration->name,
+                    'label' => $registration->label,
+                    'configuration_schema' => $schema,
+                ];
+            })
+            ->values();
+
         $mailConfig = Setting::effectiveMailConfig();
         unset($mailConfig['password']);
 
         return Inertia::render('settings/mail', [
+            'drivers' => $drivers,
             'settings' => [
                 'mail_config' => $mailConfig,
             ],
@@ -31,8 +57,14 @@ class MailController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
+        $registeredDrivers = array_map(
+            fn (NotificationDriverRegistration $r) => $r->name,
+            $this->registry->forChannel('mail'),
+        );
+        $allowedDrivers = array_unique(array_merge($registeredDrivers, ['openkos/smtp', 'openkos/log', 'smtp', 'log', 'sendmail']));
+
         $validated = $request->validate([
-            'mail_config.driver' => ['nullable', 'string', 'in:smtp,log,sendmail'],
+            'mail_config.driver' => ['nullable', 'string', 'in:'.implode(',', $allowedDrivers)],
             'mail_config.host' => ['nullable', 'string', 'max:255'],
             'mail_config.port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'mail_config.username' => ['nullable', 'string', 'max:255'],
@@ -59,23 +91,12 @@ class MailController extends Controller
 
     public function test(): RedirectResponse
     {
-        $config = Setting::effectiveMailConfig();
+        $health = $this->mailManager->health();
 
-        if (! filled($config['host'] ?? null)) {
-            Inertia::flash('toast', ['type' => 'error', 'message' => __('Configure SMTP host before testing.')]);
-
-            return back();
-        }
-
-        try {
-            Mail::raw(__('Test email from OpenKOS.'), function ($message) use ($config): void {
-                $message->to($config['from_address'] ?? '')
-                    ->subject(__('Test Email'));
-            });
-
-            Inertia::flash('toast', ['type' => 'success', 'message' => __('Test email sent.')]);
-        } catch (\Throwable $e) {
-            Inertia::flash('toast', ['type' => 'error', 'message' => __('Failed to send: :error', ['error' => $e->getMessage()])]);
+        if ($health->healthy) {
+            Inertia::flash('toast', ['type' => 'success', 'message' => __('Mail configuration is healthy: :msg', ['msg' => $health->message])]);
+        } else {
+            Inertia::flash('toast', ['type' => 'error', 'message' => __('Mail configuration check failed: :msg', ['msg' => $health->message ?? __('Invalid config')])]);
         }
 
         return back();

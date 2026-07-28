@@ -17,6 +17,7 @@ describe('Mail settings page', function () {
             ->assertInertia(fn ($page) => $page
                 ->component('settings/mail')
                 ->has('settings.mail_config')
+                ->has('drivers')
             );
     });
 
@@ -128,9 +129,9 @@ describe('Mail settings page', function () {
     });
 
     it('resolves mail.default driver from settings driver to env mailer to log', function () {
-        config(['mail.default' => 'sendmail']);
+        config(['mail.default' => 'postmark']);
 
-        expect(Setting::effectiveMailConfig()['driver'])->toBe('sendmail');
+        expect(Setting::effectiveMailConfig()['driver'])->toBe('postmark');
 
         Setting::set('mail_config', ['driver' => 'smtp']);
 
