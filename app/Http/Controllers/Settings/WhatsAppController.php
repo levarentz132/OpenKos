@@ -89,10 +89,11 @@ class WhatsAppController extends Controller
             ->values();
 
         $settings = Setting::some(['whatsapp_driver', 'whatsapp_config']);
+        $rawDriver = $settings['whatsapp_driver'] ?? 'openkos/whatsapp-log';
+        $settings['whatsapp_driver'] = $this->whatsapp->normalizeDriverId($rawDriver);
 
         $connection = null;
-        $activeDriver = $settings['whatsapp_driver'] ?? 'log';
-        if (in_array($this->whatsapp->normalizeDriverId($activeDriver), ['openkos/baileys', 'baileys'], true)) {
+        if (in_array($settings['whatsapp_driver'], ['openkos/baileys', 'baileys'], true)) {
             try {
                 $result = $this->whatsapp->health();
                 $connection = [
