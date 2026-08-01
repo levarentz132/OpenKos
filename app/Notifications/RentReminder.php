@@ -96,8 +96,8 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
 
         $message = $template
             ? str_replace(
-                [':name', ':unit:', ':days', ':amount', ':date'],
-                [$notifiable->name, $this->event->lease->unit?->name ?? '—', $this->event->lease->unit?->name ?? '—', $days, $amount, $date],
+                [':name', ':unit', ':days', ':amount', ':date'],
+                [$notifiable->name, $this->event->lease->unit?->name ?? '—', $days, $amount, $date],
                 $template,
             )
             : __("notifications.rent.{$this->event->type->value}", [

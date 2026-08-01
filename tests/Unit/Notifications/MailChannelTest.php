@@ -7,6 +7,7 @@ use App\Data\Reminder\ReminderEvent;
 use App\Enums\ReminderType;
 use App\Models\Lease;
 use App\Models\Setting;
+use App\Models\Unit;
 use App\Notifications\Channels\LogChannel;
 use App\Notifications\Channels\MailChannel;
 use App\Notifications\RentReminder;
@@ -111,4 +112,24 @@ test('RentReminder still renders events without invoice context', function () {
     expect($content->plainTextBody)
         ->toContain('Tenant')
         ->not->toContain('/portal/billing/invoices/');
+});
+
+test('RentReminder replaces every documented custom template placeholder', function () {
+    Setting::set('reminder_message_template', ':name|:unit|:days|:amount|:date');
+
+    $lease = new Lease;
+    $lease->setRelation('unit', new Unit(['name' => 'A-01']));
+    $event = new ReminderEvent(
+        lease: $lease,
+        type: ReminderType::Overdue,
+        periodStart: '2026-08-01',
+        periodEnd: '2026-08-31',
+        dueDate: '2026-08-01',
+        amount: 150000000,
+        overdueDays: 3,
+    );
+
+    $content = (new RentReminder($event))->toMailChannel((object) ['name' => 'Ayu']);
+
+    expect($content->plainTextBody)->toBe('Ayu|A-01|3|1,500,000|01 Aug 2026');
 });
