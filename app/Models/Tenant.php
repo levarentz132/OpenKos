@@ -48,6 +48,15 @@ class Tenant extends Model
         return $email ? [$email => $this->name] : [];
     }
 
+    public function hasReminderRoute(array $channels): bool
+    {
+        $hasPhoneRoute = $this->phone
+            && (in_array('whatsapp', $channels, true) || in_array('log', $channels, true));
+        $hasMailRoute = $this->user?->email && in_array('mail', $channels, true);
+
+        return (bool) ($hasPhoneRoute || $hasMailRoute);
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

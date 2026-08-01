@@ -207,6 +207,23 @@ describe('SendRentRemindersAction', function () {
         Carbon::setTestNow();
     });
 
+    it('does not treat a phone as a mail contact', function () {
+        Carbon::setTestNow(Carbon::parse('2026-07-01'));
+        Setting::set('reminder_channels', ['mail'], 'array');
+        Notification::fake();
+
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-07-01']);
+        $lease->load(['primaryTenant.user']);
+
+        $sent = app(SendRentReminders::class)->execute($lease);
+
+        expect($sent)->toBeEmpty();
+        expect(ReminderLog::count())->toBe(0);
+        Notification::assertNothingSent();
+
+        Carbon::setTestNow();
+    });
+
     it('emails an invited but unverified tenant', function () {
         Carbon::setTestNow(Carbon::parse('2026-07-01'));
         Setting::set('reminder_channels', ['mail'], 'array');
