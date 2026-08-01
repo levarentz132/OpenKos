@@ -21,7 +21,7 @@ class PaymentReminderScheduler
 
         foreach ($invoices as $invoice) {
             $dueDate = Carbon::parse($invoice->due_date)->startOfDay();
-            $amount = (int) ((float) $invoice->outstanding * 100);
+            $amount = (int) str_replace('.', '', $invoice->outstanding);
             $periodStart = $invoice->period_start->toDateString();
             $periodEnd = $invoice->period_end->toDateString();
             $dueDateStr = $dueDate->toDateString();

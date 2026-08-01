@@ -72,6 +72,23 @@ describe('PaymentReminderScheduler', function () {
         Carbon::setTestNow();
     });
 
+    it('converts fractional outstanding amounts to cents without truncation', function () {
+        Carbon::setTestNow(Carbon::parse('2026-07-01'));
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-06-01']);
+        $lease->invoices()->whereDate('due_date', '2026-07-01')->firstOrFail()->update([
+            'total' => '0.29',
+            'amount_paid' => '0.00',
+        ]);
+        $settings = new ReminderSettings(true, 3, []);
+
+        $events = (new PaymentReminderScheduler)->pendingFor($lease, $settings);
+
+        expect($events)->toHaveCount(1);
+        expect($events[0]->amount)->toBe(29);
+
+        Carbon::setTestNow();
+    });
+
     it('returns overdue event at configured interval', function () {
         Carbon::setTestNow(Carbon::parse('2026-07-02'));
         $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-07-01']);
