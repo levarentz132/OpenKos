@@ -97,9 +97,8 @@ class AppServiceProvider extends ServiceProvider
             $tenant = $lease->primaryTenant;
 
             $channels = Setting::get('reminder_channels') ?? ['log'];
-            $hasContact = $tenant?->phone || ($tenant?->user?->email && in_array('mail', $channels));
 
-            if (! $hasContact) {
+            if (! $tenant?->hasReminderRoute($channels)) {
                 return;
             }
 

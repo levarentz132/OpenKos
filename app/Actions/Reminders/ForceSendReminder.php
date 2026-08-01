@@ -25,9 +25,8 @@ class ForceSendReminder
         $tenant = $lease->primaryTenant;
 
         $channels = Setting::get('reminder_channels') ?? ['log'];
-        $hasContact = $tenant?->phone || ($tenant?->user?->email && in_array('mail', $channels));
 
-        if (! $hasContact) {
+        if (! $tenant?->hasReminderRoute($channels)) {
             return 'no_contact';
         }
 
@@ -75,6 +74,7 @@ class ForceSendReminder
             dueDate: $invoice->due_date->toDateString(),
             amount: (int) round((float) $invoice->outstanding * 100),
             overdueDays: $overdueDays,
+            invoice: $invoice,
         );
 
         $log = $this->repository->recordIfAbsent($event, $channels);

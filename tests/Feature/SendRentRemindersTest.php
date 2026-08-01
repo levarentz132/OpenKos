@@ -53,6 +53,8 @@ describe('PaymentReminderScheduler', function () {
         expect($events)->toHaveCount(1);
         expect($events[0]->type->value)->toBe('upcoming');
         expect($events[0]->dueDate)->toBe('2026-07-01');
+        expect($events[0]->invoice)->not->toBeNull();
+        expect($events[0]->invoice?->due_date->toDateString())->toBe('2026-07-01');
 
         Carbon::setTestNow();
     });
@@ -66,6 +68,23 @@ describe('PaymentReminderScheduler', function () {
 
         expect($events)->toHaveCount(1);
         expect($events[0]->type->value)->toBe('due_today');
+
+        Carbon::setTestNow();
+    });
+
+    it('converts fractional outstanding amounts to cents without truncation', function () {
+        Carbon::setTestNow(Carbon::parse('2026-07-01'));
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-06-01']);
+        $lease->invoices()->whereDate('due_date', '2026-07-01')->firstOrFail()->update([
+            'total' => '0.29',
+            'amount_paid' => '0.00',
+        ]);
+        $settings = new ReminderSettings(true, 3, []);
+
+        $events = (new PaymentReminderScheduler)->pendingFor($lease, $settings);
+
+        expect($events)->toHaveCount(1);
+        expect($events[0]->amount)->toBe(29);
 
         Carbon::setTestNow();
     });
@@ -112,6 +131,22 @@ describe('PaymentReminderScheduler', function () {
         $events = (new PaymentReminderScheduler)->pendingFor($lease, $settings);
 
         expect($events)->toBeEmpty();
+
+        Carbon::setTestNow();
+    });
+
+    it('suppresses a queued reminder when its invoice is no longer payable', function () {
+        Carbon::setTestNow(Carbon::parse('2026-07-01'));
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-06-01']);
+        $settings = new ReminderSettings(true, 3, []);
+        $event = (new PaymentReminderScheduler)->pendingFor($lease, $settings)[0];
+        $queuedReminder = unserialize(serialize(new RentReminder($event)));
+
+        expect($queuedReminder->shouldSend($lease->primaryTenant, 'mail'))->toBeTrue();
+
+        $event->invoice?->update(['status' => InvoiceStatus::Paid]);
+
+        expect($queuedReminder->shouldSend($lease->primaryTenant, 'mail'))->toBeFalse();
 
         Carbon::setTestNow();
     });
@@ -205,6 +240,23 @@ describe('SendRentRemindersAction', function () {
         Carbon::setTestNow();
     });
 
+    it('does not treat a phone as a mail contact', function () {
+        Carbon::setTestNow(Carbon::parse('2026-07-01'));
+        Setting::set('reminder_channels', ['mail'], 'array');
+        Notification::fake();
+
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-07-01']);
+        $lease->load(['primaryTenant.user']);
+
+        $sent = app(SendRentReminders::class)->execute($lease);
+
+        expect($sent)->toBeEmpty();
+        expect(ReminderLog::count())->toBe(0);
+        Notification::assertNothingSent();
+
+        Carbon::setTestNow();
+    });
+
     it('emails an invited but unverified tenant', function () {
         Carbon::setTestNow(Carbon::parse('2026-07-01'));
         Setting::set('reminder_channels', ['mail'], 'array');
@@ -237,6 +289,78 @@ describe('SendRentRemindersAction', function () {
 
         expect($sent)->not->toBeEmpty();
         Notification::assertSentTo($lease->primaryTenant, RentReminder::class);
+
+        Carbon::setTestNow();
+    });
+
+    it('includes invoice context and portal link in scheduled mail reminders', function () {
+        Carbon::setTestNow(Carbon::parse('2026-07-01'));
+        Setting::set('reminder_channels', ['mail'], 'array');
+        Notification::fake();
+
+        $user = User::factory()->create(['email' => 'tenant@example.com']);
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-07-01']);
+        $lease->primaryTenant->update([
+            'phone' => null,
+            'user_id' => $user->id,
+        ]);
+        $lease->load(['primaryTenant.user']);
+        $tenant = $lease->primaryTenant;
+        $invoice = $lease->invoices()->payable()->orderBy('period_start')->firstOrFail();
+
+        app(SendRentReminders::class)->execute($lease);
+
+        Notification::assertSentTo(
+            $tenant,
+            RentReminder::class,
+            function (RentReminder $notification) use ($invoice, $tenant): bool {
+                $content = $notification->toMailChannel($tenant);
+                $invoiceUrl = route('portal.billing.invoices.show', $invoice);
+
+                expect($content->plainTextBody)
+                    ->toContain($invoice->reference)
+                    ->toContain($invoice->period_start->format('d M Y'))
+                    ->toContain($invoice->period_end->format('d M Y'))
+                    ->toContain($invoice->due_date->format('d M Y'))
+                    ->toContain(number_format((float) $invoice->outstanding, 0))
+                    ->toContain($invoiceUrl);
+                expect($content->htmlBody)->toContain($invoiceUrl);
+
+                return true;
+            },
+        );
+
+        Carbon::setTestNow();
+    });
+
+    it('includes invoice context without a portal link for whatsapp-only tenants', function () {
+        Carbon::setTestNow(Carbon::parse('2026-07-01'));
+        Notification::fake();
+
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-07-01']);
+        $lease->load(['primaryTenant']);
+        $tenant = $lease->primaryTenant;
+        $invoice = $lease->invoices()->payable()->orderBy('period_start')->firstOrFail();
+
+        app(SendRentReminders::class)->execute($lease);
+
+        Notification::assertSentTo(
+            $tenant,
+            RentReminder::class,
+            function (RentReminder $notification) use ($invoice, $tenant): bool {
+                $message = $notification->toWhatsAppChannel($tenant)->message;
+
+                expect($message)
+                    ->toContain($invoice->reference)
+                    ->toContain($invoice->period_start->format('d M Y'))
+                    ->toContain($invoice->period_end->format('d M Y'))
+                    ->toContain($invoice->due_date->format('d M Y'))
+                    ->toContain(number_format((float) $invoice->outstanding, 0))
+                    ->not->toContain(route('portal.billing.invoices.show', $invoice));
+
+                return true;
+            },
+        );
 
         Carbon::setTestNow();
     });
@@ -294,6 +418,45 @@ describe('Manual Send via Controller', function () {
             ->assertRedirect();
 
         expect(ReminderLog::count())->toBe(1);
+
+        Carbon::setTestNow();
+    });
+
+    it('includes the selected invoice and portal link in a manual fallback reminder', function () {
+        Carbon::setTestNow(Carbon::parse('2026-06-20'));
+        Setting::set('reminder_channels', ['mail'], 'array');
+        Notification::fake();
+
+        $owner = User::factory()->owner()->create();
+        $tenantUser = User::factory()->create(['email' => 'tenant@example.com']);
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-07-01']);
+        $lease->primaryTenant->update([
+            'phone' => null,
+            'user_id' => $tenantUser->id,
+        ]);
+        $lease->unit->property->users()->attach($owner);
+        $lease->load(['primaryTenant.user']);
+        $tenant = $lease->primaryTenant;
+        $invoice = $lease->invoices()->payable()->orderBy('period_start')->firstOrFail();
+
+        $this->actingAs($owner)
+            ->post(route('leases.send-reminder', $lease))
+            ->assertRedirect();
+
+        expect(ReminderLog::count())->toBe(1);
+        Notification::assertSentTo(
+            $tenant,
+            RentReminder::class,
+            function (RentReminder $notification) use ($invoice, $tenant): bool {
+                $content = $notification->toMailChannel($tenant);
+
+                expect($content->plainTextBody)
+                    ->toContain($invoice->reference)
+                    ->toContain(route('portal.billing.invoices.show', $invoice));
+
+                return true;
+            },
+        );
 
         Carbon::setTestNow();
     });

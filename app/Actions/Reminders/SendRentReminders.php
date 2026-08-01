@@ -41,8 +41,7 @@ class SendRentReminders
 
         foreach ($leases as $lease) {
             $tenant = $lease->primaryTenant;
-            $hasContact = $tenant?->phone || ($tenant?->user?->email && in_array('mail', $channels));
-            if (! $hasContact) {
+            if (! $tenant?->hasReminderRoute($channels)) {
                 continue;
             }
 

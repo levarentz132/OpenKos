@@ -3,6 +3,7 @@
 namespace App\Data\Reminder;
 
 use App\Enums\ReminderType;
+use App\Models\Invoice;
 use App\Models\Lease;
 
 class ReminderEvent
@@ -15,5 +16,6 @@ class ReminderEvent
         public readonly string $dueDate,
         public readonly int $amount,
         public readonly ?int $overdueDays = null,
+        public readonly ?Invoice $invoice = null,
     ) {}
 }
