@@ -38,6 +38,17 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
         return array_values(array_intersect_key($map, array_flip($channels)));
     }
 
+    public function shouldSend(object $notifiable, string $channel): bool
+    {
+        $invoice = $this->invoice();
+
+        if (! $invoice?->getKey()) {
+            return true;
+        }
+
+        return Invoice::query()->payable()->whereKey($invoice->getKey())->exists();
+    }
+
     public function toMailChannel(object $notifiable): MailContent
     {
         $subject = match ($this->event->type) {

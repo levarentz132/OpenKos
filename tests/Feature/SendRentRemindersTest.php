@@ -117,6 +117,22 @@ describe('PaymentReminderScheduler', function () {
 
         Carbon::setTestNow();
     });
+
+    it('suppresses a queued reminder when its invoice is no longer payable', function () {
+        Carbon::setTestNow(Carbon::parse('2026-07-01'));
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-06-01']);
+        $settings = new ReminderSettings(true, 3, []);
+        $event = (new PaymentReminderScheduler)->pendingFor($lease, $settings)[0];
+        $queuedReminder = unserialize(serialize(new RentReminder($event)));
+
+        expect($queuedReminder->shouldSend($lease->primaryTenant, 'mail'))->toBeTrue();
+
+        $event->invoice?->update(['status' => InvoiceStatus::Paid]);
+
+        expect($queuedReminder->shouldSend($lease->primaryTenant, 'mail'))->toBeFalse();
+
+        Carbon::setTestNow();
+    });
 });
 
 describe('SendRentRemindersAction', function () {

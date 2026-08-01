@@ -107,11 +107,13 @@ test('RentReminder still renders events without invoice context', function () {
         amount: 150000000,
     );
 
-    $content = (new RentReminder($event))->toMailChannel((object) ['name' => 'Tenant']);
+    $reminder = new RentReminder($event);
+    $content = $reminder->toMailChannel((object) ['name' => 'Tenant']);
 
     expect($content->plainTextBody)
         ->toContain('Tenant')
         ->not->toContain('/portal/billing/invoices/');
+    expect($reminder->shouldSend((object) [], 'mail'))->toBeTrue();
 });
 
 test('RentReminder replaces every documented custom template placeholder', function () {
