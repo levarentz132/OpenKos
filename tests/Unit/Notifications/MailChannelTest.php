@@ -93,3 +93,22 @@ test('RentReminder via returns only configured channels', function () {
 
     expect($via)->toBe([LogChannel::class, MailChannel::class]);
 });
+
+test('RentReminder still renders events without invoice context', function () {
+    $lease = new Lease;
+    $lease->setRelation('unit', null);
+    $event = new ReminderEvent(
+        lease: $lease,
+        type: ReminderType::Upcoming,
+        periodStart: '2026-08-01',
+        periodEnd: '2026-08-31',
+        dueDate: '2026-08-01',
+        amount: 150000000,
+    );
+
+    $content = (new RentReminder($event))->toMailChannel((object) ['name' => 'Tenant']);
+
+    expect($content->plainTextBody)
+        ->toContain('Tenant')
+        ->not->toContain('/portal/billing/invoices/');
+});

@@ -75,6 +75,7 @@ class ForceSendReminder
             dueDate: $invoice->due_date->toDateString(),
             amount: (int) round((float) $invoice->outstanding * 100),
             overdueDays: $overdueDays,
+            invoice: $invoice,
         );
 
         $log = $this->repository->recordIfAbsent($event, $channels);
