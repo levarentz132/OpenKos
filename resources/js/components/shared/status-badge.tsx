@@ -103,12 +103,12 @@ const STATUS_CONFIGS: Record<string, Record<string, StatusConfig>> = {
     },
     tenant_payment: {
         confirmed: {
-            label: 'Confirmed',
+            label: 'Verified',
             className:
                 'bg-surface-green/70 text-surface-green-foreground border-surface-green-border/80',
         },
         pending: {
-            label: 'Awaiting verification',
+            label: 'Awaiting Verification',
             className:
                 'bg-surface-amber/70 text-surface-amber-foreground border-surface-amber-border/80',
         },
@@ -118,6 +118,7 @@ const STATUS_CONFIGS: Record<string, Record<string, StatusConfig>> = {
             className:
                 'bg-surface-green/70 text-surface-green-foreground border-surface-green-border/80',
         },
+        expired: { label: 'Expired', variant: 'secondary' },
     },
     maintenance: {
         reported: {
@@ -218,12 +219,12 @@ const STATUS_CONFIGS: Record<string, Record<string, StatusConfig>> = {
     },
     tenant_invoice: {
         pending: {
-            label: 'Payment due',
+            label: 'Pending',
             className:
                 'bg-surface-amber/70 text-surface-amber-foreground border-surface-amber-border/80',
         },
         partial: {
-            label: 'Partial',
+            label: 'Partially Paid',
             className:
                 'bg-surface-blue/70 text-surface-blue-foreground border-surface-blue-border/80',
         },
