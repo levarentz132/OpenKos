@@ -80,6 +80,12 @@ class SmtpMailDriver implements MailDriver
             foreach ($message->headers as $name => $value) {
                 $mail->getHeaders()->addTextHeader($name, $value);
             }
+
+            foreach ($message->attachments as $attachment) {
+                $mail->attachData($attachment->content, $attachment->filename, [
+                    'mime' => $attachment->mimeType,
+                ]);
+            }
         });
 
         return new MailSendResult(null, 'Sent via SMTP.');

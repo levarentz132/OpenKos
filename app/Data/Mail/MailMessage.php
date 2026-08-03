@@ -11,6 +11,7 @@ final readonly class MailMessage
      * @param  list<MailAddress>  $cc
      * @param  list<MailAddress>  $bcc
      * @param  array<string, string>  $headers
+     * @param  list<MailAttachment>  $attachments
      */
     public function __construct(
         public array $to,
@@ -22,6 +23,7 @@ final readonly class MailMessage
         public array $cc = [],
         public array $bcc = [],
         public array $headers = [],
+        public array $attachments = [],
     ) {
         if ($to === []) {
             throw new InvalidArgumentException('A mail message requires at least one recipient.');

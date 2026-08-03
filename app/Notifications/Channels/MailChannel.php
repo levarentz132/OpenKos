@@ -52,6 +52,7 @@ class MailChannel
             cc: $content->cc,
             bcc: $content->bcc,
             headers: $content->headers,
+            attachments: $content->attachments,
         );
 
         $this->mailManager->send($message);

@@ -1,6 +1,7 @@
 <?php
 
 use App\Contracts\MailChannelNotification;
+use App\Data\Mail\MailAttachment;
 use App\Data\Mail\MailContent;
 use App\Data\Mail\MailSendResult;
 use App\Data\Reminder\ReminderEvent;
@@ -74,6 +75,28 @@ test('MailChannel normalizes string and array recipient routes', function () {
     };
 
     $channel->send($notifiable, $notification);
+});
+
+test('MailChannel forwards attachments to the mail manager', function () {
+    $attachment = new MailAttachment('%PDF-test', 'invoice.pdf', 'application/pdf');
+    $managerMock = Mockery::mock(MailManager::class);
+    $managerMock->shouldReceive('send')
+        ->once()
+        ->withArgs(fn ($message): bool => $message->attachments === [$attachment])
+        ->andReturn(new MailSendResult('test-id', 'Sent'));
+
+    $channel = new MailChannel($managerMock);
+    $notification = new class($attachment) extends Notification implements MailChannelNotification
+    {
+        public function __construct(private MailAttachment $attachment) {}
+
+        public function toMailChannel(object $notifiable): MailContent
+        {
+            return new MailContent('Subject', 'Body', attachments: [$this->attachment]);
+        }
+    };
+
+    $channel->send((object) ['email' => 'user@example.com'], $notification);
 });
 
 test('RentReminder via returns only configured channels', function () {

@@ -11,6 +11,17 @@ final class GenerateInvoicePdf
 {
     public function execute(Invoice $invoice): string
     {
+        $invoice->loadMissing([
+            'lease.primaryTenant.user',
+            'lease.unit.property',
+            'lineItems',
+            'payments' => fn ($query) => $query
+                ->where('status', 'confirmed')
+                ->orderBy('payment_date')
+                ->orderBy('id'),
+        ]);
+        $invoice->append(['outstanding', 'display_status']);
+
         $settings = Setting::some(['site_name', 'locale', 'currency']);
         $options = new Options;
         $options->setDefaultFont('DejaVu Sans');

@@ -26,6 +26,7 @@ class LogMailDriver implements MailDriver
             'subject' => $message->subject,
             'has_html' => $message->htmlBody !== '',
             'has_plain_text' => $message->plainTextBody !== null,
+            'attachment_count' => count($message->attachments),
         ];
 
         if ($this->config['log_body'] ?? false) {
