@@ -1,11 +1,12 @@
 import { Head, Link } from '@inertiajs/react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Download } from 'lucide-react';
 import { useState } from 'react';
 import SubmitPortalPaymentSheet from '@/components/features/payments/submit-portal-payment-sheet';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
 import { formatDate, formatPeriod, formatPrice } from '@/lib/formatters';
 import { index } from '@/routes/portal/billing';
+import { download } from '@/routes/portal/billing/invoices';
 import type { Invoice } from '@/types';
 
 type InvoiceLease = {
@@ -138,14 +139,26 @@ export default function InvoiceDetail({
                                 </div>
                             </div>
                         </div>
-                        {isPayable && (
+                        <div className="mt-6 grid gap-2">
+                            {isPayable && (
+                                <Button
+                                    className="w-full"
+                                    onClick={() => setPaymentOpen(true)}
+                                >
+                                    Pay invoice
+                                </Button>
+                            )}
                             <Button
-                                className="mt-6 w-full"
-                                onClick={() => setPaymentOpen(true)}
+                                asChild
+                                className="w-full"
+                                variant="outline"
                             >
-                                Pay invoice
+                                <a href={download.url(invoice)}>
+                                    <Download className="size-4" />
+                                    Download PDF
+                                </a>
                             </Button>
-                        )}
+                        </div>
                     </aside>
                 </div>
             </div>

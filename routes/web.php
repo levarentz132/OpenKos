@@ -42,6 +42,7 @@ Route::middleware(['auth', 'verified'])->prefix('portal')->name('portal.')->grou
         Route::get('history/invoices', [TenantPortalPaymentController::class, 'invoiceHistory'])->name('history.invoices');
         Route::get('history/payments', [TenantPortalPaymentController::class, 'paymentHistory'])->name('history.payments');
         Route::get('invoices/{invoice}', [TenantPortalPaymentController::class, 'invoice'])->name('invoices.show');
+        Route::get('invoices/{invoice}/download', [TenantPortalPaymentController::class, 'download'])->name('invoices.download');
     });
 
     Route::prefix('lease')->name('lease.')->group(function () {
