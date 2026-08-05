@@ -1,6 +1,7 @@
 <?php
 
 use App\Data\Mail\MailAddress;
+use App\Data\Mail\MailAttachment;
 use App\Data\Mail\MailMessage;
 use App\Notifications\Drivers\SmtpMailDriver;
 use Illuminate\Mail\Message;
@@ -18,6 +19,7 @@ test('SmtpMailDriver composes both HTML and plain text alternative MIME parts', 
         subject: 'Rent Payment Reminder',
         htmlBody: '<h1>Rent Due</h1><p>Please pay your rent.</p>',
         plainTextBody: "Rent Due\n\nPlease pay your rent.",
+        attachments: [new MailAttachment('%PDF-test', 'invoice-2026.pdf', 'application/pdf')],
     );
 
     $capturedSymfonyEmail = null;
@@ -39,4 +41,8 @@ test('SmtpMailDriver composes both HTML and plain text alternative MIME parts', 
     $this->assertNotNull($capturedSymfonyEmail);
     $this->assertStringContainsString('<h1>Rent Due</h1>', (string) $capturedSymfonyEmail->getHtmlBody());
     $this->assertStringContainsString("Rent Due\n\nPlease pay your rent.", (string) $capturedSymfonyEmail->getTextBody());
+    expect($capturedSymfonyEmail->getAttachments())->toHaveCount(1);
+    expect($capturedSymfonyEmail->getAttachments()[0]->getFilename())->toBe('invoice-2026.pdf');
+    expect($capturedSymfonyEmail->getAttachments()[0]->getMediaType())->toBe('application');
+    expect($capturedSymfonyEmail->getAttachments()[0]->getMediaSubtype())->toBe('pdf');
 });

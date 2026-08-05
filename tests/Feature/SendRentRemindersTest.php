@@ -325,6 +325,10 @@ describe('SendRentRemindersAction', function () {
                     ->toContain(number_format((float) $invoice->outstanding, 0))
                     ->toContain($invoiceUrl);
                 expect($content->htmlBody)->toContain($invoiceUrl);
+                expect($content->attachments)->toHaveCount(1);
+                expect($content->attachments[0]->filename)->toBe("invoice-{$invoice->reference}.pdf");
+                expect($content->attachments[0]->mimeType)->toBe('application/pdf');
+                expect($content->attachments[0]->content)->toStartWith('%PDF-');
 
                 return true;
             },
@@ -453,6 +457,9 @@ describe('Manual Send via Controller', function () {
                 expect($content->plainTextBody)
                     ->toContain($invoice->reference)
                     ->toContain(route('portal.billing.invoices.show', $invoice));
+                expect($content->attachments)->toHaveCount(1);
+                expect($content->attachments[0]->filename)->toBe("invoice-{$invoice->reference}.pdf");
+                expect($content->attachments[0]->content)->toStartWith('%PDF-');
 
                 return true;
             },

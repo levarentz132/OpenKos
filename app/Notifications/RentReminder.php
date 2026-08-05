@@ -2,8 +2,10 @@
 
 namespace App\Notifications;
 
+use App\Actions\Invoices\GenerateInvoicePdf;
 use App\Contracts\MailChannelNotification;
 use App\Contracts\WhatsAppChannelNotification;
+use App\Data\Mail\MailAttachment;
 use App\Data\Mail\MailContent;
 use App\Data\Reminder\ReminderEvent;
 use App\Data\WhatsApp\WhatsAppContent;
@@ -71,10 +73,26 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
             $plainTextBody .= "\n\n{$label}: {$invoiceUrl}";
         }
 
+        $attachments = [];
+        if ($invoice && $notifiable instanceof Tenant && $notifiable->user?->email) {
+            $reference = preg_replace(
+                '/[^A-Za-z0-9_-]/',
+                '-',
+                $invoice->reference ?? (string) $invoice->getKey(),
+            );
+
+            $attachments[] = new MailAttachment(
+                content: app(GenerateInvoicePdf::class)->execute($invoice),
+                filename: 'invoice-'.($reference ?: $invoice->getKey()).'.pdf',
+                mimeType: 'application/pdf',
+            );
+        }
+
         return new MailContent(
             subject: $subject,
             htmlBody: $htmlBody,
             plainTextBody: $plainTextBody,
+            attachments: $attachments,
         );
     }
 

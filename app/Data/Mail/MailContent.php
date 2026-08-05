@@ -8,6 +8,7 @@ final readonly class MailContent
      * @param  list<MailAddress>  $cc
      * @param  list<MailAddress>  $bcc
      * @param  array<string, string>  $headers
+     * @param  list<MailAttachment>  $attachments
      */
     public function __construct(
         public string $subject,
@@ -18,5 +19,6 @@ final readonly class MailContent
         public array $cc = [],
         public array $bcc = [],
         public array $headers = [],
+        public array $attachments = [],
     ) {}
 }
