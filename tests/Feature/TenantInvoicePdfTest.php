@@ -93,6 +93,8 @@ test('invoice PDF view reflects the current aggregate for each payable state', f
     string $paymentAmount,
     InvoiceStatus $expectedStatus,
 ) {
+    $this->travelTo('2026-08-01');
+
     $fixture = createTenantInvoicePdfFixture();
     $invoice = $fixture['invoice'];
     if ($expectedStatus === InvoiceStatus::Cancelled) {

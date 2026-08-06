@@ -9,6 +9,8 @@ interface WhatsAppDriver
 {
     public function send(WhatsAppMessage $message): void;
 
+    public function supportsAttachments(): bool;
+
     public function health(): DriverHealthResult;
 
     public function supportsPairing(): bool;

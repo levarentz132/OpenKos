@@ -13,10 +13,25 @@ class BaileysDriver implements WhatsAppDriver
 
     public function send(WhatsAppMessage $message): void
     {
-        $this->signedRequest('POST', '/api/send', [
+        $payload = [
             'to' => $this->normalizePhone($message->phone),
             'text' => $message->message,
-        ]);
+        ];
+
+        if ($message->attachment) {
+            $payload['document'] = [
+                'data' => base64_encode($message->attachment->content),
+                'filename' => $message->attachment->filename,
+                'mimeType' => $message->attachment->mimeType,
+            ];
+        }
+
+        $this->signedRequest('POST', '/api/send', $payload);
+    }
+
+    public function supportsAttachments(): bool
+    {
+        return true;
     }
 
     public function health(): DriverHealthResult

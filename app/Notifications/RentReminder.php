@@ -8,6 +8,7 @@ use App\Contracts\WhatsAppChannelNotification;
 use App\Data\Mail\MailAttachment;
 use App\Data\Mail\MailContent;
 use App\Data\Reminder\ReminderEvent;
+use App\Data\WhatsApp\WhatsAppAttachment;
 use App\Data\WhatsApp\WhatsAppContent;
 use App\Enums\ReminderType;
 use App\Models\Invoice;
@@ -24,6 +25,8 @@ use Illuminate\Notifications\Notification;
 class RentReminder extends Notification implements MailChannelNotification, ShouldQueue, WhatsAppChannelNotification
 {
     use Queueable;
+
+    private ?string $invoicePdfContent = null;
 
     public function __construct(private ReminderEvent $event) {}
 
@@ -82,7 +85,7 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
             );
 
             $attachments[] = new MailAttachment(
-                content: app(GenerateInvoicePdf::class)->execute($invoice),
+                content: $this->invoicePdfContent($invoice),
                 filename: 'invoice-'.($reference ?: $invoice->getKey()).'.pdf',
                 mimeType: 'application/pdf',
             );
@@ -98,8 +101,26 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
 
     public function toWhatsAppChannel(object $notifiable): WhatsAppContent
     {
+        $attachment = null;
+        $invoice = $this->invoice();
+
+        if ($invoice) {
+            $reference = preg_replace(
+                '/[^A-Za-z0-9_-]/',
+                '-',
+                $invoice->reference ?? (string) $invoice->getKey(),
+            );
+
+            $attachment = new WhatsAppAttachment(
+                content: $this->invoicePdfContent($invoice),
+                filename: 'invoice-'.($reference ?: $invoice->getKey()).'.pdf',
+                mimeType: 'application/pdf',
+            );
+        }
+
         return new WhatsAppContent(
             message: $this->renderMessage($notifiable),
+            attachment: $attachment,
         );
     }
 
@@ -155,5 +176,10 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
     private function invoice(): ?Invoice
     {
         return isset($this->event->invoice) ? $this->event->invoice : null;
+    }
+
+    private function invoicePdfContent(Invoice $invoice): string
+    {
+        return $this->invoicePdfContent ??= app(GenerateInvoicePdf::class)->execute($invoice);
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Data\WhatsApp\WhatsAppAttachment;
 use App\Data\WhatsApp\WhatsAppMessage;
 
 it('creates with phone and message', function () {
@@ -25,4 +26,11 @@ it('properties are readonly', function () {
     $message = new WhatsAppMessage('08123456789', 'Hello');
 
     expect(fn () => $message->phone = '123')->toThrow(Error::class);
+});
+
+it('supports an optional document attachment', function () {
+    $attachment = new WhatsAppAttachment('%PDF-test', 'invoice.pdf', 'application/pdf');
+    $message = new WhatsAppMessage('08123456789', 'Hello', attachment: $attachment);
+
+    expect($message->attachment)->toBe($attachment);
 });

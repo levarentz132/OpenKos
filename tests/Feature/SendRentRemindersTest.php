@@ -352,7 +352,8 @@ describe('SendRentRemindersAction', function () {
             $tenant,
             RentReminder::class,
             function (RentReminder $notification) use ($invoice, $tenant): bool {
-                $message = $notification->toWhatsAppChannel($tenant)->message;
+                $content = $notification->toWhatsAppChannel($tenant);
+                $message = $content->message;
 
                 expect($message)
                     ->toContain($invoice->reference)
@@ -361,6 +362,13 @@ describe('SendRentRemindersAction', function () {
                     ->toContain($invoice->due_date->format('d M Y'))
                     ->toContain(number_format((float) $invoice->outstanding, 0))
                     ->not->toContain(route('portal.billing.invoices.show', $invoice));
+
+                $attachment = $content->attachment;
+
+                expect($attachment)->not->toBeNull();
+                expect($attachment->filename)->toBe("invoice-{$invoice->reference}.pdf");
+                expect($attachment->mimeType)->toBe('application/pdf');
+                expect($attachment->content)->toStartWith('%PDF-');
 
                 return true;
             },

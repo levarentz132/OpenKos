@@ -1,5 +1,6 @@
 <?php
 
+use App\Data\WhatsApp\WhatsAppAttachment;
 use App\Data\WhatsApp\WhatsAppMessage;
 use App\Notifications\Drivers\WhatsAppCloudApiDriver;
 use Illuminate\Support\Facades\Http;
@@ -30,6 +31,48 @@ it('sends message via WhatsApp Cloud API', function () {
             && ($body['type'] ?? null) === 'text'
             && ($body['text']['body'] ?? null) === 'Hello';
     });
+});
+
+it('uploads and sends a document via WhatsApp Cloud API', function () {
+    Http::fake([
+        'graph.facebook.com/v22.0/123456789/media' => Http::response(['id' => 'media-123']),
+        'graph.facebook.com/v22.0/123456789/messages' => Http::response(['messages' => [['id' => 'wamid.doc']]]),
+    ]);
+
+    $driver = new WhatsAppCloudApiDriver([
+        'phone_number_id' => '123456789',
+        'access_token' => 'valid-token',
+    ]);
+
+    $driver->send(new WhatsAppMessage(
+        '+628123456789',
+        'Invoice',
+        attachment: new WhatsAppAttachment('%PDF-test', 'invoice.pdf', 'application/pdf'),
+    ));
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://graph.facebook.com/v22.0/123456789/messages'
+        && $request->data()['type'] === 'document'
+        && $request->data()['document']['id'] === 'media-123'
+        && $request->data()['document']['filename'] === 'invoice.pdf');
+});
+
+it('fails when document upload is rejected', function () {
+    Http::fake([
+        'graph.facebook.com/v22.0/123456789/media' => Http::response([
+            'error' => ['message' => 'Unsupported document'],
+        ], 400),
+    ]);
+
+    $driver = new WhatsAppCloudApiDriver([
+        'phone_number_id' => '123456789',
+        'access_token' => 'valid-token',
+    ]);
+
+    expect(fn () => $driver->send(new WhatsAppMessage(
+        '+628123456789',
+        'Invoice',
+        attachment: new WhatsAppAttachment('%PDF-test', 'invoice.pdf', 'application/pdf'),
+    )))->toThrow(RuntimeException::class, 'Unsupported document');
 });
 
 it('throws on Graph API error', function () {

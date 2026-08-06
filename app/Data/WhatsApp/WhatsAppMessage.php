@@ -8,5 +8,6 @@ class WhatsAppMessage
         public readonly string $phone,
         public readonly string $message,
         public readonly ?string $sender = null,
+        public readonly ?WhatsAppAttachment $attachment = null,
     ) {}
 }
