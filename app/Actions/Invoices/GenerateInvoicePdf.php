@@ -37,6 +37,10 @@ final class GenerateInvoicePdf
         $pdf->setPaper('A4');
         $pdf->render();
 
-        return $pdf->output();
+        $output = $pdf->output();
+        unset($pdf);
+        gc_collect_cycles();
+
+        return $output;
     }
 }

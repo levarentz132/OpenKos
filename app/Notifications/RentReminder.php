@@ -26,6 +26,8 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
 {
     use Queueable;
 
+    private ?string $invoicePdfContent = null;
+
     public function __construct(private ReminderEvent $event) {}
 
     public function via(object $notifiable): array
@@ -83,7 +85,7 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
             );
 
             $attachments[] = new MailAttachment(
-                content: app(GenerateInvoicePdf::class)->execute($invoice),
+                content: $this->invoicePdfContent($invoice),
                 filename: 'invoice-'.($reference ?: $invoice->getKey()).'.pdf',
                 mimeType: 'application/pdf',
             );
@@ -110,7 +112,7 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
             );
 
             $attachment = new WhatsAppAttachment(
-                content: app(GenerateInvoicePdf::class)->execute($invoice),
+                content: $this->invoicePdfContent($invoice),
                 filename: 'invoice-'.($reference ?: $invoice->getKey()).'.pdf',
                 mimeType: 'application/pdf',
             );
@@ -174,5 +176,10 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
     private function invoice(): ?Invoice
     {
         return isset($this->event->invoice) ? $this->event->invoice : null;
+    }
+
+    private function invoicePdfContent(Invoice $invoice): string
+    {
+        return $this->invoicePdfContent ??= app(GenerateInvoicePdf::class)->execute($invoice);
     }
 }
