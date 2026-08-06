@@ -34,9 +34,14 @@ class WhatsAppManager
 
         $message = is_string($content) ? $content : $content->message;
         $mediaUrl = $content instanceof WhatsAppContent ? $content->mediaUrl : null;
+        $attachment = $content instanceof WhatsAppContent ? $content->attachment : null;
 
         try {
-            $driver->send(new WhatsAppMessage($phone, $message));
+            if ($attachment && ! $driver->supportsAttachments()) {
+                throw new \RuntimeException("WhatsApp driver [{$driverId}] does not support document attachments.");
+            }
+
+            $driver->send(new WhatsAppMessage($phone, $message, attachment: $attachment));
 
             event(new WhatsAppSent($driverId, $phone, $mediaUrl));
         } catch (\Throwable $exception) {

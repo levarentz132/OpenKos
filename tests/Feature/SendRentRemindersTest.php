@@ -362,6 +362,13 @@ describe('SendRentRemindersAction', function () {
                     ->toContain(number_format((float) $invoice->outstanding, 0))
                     ->not->toContain(route('portal.billing.invoices.show', $invoice));
 
+                $attachment = $notification->toWhatsAppChannel($tenant)->attachment;
+
+                expect($attachment)->not->toBeNull();
+                expect($attachment->filename)->toBe("invoice-{$invoice->reference}.pdf");
+                expect($attachment->mimeType)->toBe('application/pdf');
+                expect($attachment->content)->toStartWith('%PDF-');
+
                 return true;
             },
         );

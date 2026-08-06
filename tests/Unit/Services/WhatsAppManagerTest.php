@@ -2,6 +2,8 @@
 
 use App\Contracts\WhatsAppDriver;
 use App\Data\WhatsApp\DriverHealthResult;
+use App\Data\WhatsApp\WhatsAppAttachment;
+use App\Data\WhatsApp\WhatsAppContent;
 use App\Data\WhatsApp\WhatsAppMessage;
 use App\Events\WhatsApp\WhatsAppFailed;
 use App\Events\WhatsApp\WhatsAppSent;
@@ -67,6 +69,36 @@ describe('WhatsAppManager', function () {
         });
     });
 
+    it('forwards document attachments to the driver', function () {
+        app(NotificationRegistry::class)->registerDriver(new NotificationDriverRegistration(
+            name: 'test/capture',
+            channel: 'whatsapp',
+            driverClass: UnitTestWhatsAppDriver::class,
+            label: 'Capture Driver',
+        ));
+        Setting::set('whatsapp_driver', 'test/capture');
+        $attachment = new WhatsAppAttachment('%PDF-test', 'invoice.pdf', 'application/pdf');
+
+        app(WhatsAppManager::class)->send('628123456789', new WhatsAppContent('Invoice', attachment: $attachment));
+
+        expect(UnitTestWhatsAppDriver::$lastMessage?->attachment)->toBe($attachment);
+    });
+
+    it('fails explicitly when a driver does not support attachments', function () {
+        app(NotificationRegistry::class)->registerDriver(new NotificationDriverRegistration(
+            name: 'test/unsupported',
+            channel: 'whatsapp',
+            driverClass: UnitTestUnsupportedWhatsAppDriver::class,
+            label: 'Unsupported Driver',
+        ));
+        Setting::set('whatsapp_driver', 'test/unsupported');
+
+        expect(fn () => app(WhatsAppManager::class)->send(
+            '628123456789',
+            new WhatsAppContent('Invoice', attachment: new WhatsAppAttachment('%PDF-test', 'invoice.pdf', 'application/pdf')),
+        ))->toThrow(WhatsAppDeliveryException::class, 'does not support document attachments');
+    });
+
     it('dispatches WhatsAppFailed event and throws WhatsAppDeliveryException on failure', function () {
         Event::fake([WhatsAppFailed::class]);
 
@@ -94,9 +126,19 @@ describe('WhatsAppManager', function () {
 
 class UnitTestWhatsAppDriver implements WhatsAppDriver
 {
+    public static ?WhatsAppMessage $lastMessage = null;
+
     public function __construct(public array $config = []) {}
 
-    public function send(WhatsAppMessage $message): void {}
+    public function send(WhatsAppMessage $message): void
+    {
+        self::$lastMessage = $message;
+    }
+
+    public function supportsAttachments(): bool
+    {
+        return true;
+    }
 
     public function health(): DriverHealthResult
     {
@@ -132,9 +174,50 @@ class UnitTestFailingWhatsAppDriver implements WhatsAppDriver
         throw new RuntimeException('Network connection failed');
     }
 
+    public function supportsAttachments(): bool
+    {
+        return true;
+    }
+
     public function health(): DriverHealthResult
     {
         return new DriverHealthResult(false, 'Unhealthy');
+    }
+
+    public function supportsPairing(): bool
+    {
+        return false;
+    }
+
+    public function configurationSchema(): array
+    {
+        return [];
+    }
+
+    public function getPairingQrCode(): ?string
+    {
+        return null;
+    }
+
+    public function pair(): void {}
+
+    public function disconnect(): void {}
+}
+
+class UnitTestUnsupportedWhatsAppDriver implements WhatsAppDriver
+{
+    public function __construct(public array $config = []) {}
+
+    public function send(WhatsAppMessage $message): void {}
+
+    public function supportsAttachments(): bool
+    {
+        return false;
+    }
+
+    public function health(): DriverHealthResult
+    {
+        return new DriverHealthResult(true);
     }
 
     public function supportsPairing(): bool

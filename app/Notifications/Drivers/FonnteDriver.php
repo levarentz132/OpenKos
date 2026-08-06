@@ -19,18 +19,33 @@ class FonnteDriver implements WhatsAppDriver
             throw new \RuntimeException('Fonnte token is not configured.');
         }
 
-        $response = Http::withToken($token, '')
-            ->asMultipart()
-            ->post('https://api.fonnte.com/send', [
-                'target' => $this->normalizePhone($message->phone),
-                'message' => $message->message,
-            ]);
+        $request = Http::withToken($token, '');
+
+        if ($message->attachment) {
+            $request = $request->attach(
+                'file',
+                $message->attachment->content,
+                $message->attachment->filename,
+                ['Content-Type' => $message->attachment->mimeType],
+            );
+        }
+
+        $response = $request->asMultipart()->post('https://api.fonnte.com/send', array_filter([
+            'target' => $this->normalizePhone($message->phone),
+            'message' => $message->message,
+            'filename' => $message->attachment?->filename,
+        ], fn ($value): bool => $value !== null));
 
         $body = $response->json();
 
         if (! ($body['status'] ?? false)) {
             throw new \RuntimeException($body['reason'] ?? 'Fonnte send failed');
         }
+    }
+
+    public function supportsAttachments(): bool
+    {
+        return true;
     }
 
     public function health(): DriverHealthResult

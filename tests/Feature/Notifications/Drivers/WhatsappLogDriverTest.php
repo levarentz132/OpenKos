@@ -1,5 +1,6 @@
 <?php
 
+use App\Data\WhatsApp\WhatsAppAttachment;
 use App\Data\WhatsApp\WhatsAppMessage;
 use App\Notifications\Drivers\WhatsappLogDriver;
 
@@ -7,6 +8,18 @@ it('sends without exception', function () {
     $driver = new WhatsappLogDriver;
 
     $driver->send(new WhatsAppMessage('08123456789', 'Test message'));
+
+    expect(true)->toBeTrue();
+});
+
+it('sends documents without logging their contents', function () {
+    $driver = new WhatsappLogDriver;
+
+    $driver->send(new WhatsAppMessage(
+        '08123456789',
+        'Invoice',
+        attachment: new WhatsAppAttachment('%PDF-test', 'invoice.pdf', 'application/pdf'),
+    ));
 
     expect(true)->toBeTrue();
 });

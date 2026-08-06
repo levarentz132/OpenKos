@@ -1,5 +1,6 @@
 <?php
 
+use App\Data\WhatsApp\WhatsAppAttachment;
 use App\Data\WhatsApp\WhatsAppMessage;
 use App\Notifications\Drivers\BaileysDriver;
 use Illuminate\Support\Facades\Http;
@@ -44,6 +45,27 @@ it('includes HMAC signature headers', function () {
         return $request->hasHeader('X-Timestamp')
             && $request->hasHeader('X-Signature')
             && $request->header('X-Key-Id') === [];
+    });
+});
+
+it('sends a document payload', function () {
+    Http::fake([
+        '*/api/send' => fakeResponse(),
+    ]);
+
+    $driver = new BaileysDriver(['url' => 'http://localhost:3000', 'api_key' => 'secret']);
+    $driver->send(new WhatsAppMessage(
+        '+628123456789',
+        'Invoice',
+        attachment: new WhatsAppAttachment('%PDF-test', 'invoice.pdf', 'application/pdf'),
+    ));
+
+    Http::assertSent(function ($request) {
+        $body = json_decode($request->body(), true);
+
+        return ($body['document']['filename'] ?? null) === 'invoice.pdf'
+            && ($body['document']['mimeType'] ?? null) === 'application/pdf'
+            && ($body['document']['data'] ?? null) === base64_encode('%PDF-test');
     });
 });
 

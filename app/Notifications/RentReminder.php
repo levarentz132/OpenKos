@@ -8,6 +8,7 @@ use App\Contracts\WhatsAppChannelNotification;
 use App\Data\Mail\MailAttachment;
 use App\Data\Mail\MailContent;
 use App\Data\Reminder\ReminderEvent;
+use App\Data\WhatsApp\WhatsAppAttachment;
 use App\Data\WhatsApp\WhatsAppContent;
 use App\Enums\ReminderType;
 use App\Models\Invoice;
@@ -98,8 +99,26 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
 
     public function toWhatsAppChannel(object $notifiable): WhatsAppContent
     {
+        $attachment = null;
+        $invoice = $this->invoice();
+
+        if ($invoice) {
+            $reference = preg_replace(
+                '/[^A-Za-z0-9_-]/',
+                '-',
+                $invoice->reference ?? (string) $invoice->getKey(),
+            );
+
+            $attachment = new WhatsAppAttachment(
+                content: app(GenerateInvoicePdf::class)->execute($invoice),
+                filename: 'invoice-'.($reference ?: $invoice->getKey()).'.pdf',
+                mimeType: 'application/pdf',
+            );
+        }
+
         return new WhatsAppContent(
             message: $this->renderMessage($notifiable),
+            attachment: $attachment,
         );
     }
 

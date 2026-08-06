@@ -1,5 +1,6 @@
 <?php
 
+use App\Data\WhatsApp\WhatsAppAttachment;
 use App\Data\WhatsApp\WhatsAppMessage;
 use App\Notifications\Drivers\FonnteDriver;
 use Illuminate\Support\Facades\Http;
@@ -27,6 +28,31 @@ it('throws on failed send', function () {
 
     expect(fn () => $driver->send(new WhatsAppMessage('+628123456789', 'Hello')))
         ->toThrow(RuntimeException::class, 'insufficient quota');
+});
+
+it('sends a document as a multipart file', function () {
+    Http::fake([
+        'api.fonnte.com/send' => Http::response(['status' => true]),
+    ]);
+
+    $driver = new FonnteDriver(['token' => 'valid-token']);
+    $driver->send(new WhatsAppMessage(
+        '+628123456789',
+        'Invoice',
+        attachment: new WhatsAppAttachment('%PDF-test', 'invoice.pdf', 'application/pdf'),
+    ));
+
+    Http::assertSent(fn ($request) => str_contains($request->body(), 'invoice.pdf'));
+});
+
+it('preserves an empty text message', function () {
+    Http::fake([
+        'api.fonnte.com/send' => Http::response(['status' => true]),
+    ]);
+
+    (new FonnteDriver(['token' => 'valid-token']))->send(new WhatsAppMessage('+628123456789', ''));
+
+    Http::assertSent(fn ($request) => str_contains($request->body(), 'name="message"'));
 });
 
 it('throws when token missing on send', function () {

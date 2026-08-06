@@ -82,6 +82,11 @@ class TestWhatsAppDriver implements WhatsAppDriver
         self::$sentMessages[] = $message->phone;
     }
 
+    public function supportsAttachments(): bool
+    {
+        return true;
+    }
+
     public function health(): DriverHealthResult
     {
         return new DriverHealthResult(true);

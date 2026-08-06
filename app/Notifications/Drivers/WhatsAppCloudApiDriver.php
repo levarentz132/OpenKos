@@ -20,18 +20,57 @@ class WhatsAppCloudApiDriver implements WhatsAppDriver
         $phoneNumberId = $this->config['phone_number_id'] ?? throw new \RuntimeException('WhatsApp Cloud API phone_number_id is not configured.');
         $token = $this->config['access_token'] ?? throw new \RuntimeException('WhatsApp Cloud API access_token is not configured.');
 
-        $response = Http::withToken($token)->post(self::GRAPH_API_BASE.'/'.$phoneNumberId.'/messages', [
-            'messaging_product' => 'whatsapp',
-            'to' => $this->normalizePhone($message->phone),
-            'type' => 'text',
-            'text' => ['body' => $message->message],
-        ]);
+        if ($message->attachment) {
+            $mediaResponse = Http::withToken($token)
+                ->attach(
+                    'file',
+                    $message->attachment->content,
+                    $message->attachment->filename,
+                    ['Content-Type' => $message->attachment->mimeType],
+                )
+                ->post(self::GRAPH_API_BASE.'/'.$phoneNumberId.'/media', [
+                    'messaging_product' => 'whatsapp',
+                ]);
+
+            if ($mediaResponse->failed()) {
+                throw new \RuntimeException($mediaResponse->json('error.message') ?? 'WhatsApp Cloud API media upload failed');
+            }
+
+            $mediaId = $mediaResponse->json('id');
+
+            if (! $mediaId) {
+                throw new \RuntimeException($mediaResponse->json('error.message') ?? 'WhatsApp Cloud API media upload failed');
+            }
+
+            $response = Http::withToken($token)->post(self::GRAPH_API_BASE.'/'.$phoneNumberId.'/messages', [
+                'messaging_product' => 'whatsapp',
+                'to' => $this->normalizePhone($message->phone),
+                'type' => 'document',
+                'document' => [
+                    'id' => $mediaId,
+                    'caption' => $message->message,
+                    'filename' => $message->attachment->filename,
+                ],
+            ]);
+        } else {
+            $response = Http::withToken($token)->post(self::GRAPH_API_BASE.'/'.$phoneNumberId.'/messages', [
+                'messaging_product' => 'whatsapp',
+                'to' => $this->normalizePhone($message->phone),
+                'type' => 'text',
+                'text' => ['body' => $message->message],
+            ]);
+        }
 
         $body = $response->json();
 
-        if (isset($body['error'])) {
+        if ($response->failed() || isset($body['error'])) {
             throw new \RuntimeException($body['error']['message'] ?? 'WhatsApp Cloud API send failed');
         }
+    }
+
+    public function supportsAttachments(): bool
+    {
+        return true;
     }
 
     public function health(): DriverHealthResult
