@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes/portal';
 import { index as billing } from '@/routes/portal/billing';
 import { index as leases } from '@/routes/portal/lease';
+import { index as notifications } from '@/routes/portal/notifications';
 import type { Auth } from '@/types/auth';
 import type { AppLayoutProps } from '@/types/ui';
 
@@ -30,6 +31,7 @@ const navigationItems = [
     { title: 'Leases', href: leases() },
     { title: 'Billing', href: billing() },
     { title: 'Maintenance', href: '/portal/maintenance-tickets' },
+    { title: 'Notifications', href: notifications() },
 ];
 
 export default function TenantPortalLayout({ children }: AppLayoutProps) {

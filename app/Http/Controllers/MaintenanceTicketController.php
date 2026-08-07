@@ -9,6 +9,7 @@ use App\Enums\LeaseStatus;
 use App\Enums\MaintenanceStatus;
 use App\Events\Maintenance\MaintenanceResolved;
 use App\Events\Maintenance\MaintenanceTicketCreated;
+use App\Events\Maintenance\MaintenanceTicketUpdated;
 use App\Events\Unit\UnitStatusChanged;
 use App\Http\Requests\Maintenance\StoreMaintenanceTicketRequest;
 use App\Http\Requests\Maintenance\UpdateMaintenanceTicketRequest;
@@ -214,6 +215,8 @@ class MaintenanceTicketController extends Controller
         unset($validated['restore_unit'], $validated['move_back']);
 
         $ticket->update($validated);
+
+        MaintenanceTicketUpdated::dispatch($ticket, actorId: Auth::id());
 
         if (($statusChangedToResolved ?? false)) {
             MaintenanceResolved::dispatch($ticket, actorId: Auth::id());

@@ -16,6 +16,7 @@ use App\Http\Controllers\TenantDocumentController;
 use App\Http\Controllers\TenantInvitationController;
 use App\Http\Controllers\TenantPortal\DashboardController as TenantPortalDashboardController;
 use App\Http\Controllers\TenantPortal\LeaseController as TenantPortalLeaseController;
+use App\Http\Controllers\TenantPortal\NotificationController as TenantPortalNotificationController;
 use App\Http\Controllers\TenantPortal\PaymentController as TenantPortalPaymentController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UserController;
@@ -36,6 +37,11 @@ Route::prefix('tenants/invitations')->name('tenants.invitations.')->middleware('
 Route::middleware(['auth', 'verified'])->prefix('portal')->name('portal.')->group(function () {
     Route::redirect('/', '/portal/dashboard');
     Route::get('dashboard', TenantPortalDashboardController::class)->name('dashboard');
+    Route::prefix('notifications')->name('notifications.')->group(function () {
+        Route::get('/', [TenantPortalNotificationController::class, 'index'])->name('index');
+        Route::post('{notification}/read', [TenantPortalNotificationController::class, 'markAsRead'])->name('read');
+        Route::post('read-all', [TenantPortalNotificationController::class, 'markAllAsRead'])->name('read-all');
+    });
     Route::prefix('billing')->name('billing.')->group(function () {
         Route::get('/', [TenantPortalPaymentController::class, 'index'])->name('index');
         Route::post('/', [TenantPortalPaymentController::class, 'store'])->name('store');

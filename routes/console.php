@@ -15,3 +15,7 @@ Schedule::command('invoices:generate')
 Schedule::command('rent:send-reminders')
     ->dailyAt('08:00')
     ->withoutOverlapping(60);
+
+Schedule::command('app:send-lease-expiration-notifications')
+    ->dailyAt('08:05')
+    ->withoutOverlapping(60);
