@@ -33,6 +33,7 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
     public function via(object $notifiable): array
     {
         $map = [
+            'database' => 'database',
             'log' => LogChannel::class,
             'whatsapp' => WhatsAppChannel::class,
             'mail' => MailChannel::class,
@@ -40,7 +41,7 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
 
         $channels = Setting::get('reminder_channels') ?? ['log'];
 
-        return array_values(array_intersect_key($map, array_flip($channels)));
+        return array_values(array_intersect_key($map, array_flip(['database', ...$channels])));
     }
 
     public function shouldSend(object $notifiable, string $channel): bool
@@ -127,6 +128,26 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
     public function toLog(object $notifiable): string
     {
         return $this->renderMessage($notifiable);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(object $notifiable): array
+    {
+        $invoice = $this->invoice();
+
+        return [
+            'type' => 'rent_reminder',
+            'title' => __('Rent reminder'),
+            'message' => $this->renderMessage($notifiable),
+            'url' => $invoice ? route('portal.billing.invoices.show', $invoice) : route('portal.billing.index'),
+        ];
+    }
+
+    public function databaseType(object $notifiable): string
+    {
+        return 'rent_reminder';
     }
 
     public function toWhatsApp(object $notifiable): string

@@ -115,7 +115,7 @@ test('RentReminder via returns only configured channels', function () {
     $reminder = new RentReminder($event);
     $via = $reminder->via((object) []);
 
-    expect($via)->toBe([LogChannel::class, MailChannel::class]);
+    expect($via)->toBe(['database', LogChannel::class, MailChannel::class]);
 });
 
 test('RentReminder still renders events without invoice context', function () {
