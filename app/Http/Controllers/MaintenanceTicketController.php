@@ -216,7 +216,9 @@ class MaintenanceTicketController extends Controller
 
         $ticket->update($validated);
 
-        MaintenanceTicketUpdated::dispatch($ticket, actorId: Auth::id());
+        if ($ticket->wasChanged()) {
+            MaintenanceTicketUpdated::dispatch($ticket, actorId: Auth::id());
+        }
 
         if (($statusChangedToResolved ?? false)) {
             MaintenanceResolved::dispatch($ticket, actorId: Auth::id());

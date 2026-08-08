@@ -41,7 +41,7 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
 
         $channels = Setting::get('reminder_channels') ?? ['log'];
 
-        return array_merge(['database'], array_values(array_intersect_key($map, array_flip($channels))));
+        return array_values(array_intersect_key($map, array_flip(['database', ...$channels])));
     }
 
     public function shouldSend(object $notifiable, string $channel): bool
