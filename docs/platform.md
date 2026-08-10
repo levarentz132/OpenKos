@@ -9,7 +9,7 @@ OpenKOS is becoming an extensible platform. Plugins must be able to add navigati
 
 ## Namespace & Location
 
-The reusable platform code lives in the standalone `openkos/platform` Composer package under `/Users/a1234/Projects/personal/openkos-platform/`. During local development the application consumes it through a Composer path repository. The main repository keeps only application-owned plugins in `src/Plugins/`:
+The reusable platform code lives in the standalone `openkos/platform` Composer package published on Packagist. The application consumes the released package through Composer, while the main repository keeps only application-owned plugins in `src/Plugins/`:
 
 ```
 openkos-platform/

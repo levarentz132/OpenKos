@@ -19,7 +19,7 @@
 
 ## Layer Architecture
 
-The application uses a **multi-layered domain-oriented** architecture. Files are organized by architectural concern (layer-first), not by feature. The reusable platform layer is maintained in the standalone `openkos/platform` package and consumed locally through a Composer path repository.
+The application uses a **multi-layered domain-oriented** architecture. Files are organized by architectural concern (layer-first), not by feature. The reusable platform layer is maintained in the standalone `openkos/platform` package and consumed through Composer.
 
 Application code lives in `app/` (`App\` namespace). The extensibility platform lives in `src/` (`OpenKOS\` namespace) — registries, the `OpenKOS` facade/manager, and the plugin system. See `docs/platform.md`.
 
