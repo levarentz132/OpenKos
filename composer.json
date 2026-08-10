@@ -54,15 +54,6 @@
             "Tests\\": "tests/"
         }
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../openkos-platform",
-            "options": {
-                "symlink": true
-            }
-        }
-    ],
     "scripts": {
         "setup": [
             "composer install",

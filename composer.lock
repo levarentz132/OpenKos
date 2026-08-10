@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8c74e3b0434d764f213637ec9b6d4b1f",
+    "content-hash": "e0e50a400bbd0f9faff972d6cd6d3d91",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -3312,10 +3312,16 @@
         {
             "name": "openkos/platform",
             "version": "0.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/senatroxx/openkos-platform.git",
+                "reference": "9875a67041d54339c5ae1b9daa0c0767e429e0aa"
+            },
             "dist": {
-                "type": "path",
-                "url": "../openkos-platform",
-                "reference": "352b2dad7bbb0c2cc62191084f1f8c4488e92722"
+                "type": "zip",
+                "url": "https://api.github.com/repos/senatroxx/openkos-platform/zipball/9875a67041d54339c5ae1b9daa0c0767e429e0aa",
+                "reference": "9875a67041d54339c5ae1b9daa0c0767e429e0aa",
+                "shasum": ""
             },
             "require": {
                 "composer/semver": "^3.4",
@@ -3345,27 +3351,16 @@
                     "OpenKOS\\": "src/"
                 }
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "Tests\\": "tests/"
-                }
-            },
-            "scripts": {
-                "test": [
-                    "pest --compact"
-                ],
-                "lint": [
-                    "pint"
-                ]
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "Apache-2.0"
             ],
             "description": "The OpenKOS platform and plugin SDK.",
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
+            "support": {
+                "issues": "https://github.com/senatroxx/openkos-platform/issues",
+                "source": "https://github.com/senatroxx/openkos-platform/tree/v0.1.0"
+            },
+            "time": "2026-08-10T10:09:51+00:00"
         },
         {
             "name": "paragonie/constant_time_encoding",
