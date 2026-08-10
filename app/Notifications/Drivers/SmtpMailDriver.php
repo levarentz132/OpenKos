@@ -2,12 +2,12 @@
 
 namespace App\Notifications\Drivers;
 
-use App\Contracts\MailDriver;
-use App\Data\Mail\DriverHealthResult;
-use App\Data\Mail\MailMessage;
-use App\Data\Mail\MailSendResult;
 use App\Exceptions\InvalidMailConfigurationException;
 use Illuminate\Support\Facades\Mail;
+use OpenKOS\Core\Contracts\MailDriver;
+use OpenKOS\Core\Data\Mail\DriverHealthResult;
+use OpenKOS\Core\Data\Mail\MailMessage;
+use OpenKOS\Core\Data\Mail\MailSendResult;
 
 class SmtpMailDriver implements MailDriver
 {

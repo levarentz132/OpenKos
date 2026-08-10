@@ -12,6 +12,7 @@ use App\Models\MaintenanceTicket;
 use App\Models\Setting;
 use App\Notifications\RentReminder;
 use App\Notifications\TenantPortalNotification;
+use App\Services\Settings\PlatformSettingsStore;
 use App\Services\Settings\SettingManager;
 use App\Services\WhatsAppManager;
 use Carbon\CarbonImmutable;
@@ -23,12 +24,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use OpenKOS\Core\Contracts\SettingsStore;
+use OpenKOS\Platform\OpenKOSManager;
+use OpenKOS\Platform\Settings\SettingsPage;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
         $this->app->singleton(SettingManager::class);
+        $this->app->singleton(SettingsStore::class, PlatformSettingsStore::class);
         $this->app->singleton(MailManager::class);
         $this->app->singleton(WhatsAppManager::class);
 
@@ -41,6 +46,9 @@ class AppServiceProvider extends ServiceProvider
         $this->configureAuthEvents();
         $this->configureMail();
         $this->configureDomainEvents();
+        $this->app->booted(function (): void {
+            $this->registerPlatformSettingsPages();
+        });
     }
 
     protected function configureDefaults(): void
@@ -137,6 +145,17 @@ class AppServiceProvider extends ServiceProvider
 
             $tenant->notify(new RentReminder($event->event));
         });
+    }
+
+    private function registerPlatformSettingsPages(): void
+    {
+        app(OpenKOSManager::class)->settings()
+            ->registerPage(new SettingsPage('profile', 'Profile', '/settings/profile', ownerOnly: false, group: 'Account', order: 100, routeName: 'profile.edit'))
+            ->registerPage(new SettingsPage('security', 'Security', '/settings/security', ownerOnly: false, group: 'Account', order: 200, routeName: 'security.edit'))
+            ->registerPage(new SettingsPage('general', 'General', '/settings/general', group: 'Preferences', order: 100, routeName: 'settings.general.edit'))
+            ->registerPage(new SettingsPage('reminders', 'Reminders', '/settings/reminders', group: 'Preferences', order: 300, routeName: 'settings.reminders.edit'))
+            ->registerPage(new SettingsPage('property-types', 'Property Types', '/settings/property-types', group: 'Property', order: 100, routeName: 'settings.property-types.index'))
+            ->registerPage(new SettingsPage('mail', 'Mail', '/settings/mail', group: 'Integrations', order: 100, routeName: 'settings.mail.edit'));
     }
 
     private function notifyMaintenanceTenant(MaintenanceTicket $ticket, string $type): void

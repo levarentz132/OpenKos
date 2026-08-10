@@ -1,6 +1,6 @@
 <?php
 
-use App\Data\WhatsApp\DriverHealthResult;
+use OpenKOS\Core\Data\WhatsApp\DriverHealthResult;
 
 it('creates healthy result', function () {
     $result = new DriverHealthResult(true);

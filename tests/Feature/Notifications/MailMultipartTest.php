@@ -1,11 +1,11 @@
 <?php
 
-use App\Data\Mail\MailAddress;
-use App\Data\Mail\MailAttachment;
-use App\Data\Mail\MailMessage;
 use App\Notifications\Drivers\SmtpMailDriver;
 use Illuminate\Mail\Message;
 use Illuminate\Support\Facades\Mail;
+use OpenKOS\Core\Data\Mail\MailAddress;
+use OpenKOS\Core\Data\Mail\MailAttachment;
+use OpenKOS\Core\Data\Mail\MailMessage;
 use Symfony\Component\Mime\Email;
 
 test('SmtpMailDriver composes both HTML and plain text alternative MIME parts', function () {

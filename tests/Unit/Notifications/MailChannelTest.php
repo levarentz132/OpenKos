@@ -1,9 +1,5 @@
 <?php
 
-use App\Contracts\MailChannelNotification;
-use App\Data\Mail\MailAttachment;
-use App\Data\Mail\MailContent;
-use App\Data\Mail\MailSendResult;
 use App\Data\Reminder\ReminderEvent;
 use App\Enums\ReminderType;
 use App\Models\Lease;
@@ -16,6 +12,10 @@ use App\Services\MailManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
+use OpenKOS\Core\Contracts\MailChannelNotification;
+use OpenKOS\Core\Data\Mail\MailAttachment;
+use OpenKOS\Core\Data\Mail\MailContent;
+use OpenKOS\Core\Data\Mail\MailSendResult;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);

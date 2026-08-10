@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "18984f3aeb5cf6500df06d3aee0aa117",
+    "content-hash": "8c74e3b0434d764f213637ec9b6d4b1f",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -3308,6 +3308,64 @@
                 }
             ],
             "time": "2026-02-16T23:10:27+00:00"
+        },
+        {
+            "name": "openkos/platform",
+            "version": "0.1.0",
+            "dist": {
+                "type": "path",
+                "url": "../openkos-platform",
+                "reference": "352b2dad7bbb0c2cc62191084f1f8c4488e92722"
+            },
+            "require": {
+                "composer/semver": "^3.4",
+                "illuminate/container": "^13.0",
+                "illuminate/contracts": "^13.0",
+                "illuminate/events": "^13.0",
+                "illuminate/support": "^13.0",
+                "illuminate/validation": "^13.0",
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.29",
+                "orchestra/testbench": "^11.1",
+                "pestphp/pest": "^4.7",
+                "pestphp/pest-plugin-arch": "^4.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenKOS\\Platform\\PlatformServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenKOS\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "pest --compact"
+                ],
+                "lint": [
+                    "pint"
+                ]
+            },
+            "license": [
+                "Apache-2.0"
+            ],
+            "description": "The OpenKOS platform and plugin SDK.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "paragonie/constant_time_encoding",

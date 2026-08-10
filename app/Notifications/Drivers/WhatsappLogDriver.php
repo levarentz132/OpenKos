@@ -2,10 +2,10 @@
 
 namespace App\Notifications\Drivers;
 
-use App\Contracts\WhatsAppDriver;
-use App\Data\WhatsApp\DriverHealthResult;
-use App\Data\WhatsApp\WhatsAppMessage;
 use Illuminate\Support\Facades\Log;
+use OpenKOS\Core\Contracts\WhatsAppDriver;
+use OpenKOS\Core\Data\WhatsApp\DriverHealthResult;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppMessage;
 
 class WhatsappLogDriver implements WhatsAppDriver
 {

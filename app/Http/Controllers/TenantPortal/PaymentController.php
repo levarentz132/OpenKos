@@ -17,6 +17,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use OpenKOS\Core\Events\PaymentRecorded as PlatformPaymentRecorded;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PaymentController extends TenantPortalController
@@ -226,6 +227,7 @@ class PaymentController extends TenantPortalController
         $payment = $result->payment;
 
         PaymentRecorded::dispatch($payment, actorId: $request->user()->id);
+        event(new PlatformPaymentRecorded(paymentId: $payment->getKey(), actorId: $request->user()->id));
 
         Inertia::flash('toast', [
             'type' => 'success',

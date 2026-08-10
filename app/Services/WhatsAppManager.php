@@ -2,10 +2,6 @@
 
 namespace App\Services;
 
-use App\Contracts\WhatsAppDriver;
-use App\Data\WhatsApp\DriverHealthResult;
-use App\Data\WhatsApp\WhatsAppContent;
-use App\Data\WhatsApp\WhatsAppMessage;
 use App\Events\WhatsApp\WhatsAppFailed;
 use App\Events\WhatsApp\WhatsAppSent;
 use App\Exceptions\InvalidWhatsAppDriverException;
@@ -14,6 +10,10 @@ use App\Exceptions\WhatsAppDriverNotFoundException;
 use App\Models\Setting;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\QueryException;
+use OpenKOS\Core\Contracts\WhatsAppDriver;
+use OpenKOS\Core\Data\WhatsApp\DriverHealthResult;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppContent;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppMessage;
 use OpenKOS\Platform\Notification\NotificationRegistry;
 
 class WhatsAppManager

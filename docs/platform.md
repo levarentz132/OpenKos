@@ -9,34 +9,21 @@ OpenKOS is becoming an extensible platform. Plugins must be able to add navigati
 
 ## Namespace & Location
 
-Platform code lives in `src/` under the `OpenKOS\` namespace (PSR-4 mapped in `composer.json`), physically separate from the application code in `app/`:
+The reusable platform code lives in the standalone `openkos/platform` Composer package under `/Users/a1234/Projects/personal/openkos-platform/`. During local development the application consumes it through a Composer path repository. The main repository keeps only application-owned plugins in `src/Plugins/`:
 
 ```
-src/
-├── Core/
-│   └── Contracts/            Platform-facing interfaces (PaymentGateway, PluginDiscovery)
-├── Platform/
-│   ├── OpenKOSManager.php    Central manager — the object plugins receive
-│   ├── PlatformServiceProvider.php
-│   ├── Console/
-│   ├── Facades/OpenKOS.php
-│   ├── Permission/           PermissionRegistry
-│   ├── Plugin/               Plugin base, PluginManifest, PluginLoader
-│   ├── Dashboard/            DashboardRegistry + DashboardPage
-│   ├── Navigation/           NavigationRegistry + NavigationItem
-│   ├── Workspace/            WorkspaceRegistry + Workspace + WorkspaceTab
-│   ├── Settings/             SettingsRegistry + SettingsPage
-│   ├── Notification/         NotificationRegistry
-│   └── Payment/              PaymentRegistry
-└── Plugins/
-    ├── WhatsApp/             Core plugin: registers built-in WhatsApp drivers
-    └── Example/              Reference plugin (manifest, listener, routes/,
-                              database/migrations/) — disabled by default (see below)
+openkos-platform/
+├── src/Core/                 Contracts, DTOs, and platform-level events
+└── src/Platform/              Registries, manager, facade, and plugin lifecycle
+
+openkos/src/Plugins/
+├── WhatsApp/                 Built-in plugin: registers application drivers
+└── Example/                  Reference plugin — disabled by default
 ```
 
-Core also dispatches domain events plugins can subscribe to, e.g. `App\Events\Payment\PaymentRecorded`.
+The package exposes host-agnostic contracts and events such as `OpenKOS\Core\Events\PaymentRecorded`. OpenKOS may also dispatch its legacy `App\Events` counterparts for application subscribers; the package never imports application events or models.
 
-`src/Core/` currently holds only contracts. It is the designated future home for domain code migrating out of `app/` — nothing has been moved yet, deliberately.
+Composer package auto-discovery registers `PlatformServiceProvider`; the application does not list it again in `bootstrap/providers.php`. Plugin classes remain explicitly listed in `config/platform.php`. Composer-based plugin discovery is deferred to a follow-up ticket.
 
 ## The Registries
 
@@ -48,7 +35,7 @@ Nine singletons, each bound as a **container singleton** in `PlatformServiceProv
 | `DashboardRegistry`    | Dashboard pages                                  | `DashboardPage(key, title, href, permission?)`                                                                                                                                                                                 |
 | `WorkspaceRegistry`    | Tabs on entity workspace pages                   | `WorkspaceTab(key, label, permission?, meta[])`                                                                                                                                                                                |
 | `SettingsRegistry`     | Settings pages + setting definitions             | `SettingsPage(key, title, href, permission?, group?, routeName?, order?)` — `group` renders under a nav section; `routeName` is resolved lazily in `toArray()` (safe for plugin `boot()`); pages sort by `order` (default 500) |
-| `SettingsManager`      | Settings storage (read/write by key)             | Injected class with `get(key)`, `set(key, value)`, `some(keys)` methods                                                                                                                                                        |
+| `SettingsManager`      | Settings storage (read/write by key)             | Injected class with `get(key)`, `set(key, value)`, `some(keys)` methods; persistence is supplied by the host through `SettingsStore`                                                                                             |
 | `PermissionRegistry`   | Plugin-declared permissions                      | `register(key, label)` — persisted to Spatie permissions table via `platform:permissions:sync`                                                                                                                                 |
 | `NotificationRegistry` | Notification drivers by name                     | `NotificationDriverRegistration(name, channel, driverClass, label, config[])`                                                                                                                                                  |
 | `PaymentRegistry`      | Payment gateways by key                          | class-string or instance of `PaymentGateway`                                                                                                                                                                                   |
@@ -78,7 +65,7 @@ $platform->settings()->registerSetting(new SettingDefinition(
 
 Supported types: `string`, `boolean`, `integer`, `array`, `encrypted`, `encrypted:array`.
 
-**Reading and writing** goes through `SettingsManager`, accessible via the manager:
+**Reading and writing** goes through `SettingsManager`, accessible via the manager. The package depends only on `OpenKOS\Core\Contracts\SettingsStore`; OpenKOS binds that contract to its Eloquent-backed settings service:
 
 ```php
 // In a plugin's controller or Boot method:
@@ -142,7 +129,7 @@ A plugin is a class extending `Plugin` that declares a **manifest** and register
 extensions. The `src/Plugins/Example/` plugin is a working reference for everything below.
 
 ```php
-use App\Events\Payment\PaymentRecorded;
+use OpenKOS\Core\Events\PaymentRecorded;
 use OpenKOS\Platform\Navigation\NavigationItem;
 use OpenKOS\Platform\OpenKOSManager;
 use OpenKOS\Platform\Settings\SettingsPage;
@@ -220,7 +207,7 @@ src/Plugins/MyPlugin/
 
 ### Lifecycle
 
-`PlatformServiceProvider::boot()`:
+The package `PlatformServiceProvider::boot()`:
 
 1. Instantiates every configured plugin through the container (so plugins can
    constructor-inject dependencies).
@@ -247,12 +234,12 @@ src/Plugins/MyPlugin/
 
 ### Domain events
 
-Core dispatches domain events (e.g. `App\Events\Payment\PaymentRecorded`); plugins subscribe
+Core dispatches package domain events (e.g. `OpenKOS\Core\Events\PaymentRecorded`); plugins subscribe
 declaratively via `listens()` (`event => listener` / `[listeners]`), wired onto Laravel's
 event dispatcher at boot. This is the standard extension seam for reacting to core
 activity (accounting, analytics, notifications) **without modifying core** — the action
-just dispatches; any number of plugins can listen. Add new domain events as core
-operations warrant; keep them in `App\Events` as part of the stable plugin API.
+just dispatches; any number of plugins can listen. Application workflows may also dispatch
+legacy `App\Events` for host-only subscribers.
 
 ### Discovery
 
@@ -285,17 +272,18 @@ Composer dependency. What the platform **does** enforce:
 
 Sandboxing (capability limits, resource isolation) is explicitly out of scope for the
 monolith; it would only matter for untrusted third-party marketplace plugins, which is a
-future concern.
+Composer plugin discovery is deferred to a follow-up ticket; configured plugins remain
+explicit in `config/platform.php` for this package extraction.
 
 ## Notifications (WhatsApp) — consumed
 
 `NotificationRegistry` is now the **runtime source of truth** for WhatsApp drivers, replacing the old `config('services.whatsapp.drivers')` lookups:
 
 - **`WhatsAppPlugin`** (`src/Plugins/WhatsApp/`, enabled in `config/platform.php`) seeds the registry from `config/services.php` at boot — each entry becomes a `NotificationDriverRegistration(name, channel: 'whatsapp', driverClass, label, config)`. Config is now just seed data; a third-party plugin can register additional whatsapp-channel drivers the same way and they appear everywhere automatically.
-- **`WhatsAppManager`** resolves the selected driver from the registry (`$registry->get($name)`) instead of config, then instantiates `driverClass` with merged credentials (DB `whatsapp_config` over registration defaults). The existing `App\Contracts\WhatsAppDriver` interface and the four driver classes are **unchanged**.
+- **`WhatsAppManager`** resolves the selected driver from the registry (`$registry->get($name)`) instead of config, then instantiates `driverClass` with merged credentials (DB `whatsapp_config` over registration defaults). The package `OpenKOS\Core\Contracts\WhatsAppDriver` is implemented by the four application driver classes.
 - **The WhatsApp settings page** (`WhatsAppController`) lists drivers via `$registry->forChannel('whatsapp')` and validates the selection against it.
 
-`NotificationDriverRegistration.driverClass` is a plain class-string, not a typed contract, because each channel brings its own driver interface shaped to its needs — WhatsApp drivers implement the stateful `App\Contracts\WhatsAppDriver` (pairing/health). A future SMS/Telegram/push channel follows the same pattern: define a channel-specific driver contract (e.g. `App\Contracts\SmsDriver`), register implementations into `NotificationRegistry` with that `channel`, and add a small manager (parallel to `WhatsAppManager`) that resolves and calls them. The registry, registration, and settings-page listing are channel-agnostic and reused as-is; only the per-channel contract and manager are new.
+`NotificationDriverRegistration.driverClass` is a plain class-string, not a typed contract, because each channel brings its own driver interface shaped to its needs — WhatsApp drivers implement the stateful `OpenKOS\Core\Contracts\WhatsAppDriver` (pairing/health). A future SMS/Telegram/push channel follows the same pattern: define a channel-specific driver contract in the package, register implementations into `NotificationRegistry` with that `channel`, and add a small app-side manager that resolves and calls them. The registry, registration, and settings-page listing are channel-agnostic and reused as-is; only the per-channel contract and manager are new.
 
 ## Payment Contracts — interface only
 
@@ -311,7 +299,7 @@ future concern.
 
 ### ExamplePlugin (disabled by default)
 
-`ExamplePlugin` (`src/Plugins/Example/`) is a working reference for **every** extension point: a manifest, a declared permission (`example.view`) gating its nav item and route, the consumed registries (sidebar nav item, Dashboard sub-page, settings nav entry, plus a `workspace-header-badge` region — client half in `resources/js/plugins/example/`), a domain-event listener (`Listeners/LogPaymentRecorded` on `App\Events\Payment\PaymentRecorded`), its own `routes/web.php` (an invokable-controller `/example` endpoint), and a `database/migrations/` migration.
+`ExamplePlugin` (`src/Plugins/Example/`) is a working reference for **every** extension point: a manifest, a declared permission (`example.view`) gating its nav item and route, the consumed registries (sidebar nav item, Dashboard sub-page, settings nav entry, plus a `workspace-header-badge` region — client half in `resources/js/plugins/example/`), a domain-event listener (`Listeners/LogPaymentRecorded` on `OpenKOS\Core\Events\PaymentRecorded`), its own `routes/web.php` (an invokable-controller `/example` endpoint), and a `database/migrations/` migration.
 
 It ships **disabled** so the demo stays out of the real UI. To enable it:
 

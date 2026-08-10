@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Repositories\SettingRepository;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Events\Dispatcher;
+use OpenKOS\Core\Events\SettingsUpdated as PlatformSettingsUpdated;
 
 class UpdateSettings
 {
@@ -31,6 +32,12 @@ class UpdateSettings
         );
 
         $this->events->dispatch(new SettingsUpdated(
+            group: $result->group,
+            keys: array_keys($data),
+            actorId: $actor?->getKey(),
+        ));
+
+        $this->events->dispatch(new PlatformSettingsUpdated(
             group: $result->group,
             keys: array_keys($data),
             actorId: $actor?->getKey(),

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\Events\Settings\SettingsUpdated;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -39,6 +40,12 @@ class SettingValuesController extends Controller
                 'value' => $e->getMessage(),
             ]);
         }
+
+        event(new SettingsUpdated(
+            group: $this->manager->definitions()[$data['key']]->page ?? 'general',
+            keys: [$data['key']],
+            actorId: $request->user()?->getKey(),
+        ));
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Setting updated.')]);
 

@@ -2,9 +2,9 @@
 
 namespace App\Events\Mail;
 
-use App\Data\Mail\MailAddress;
-use App\Data\Mail\MailMessage;
 use App\Exceptions\MailDeliveryException;
+use OpenKOS\Core\Data\Mail\MailAddress;
+use OpenKOS\Core\Data\Mail\MailMessage;
 
 final readonly class MailFailed
 {

@@ -2,8 +2,8 @@
 
 namespace OpenKOS\Plugins\Example\Listeners;
 
-use App\Events\Payment\PaymentRecorded;
 use Illuminate\Support\Facades\Log;
+use OpenKOS\Core\Events\PaymentRecorded;
 
 /**
  * Example listener for a core domain event — wired via ExamplePlugin::listens().
@@ -13,6 +13,6 @@ class LogPaymentRecorded
 {
     public function handle(PaymentRecorded $event): void
     {
-        Log::info('[example-plugin] payment recorded', ['payment_id' => $event->payment->id]);
+        Log::info('[example-plugin] payment recorded', ['payment_id' => $event->paymentId]);
     }
 }

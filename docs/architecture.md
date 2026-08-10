@@ -19,7 +19,7 @@
 
 ## Layer Architecture
 
-The application uses a **multi-layered domain-oriented** architecture. Files are organized by architectural concern (layer-first), not by feature.
+The application uses a **multi-layered domain-oriented** architecture. Files are organized by architectural concern (layer-first), not by feature. The reusable platform layer is maintained in the standalone `openkos/platform` package and consumed locally through a Composer path repository.
 
 Application code lives in `app/` (`App\` namespace). The extensibility platform lives in `src/` (`OpenKOS\` namespace) — registries, the `OpenKOS` facade/manager, and the plugin system. See `docs/platform.md`.
 
@@ -48,9 +48,11 @@ app/
 └── Tables/           Reusable table/filter/column builders
 
 src/
-├── Core/Contracts/   Platform-facing interfaces (NotificationDriver, PaymentGateway, PluginDiscovery)
-├── Platform/         Registries, OpenKOSManager, OpenKOS facade, Plugin base class
-└── Plugins/          Plugin implementations (config/platform.php lists enabled plugins)
+└── Plugins/          Application-owned plugin implementations (config/platform.php lists enabled plugins)
+
+openkos-platform/src/
+├── Core/             Platform contracts, DTOs, and events
+└── Platform/         Registries, manager, facade, and plugin lifecycle
 ```
 
 ### Layer Rules

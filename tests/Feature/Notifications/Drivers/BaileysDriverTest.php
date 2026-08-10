@@ -1,9 +1,9 @@
 <?php
 
-use App\Data\WhatsApp\WhatsAppAttachment;
-use App\Data\WhatsApp\WhatsAppMessage;
 use App\Notifications\Drivers\BaileysDriver;
 use Illuminate\Support\Facades\Http;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppAttachment;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppMessage;
 
 function fakeResponse(array $data = [], int $status = 200, bool $success = true, string $message = '')
 {

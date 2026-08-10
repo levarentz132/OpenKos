@@ -1,10 +1,5 @@
 <?php
 
-use App\Contracts\WhatsAppDriver;
-use App\Data\WhatsApp\DriverHealthResult;
-use App\Data\WhatsApp\WhatsAppAttachment;
-use App\Data\WhatsApp\WhatsAppContent;
-use App\Data\WhatsApp\WhatsAppMessage;
 use App\Events\WhatsApp\WhatsAppFailed;
 use App\Events\WhatsApp\WhatsAppSent;
 use App\Exceptions\WhatsAppDeliveryException;
@@ -13,6 +8,11 @@ use App\Models\Setting;
 use App\Services\WhatsAppManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use OpenKOS\Core\Contracts\WhatsAppDriver;
+use OpenKOS\Core\Data\WhatsApp\DriverHealthResult;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppAttachment;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppContent;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppMessage;
 use OpenKOS\Platform\Notification\NotificationDriverRegistration;
 use OpenKOS\Platform\Notification\NotificationRegistry;
 use Tests\TestCase;

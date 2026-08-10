@@ -2,10 +2,6 @@
 
 namespace App\Services;
 
-use App\Contracts\MailDriver;
-use App\Data\Mail\DriverHealthResult;
-use App\Data\Mail\MailMessage;
-use App\Data\Mail\MailSendResult;
 use App\Events\Mail\MailFailed;
 use App\Events\Mail\MailSent;
 use App\Exceptions\InvalidMailDriverException;
@@ -13,6 +9,10 @@ use App\Exceptions\MailDeliveryException;
 use App\Exceptions\MailDriverNotFoundException;
 use App\Models\Setting;
 use Illuminate\Contracts\Container\Container;
+use OpenKOS\Core\Contracts\MailDriver;
+use OpenKOS\Core\Data\Mail\DriverHealthResult;
+use OpenKOS\Core\Data\Mail\MailMessage;
+use OpenKOS\Core\Data\Mail\MailSendResult;
 use OpenKOS\Platform\Notification\NotificationRegistry;
 
 class MailManager

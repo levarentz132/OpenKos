@@ -2,13 +2,13 @@
 
 namespace App\Notifications\Channels;
 
-use App\Contracts\MailChannelNotification;
-use App\Data\Mail\MailAddress;
-use App\Data\Mail\MailMessage;
 use App\Services\MailManager;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use OpenKOS\Core\Contracts\MailChannelNotification;
+use OpenKOS\Core\Data\Mail\MailAddress;
+use OpenKOS\Core\Data\Mail\MailMessage;
 
 class MailChannel
 {
@@ -18,7 +18,7 @@ class MailChannel
     {
         if (! $notification instanceof MailChannelNotification) {
             throw new InvalidArgumentException(sprintf(
-                'Notification [%s] must implement App\\Contracts\\MailChannelNotification.',
+                'Notification [%s] must implement OpenKOS\\Core\\Contracts\\MailChannelNotification.',
                 $notification::class,
             ));
         }

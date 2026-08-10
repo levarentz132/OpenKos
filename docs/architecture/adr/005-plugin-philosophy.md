@@ -17,7 +17,7 @@ We will treat plugins as **trusted, in-process extensions registering into typed
 
 - A plugin extends `OpenKOS\Platform\Plugin\Plugin`, declares a `PluginManifest` (id, version, `coreVersion` constraint, dependencies), and registers into container-singleton registries via the `OpenKOSManager`. Enabled plugins are listed explicitly in `config/platform.php`.
 - Extension is **additive only**: plugins own their tables via their own migrations, declare their own permissions, and must not alter core schema or behavior.
-- Plugins react to core through **domain events** (`App\Events`, see [docs/domain-events.md](../../domain-events.md)) — the stable plugin API — never by patching core code.
+- Plugins react to core through **platform-level domain events** (`OpenKOS\Core\Events`, see [docs/domain-events.md](../../domain-events.md)) — the stable plugin API — never by patching core code. Application events remain a compatibility surface for host-only subscribers.
 - The loader fail-fasts on incompatible core versions, missing dependencies, and cycles; a broken plugin never half-boots.
 - Dormant seams are interface-only until a real consumer forces their shape (e.g. `PaymentGateway` waits for the first real gateway; `PluginDiscovery` waits for Composer-based distribution).
 

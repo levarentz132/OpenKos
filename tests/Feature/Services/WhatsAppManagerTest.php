@@ -1,10 +1,10 @@
 <?php
 
-use App\Contracts\WhatsAppDriver;
-use App\Data\WhatsApp\DriverHealthResult;
-use App\Data\WhatsApp\WhatsAppMessage;
 use App\Exceptions\WhatsAppDriverNotFoundException;
 use App\Services\WhatsAppManager;
+use OpenKOS\Core\Contracts\WhatsAppDriver;
+use OpenKOS\Core\Data\WhatsApp\DriverHealthResult;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppMessage;
 use OpenKOS\Platform\Notification\NotificationDriverRegistration;
 use OpenKOS\Platform\Notification\NotificationRegistry;
 

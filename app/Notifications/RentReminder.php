@@ -3,13 +3,7 @@
 namespace App\Notifications;
 
 use App\Actions\Invoices\GenerateInvoicePdf;
-use App\Contracts\MailChannelNotification;
-use App\Contracts\WhatsAppChannelNotification;
-use App\Data\Mail\MailAttachment;
-use App\Data\Mail\MailContent;
 use App\Data\Reminder\ReminderEvent;
-use App\Data\WhatsApp\WhatsAppAttachment;
-use App\Data\WhatsApp\WhatsAppContent;
 use App\Enums\ReminderType;
 use App\Models\Invoice;
 use App\Models\Setting;
@@ -21,6 +15,12 @@ use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
+use OpenKOS\Core\Contracts\MailChannelNotification;
+use OpenKOS\Core\Contracts\WhatsAppChannelNotification;
+use OpenKOS\Core\Data\Mail\MailAttachment;
+use OpenKOS\Core\Data\Mail\MailContent;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppAttachment;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppContent;
 
 class RentReminder extends Notification implements MailChannelNotification, ShouldQueue, WhatsAppChannelNotification
 {
