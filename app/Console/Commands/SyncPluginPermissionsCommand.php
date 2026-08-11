@@ -1,15 +1,11 @@
 <?php
 
-namespace OpenKOS\Platform\Console;
+namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use OpenKOS\Platform\Permission\PermissionRegistry;
 use Spatie\Permission\Models\Permission;
 
-/**
- * Persists permissions declared by enabled plugins into the Spatie
- * permissions table. Run after enabling a plugin, alongside `migrate`.
- */
 class SyncPluginPermissionsCommand extends Command
 {
     protected $signature = 'platform:permissions:sync';

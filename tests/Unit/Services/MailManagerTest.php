@@ -1,7 +1,5 @@
 <?php
 
-use App\Data\Mail\MailAddress;
-use App\Data\Mail\MailMessage;
 use App\Events\Mail\MailFailed;
 use App\Events\Mail\MailSent;
 use App\Exceptions\MailDeliveryException;
@@ -11,6 +9,8 @@ use App\Notifications\Drivers\SmtpMailDriver;
 use App\Services\MailManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use OpenKOS\Core\Data\Mail\MailAddress;
+use OpenKOS\Core\Data\Mail\MailMessage;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);

@@ -35,6 +35,8 @@ public readonly ?int $actorId;      // ID of the acting user, null for system-tr
 
 Since [ADR-007](architecture/adr/007-invoice-aggregate.md) payments settle invoices; listeners reach the billing context via `$payment->invoice` (and `->invoice->lease`).
 
+The package-level plugin event is `OpenKOS\Core\Events\PaymentRecorded` with `int|string $paymentId` and `?int $actorId`. The application dispatches it alongside the legacy model-bearing event so package consumers do not depend on Eloquent.
+
 ### Invoice
 
 | Event                      | Payload            | Dispatched from                     |
@@ -90,6 +92,8 @@ public readonly array $keys;    // affected setting keys
 public readonly ?int $actorId;
 ```
 
+The package-level event is `OpenKOS\Core\Events\SettingsUpdated`; its payload matches the application event without exposing application models.
+
 ## Plugin Subscription
 
 Plugins subscribe to events via `listens()` in their `Plugin` subclass:
@@ -103,7 +107,7 @@ public function listens(): array
 }
 ```
 
-Listeners are wired onto Laravel's dispatcher by `PlatformServiceProvider::boot()` after all plugins have registered.
+Listeners are wired onto Laravel's dispatcher by the `openkos/platform` package provider after all configured plugins have registered.
 
 ## Adding a New Event
 

@@ -1,8 +1,8 @@
 <?php
 
-use App\Data\WhatsApp\WhatsAppAttachment;
-use App\Data\WhatsApp\WhatsAppMessage;
 use App\Notifications\Drivers\WhatsappLogDriver;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppAttachment;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppMessage;
 
 it('sends without exception', function () {
     $driver = new WhatsappLogDriver;

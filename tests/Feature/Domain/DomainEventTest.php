@@ -19,6 +19,7 @@ use App\Models\User;
 use Database\Seeders\RegionAndCitySeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Support\Facades\Event;
+use OpenKOS\Core\Events\PaymentRecorded as PlatformPaymentRecorded;
 
 uses()->beforeEach(function () {
     $this->seed(RoleAndPermissionSeeder::class);
@@ -71,7 +72,7 @@ describe('lease events', function () {
 
 describe('payment events', function () {
     it('dispatches PaymentRecorded when recording a payment', function () {
-        Event::fake([PaymentRecorded::class]);
+        Event::fake([PaymentRecorded::class, PlatformPaymentRecorded::class]);
 
         $property = Property::factory()->create();
         $unit = Unit::factory()->withRate(1_000_000)->create(['property_id' => $property->id]);
@@ -97,6 +98,7 @@ describe('payment events', function () {
         ]);
 
         Event::assertDispatched(PaymentRecorded::class);
+        Event::assertDispatched(PlatformPaymentRecorded::class, fn (PlatformPaymentRecorded $event): bool => $event->paymentId === $invoice->payments()->latest('id')->value('id'));
     });
 });
 

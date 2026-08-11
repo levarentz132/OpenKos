@@ -1,9 +1,7 @@
 <?php
 
-use App\Events\Payment\PaymentRecorded;
 use App\Models\Invoice;
 use App\Models\Lease;
-use App\Models\Payment;
 use App\Models\Property;
 use App\Models\Tenant;
 use App\Models\Unit;
@@ -11,6 +9,7 @@ use App\Models\User;
 use Database\Seeders\RegionAndCitySeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Support\Facades\Event;
+use OpenKOS\Core\Events\PaymentRecorded;
 use OpenKOS\Platform\OpenKOSManager;
 use OpenKOS\Platform\PlatformServiceProvider;
 use OpenKOS\Platform\Plugin\Plugin;
@@ -40,7 +39,7 @@ it('wires a plugins event listeners at boot', function () {
     config(['platform.plugins' => [EventProbePlugin::class]]);
     (new PlatformServiceProvider(app()))->boot();
 
-    PaymentRecorded::dispatch(Payment::factory()->make());
+    event(new PaymentRecorded(paymentId: 1));
 
     expect(EventProbePlugin::$fired)->toBeTrue();
 });

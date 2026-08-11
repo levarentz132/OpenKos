@@ -2,9 +2,9 @@
 
 namespace App\Notifications\Channels;
 
-use App\Contracts\WhatsAppChannelNotification;
 use App\Services\WhatsAppManager;
 use Illuminate\Notifications\Notification;
+use OpenKOS\Core\Contracts\WhatsAppChannelNotification;
 
 class WhatsAppChannel
 {

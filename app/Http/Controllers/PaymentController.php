@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
+use OpenKOS\Core\Events\PaymentRecorded as PlatformPaymentRecorded;
 
 class PaymentController extends Controller
 {
@@ -54,6 +55,7 @@ class PaymentController extends Controller
         $payment = $result->payment;
 
         PaymentRecorded::dispatch($payment, actorId: Auth::id());
+        event(new PlatformPaymentRecorded(paymentId: $payment->getKey(), actorId: Auth::id()));
 
         Inertia::flash('toast', [
             'type' => 'success',

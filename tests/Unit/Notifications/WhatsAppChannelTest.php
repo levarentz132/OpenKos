@@ -1,10 +1,10 @@
 <?php
 
-use App\Contracts\WhatsAppChannelNotification;
-use App\Data\WhatsApp\WhatsAppContent;
 use App\Notifications\Channels\WhatsAppChannel;
 use App\Services\WhatsAppManager;
 use Illuminate\Notifications\Notification;
+use OpenKOS\Core\Contracts\WhatsAppChannelNotification;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppContent;
 
 describe('WhatsAppChannel', function () {
     it('sends notification using WhatsAppChannelNotification contract', function () {

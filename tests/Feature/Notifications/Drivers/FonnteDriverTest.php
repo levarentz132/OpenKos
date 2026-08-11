@@ -1,9 +1,9 @@
 <?php
 
-use App\Data\WhatsApp\WhatsAppAttachment;
-use App\Data\WhatsApp\WhatsAppMessage;
 use App\Notifications\Drivers\FonnteDriver;
 use Illuminate\Support\Facades\Http;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppAttachment;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppMessage;
 
 it('sends message via fonnte api', function () {
     Http::fake([

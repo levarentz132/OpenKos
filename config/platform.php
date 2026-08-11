@@ -1,5 +1,6 @@
 <?php
 
+use Composer\InstalledVersions;
 use OpenKOS\Plugins\Mail\MailPlugin;
 use OpenKOS\Plugins\WhatsApp\WhatsAppPlugin;
 
@@ -18,7 +19,7 @@ return [
     |
     */
 
-    'version' => '0.1.0-alpha.3',
+    'version' => InstalledVersions::getPrettyVersion('openkos/platform') ?: '0.1.0',
 
     /*
     |--------------------------------------------------------------------------

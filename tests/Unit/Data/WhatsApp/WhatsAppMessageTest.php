@@ -1,7 +1,7 @@
 <?php
 
-use App\Data\WhatsApp\WhatsAppAttachment;
-use App\Data\WhatsApp\WhatsAppMessage;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppAttachment;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppMessage;
 
 it('creates with phone and message', function () {
     $message = new WhatsAppMessage('08123456789', 'Hello');

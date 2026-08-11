@@ -1,9 +1,9 @@
 <?php
 
-use App\Data\WhatsApp\WhatsAppAttachment;
-use App\Data\WhatsApp\WhatsAppMessage;
 use App\Notifications\Drivers\WhatsAppCloudApiDriver;
 use Illuminate\Support\Facades\Http;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppAttachment;
+use OpenKOS\Core\Data\WhatsApp\WhatsAppMessage;
 
 it('sends message via WhatsApp Cloud API', function () {
     Http::fake([

@@ -4,7 +4,9 @@ use App\Models\Setting;
 use App\Models\Tenant;
 use App\Models\User;
 use Database\Seeders\RoleAndPermissionSeeder;
+use Illuminate\Support\Facades\Event;
 use Inertia\Testing\AssertableInertia as Assert;
+use OpenKOS\Core\Events\SettingsUpdated as PlatformSettingsUpdated;
 use OpenKOS\Platform\Facades\OpenKOS;
 use OpenKOS\Platform\Settings\SettingDefinition;
 use OpenKOS\Platform\Settings\SettingsPage;
@@ -59,6 +61,8 @@ test('owners can view and update registered dynamic settings', function () {
             ->has('definitions', 1)
             ->where('definitions.0.key', 'plugin_demo.api_key'));
 
+    Event::fake([PlatformSettingsUpdated::class]);
+
     $this->from(route('settings.dynamic.edit', 'plugin-demo'))->actingAs($owner)
         ->post(route('settings.values.upsert'), [
             'key' => 'plugin_demo.api_key',
@@ -67,4 +71,10 @@ test('owners can view and update registered dynamic settings', function () {
         ->assertRedirect(route('settings.dynamic.edit', 'plugin-demo'));
 
     expect(Setting::get('plugin_demo.api_key'))->toBe('owner-secret');
+
+    Event::assertDispatched(PlatformSettingsUpdated::class, function (PlatformSettingsUpdated $event) use ($owner): bool {
+        return $event->group === 'plugin-demo'
+            && $event->keys === ['plugin_demo.api_key']
+            && $event->actorId === $owner->getKey();
+    });
 });
