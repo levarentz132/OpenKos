@@ -1,7 +1,6 @@
 <?php
 
 use App\Notifications\Drivers\BaileysDriver;
-use App\Notifications\Drivers\FonnteDriver;
 use App\Notifications\Drivers\WhatsAppCloudApiDriver;
 use App\Notifications\Drivers\WhatsappLogDriver;
 
@@ -43,11 +42,6 @@ return [
                 'label' => 'Baileys (Unofficial, Unstable)',
                 'url' => env('BAILEYS_URL'),
                 'api_key' => env('BAILEYS_API_KEY'),
-            ],
-            'fonnte' => [
-                'class' => FonnteDriver::class,
-                'label' => 'Fonnte (Unofficial)',
-                'token' => env('FONNTE_TOKEN'),
             ],
             'whatsapp_cloud' => [
                 'class' => WhatsAppCloudApiDriver::class,

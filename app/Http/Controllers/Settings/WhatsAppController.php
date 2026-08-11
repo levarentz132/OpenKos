@@ -119,7 +119,11 @@ class WhatsAppController extends Controller
             fn (NotificationDriverRegistration $r) => $r->name,
             $this->registry->forChannel('whatsapp'),
         );
-        $allowedDrivers = array_unique(array_merge($registeredDrivers, ['log', 'baileys', 'fonnte', 'whatsapp_cloud', 'whatsapp_cloud_api']));
+        $aliases = ['log', 'baileys', 'whatsapp_cloud', 'whatsapp_cloud_api'];
+        if ($this->registry->has('openkos/fonnte')) {
+            $aliases[] = 'fonnte';
+        }
+        $allowedDrivers = array_unique(array_merge($registeredDrivers, $aliases));
 
         $validated = $request->validate([
             'whatsapp_driver' => ['nullable', 'string', 'in:'.implode(',', $allowedDrivers)],
