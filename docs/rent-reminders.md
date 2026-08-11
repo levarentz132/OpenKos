@@ -158,5 +158,5 @@ app/
 - Dynamic scheduling time (currently hardcoded `dailyAt('08:00')`)
 - Email and in-app notification channels
 - SMTP config UI + channel selector on settings page
-- Baileys driver for real WhatsApp integration
+- Additional WhatsApp integrations
 - Send to all tenants on lease (not just primary)

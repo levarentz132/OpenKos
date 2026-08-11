@@ -104,9 +104,7 @@ class WhatsAppManager
     {
         return match ($name) {
             'log', 'openkos/log' => 'openkos/whatsapp-log',
-            'baileys' => 'openkos/baileys',
             'fonnte' => 'openkos/fonnte',
-            'whatsapp_cloud', 'whatsapp_cloud_api' => 'openkos/whatsapp-cloud',
             default => $name,
         };
     }

@@ -33,9 +33,6 @@ class WhatsAppPlugin extends Plugin
     {
         $map = [
             'log' => 'openkos/whatsapp-log',
-            'baileys' => 'openkos/baileys',
-            'fonnte' => 'openkos/fonnte',
-            'whatsapp_cloud' => 'openkos/whatsapp-cloud',
         ];
 
         foreach (config('services.whatsapp.drivers', []) as $name => $definition) {

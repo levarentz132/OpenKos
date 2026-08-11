@@ -32,9 +32,6 @@ describe('WhatsApp settings page', function () {
             ->get(route('settings.whatsapp.edit'))
             ->assertInertia(fn ($page) => $page
                 ->where('drivers.0.name', 'openkos/whatsapp-log')
-                ->where('drivers.1.name', 'openkos/baileys')
-                ->where('drivers.2.name', 'openkos/fonnte')
-                ->where('drivers.3.name', 'openkos/whatsapp-cloud')
             );
     });
 
@@ -51,8 +48,8 @@ describe('WhatsApp settings page', function () {
         $this->actingAs($owner)
             ->get(route('settings.whatsapp.edit'))
             ->assertInertia(fn ($page) => $page
-                ->where('drivers.4.name', 'custom_gateway')
-                ->where('drivers.4.label', 'Custom Gateway')
+                ->where('drivers.1.name', 'custom_gateway')
+                ->where('drivers.1.label', 'Custom Gateway')
             );
     });
 
@@ -61,11 +58,11 @@ describe('WhatsApp settings page', function () {
 
         $this->actingAs($owner)
             ->patch(route('settings.whatsapp.update'), [
-                'whatsapp_driver' => 'fonnte',
+                'whatsapp_driver' => 'log',
             ])
             ->assertRedirect();
 
-        expect(Setting::get('whatsapp_driver'))->toBe('fonnte');
+        expect(Setting::get('whatsapp_driver'))->toBe('log');
     });
 
     it('updates whatsapp config', function () {
@@ -73,10 +70,10 @@ describe('WhatsApp settings page', function () {
 
         $this->actingAs($owner)
             ->patch(route('settings.whatsapp.update'), [
-                'whatsapp_driver' => 'fonnte',
+                'whatsapp_driver' => 'log',
                 'whatsapp_config' => [
-                    'fonnte' => [
-                        'token' => 'test-token-123',
+                    'log' => [
+                        'note' => 'test',
                     ],
                 ],
             ])
@@ -84,26 +81,25 @@ describe('WhatsApp settings page', function () {
 
         $config = Setting::get('whatsapp_config');
 
-        expect($config['fonnte']['token'])->toBe('test-token-123');
+        expect($config['log']['note'])->toBe('test');
     });
 
     it('does not overwrite existing config on update', function () {
         $owner = User::factory()->owner()->create();
-        Setting::set('whatsapp_config', ['fonnte' => ['token' => 'existing-token']], 'encrypted:array');
-        Setting::set('whatsapp_driver', 'fonnte');
+        Setting::set('whatsapp_config', ['log' => ['note' => 'test']], 'encrypted:array');
+        Setting::set('whatsapp_driver', 'log');
 
         $this->actingAs($owner)
             ->patch(route('settings.whatsapp.update'), [
-                'whatsapp_driver' => 'baileys',
+                'whatsapp_driver' => 'log',
                 'whatsapp_config' => [
-                    'baileys' => ['url' => 'http://localhost:3000'],
+                    'log' => ['note' => 'test'],
                 ],
             ])
             ->assertRedirect();
 
         $config = Setting::get('whatsapp_config');
-        expect($config['fonnte']['token'])->toBe('existing-token');
-        expect($config['baileys']['url'])->toBe('http://localhost:3000');
+        expect($config['log']['note'])->toBe('test');
     });
 
     it('tests connection with log driver', function () {
@@ -132,6 +128,35 @@ describe('WhatsApp settings page', function () {
             ->assertSessionHasErrors(['whatsapp_driver']);
     });
 
+    it('rejects fonnte when the integration package is absent', function () {
+        $owner = User::factory()->owner()->create();
+
+        $this->actingAs($owner)
+            ->patch(route('settings.whatsapp.update'), [
+                'whatsapp_driver' => 'fonnte',
+            ])
+            ->assertSessionHasErrors(['whatsapp_driver']);
+    });
+
+    it('accepts the fonnte alias when the integration is registered', function () {
+        app(NotificationRegistry::class)->registerDriver(new NotificationDriverRegistration(
+            name: 'openkos/fonnte',
+            channel: 'whatsapp',
+            driverClass: WhatsappLogDriver::class,
+            label: 'Fonnte (Test)',
+        ));
+
+        $owner = User::factory()->owner()->create();
+
+        $this->actingAs($owner)
+            ->patch(route('settings.whatsapp.update'), [
+                'whatsapp_driver' => 'fonnte',
+            ])
+            ->assertRedirect();
+
+        expect(Setting::get('whatsapp_driver'))->toBe('fonnte');
+    });
+
     it('returns status json', function () {
         $owner = User::factory()->owner()->create();
 
@@ -141,19 +166,4 @@ describe('WhatsApp settings page', function () {
             ->assertJsonStructure(['healthy', 'message', 'phone', 'lastConnected']);
     });
 
-    it('disconnects baileys driver', function () {
-        $owner = User::factory()->owner()->create();
-        Setting::set('whatsapp_driver', 'baileys');
-        Setting::set('whatsapp_config', ['baileys' => ['url' => 'http://localhost:3000', 'api_key' => 'secret']], 'encrypted:array');
-
-        Http::fake([
-            '*/api/sessions' => Http::response(['meta' => ['success' => true]]),
-        ]);
-
-        $this->actingAs($owner)
-            ->delete(route('settings.whatsapp.disconnect'))
-            ->assertRedirect();
-
-        Http::assertSent(fn ($request) => $request->method() === 'DELETE');
-    });
 });

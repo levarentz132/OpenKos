@@ -44,10 +44,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('settings/whatsapp', [WhatsAppController::class, 'edit'])->name('settings.whatsapp.edit');
         Route::patch('settings/whatsapp', [WhatsAppController::class, 'update'])->name('settings.whatsapp.update');
         Route::post('settings/whatsapp/test', [WhatsAppController::class, 'test'])->name('settings.whatsapp.test');
-        Route::post('settings/whatsapp/pair', [WhatsAppController::class, 'pair'])->name('settings.whatsapp.pair');
-        Route::get('settings/whatsapp/qr', [WhatsAppController::class, 'qr'])->name('settings.whatsapp.qr');
         Route::get('settings/whatsapp/status', [WhatsAppController::class, 'status'])->name('settings.whatsapp.status');
-        Route::delete('settings/whatsapp/disconnect', [WhatsAppController::class, 'disconnect'])->name('settings.whatsapp.disconnect');
 
         Route::get('settings/property-types', [PropertyTypeController::class, 'index'])->name('settings.property-types.index');
         Route::post('settings/property-types', [PropertyTypeController::class, 'store'])->name('settings.property-types.store');

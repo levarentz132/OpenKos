@@ -25,10 +25,7 @@ describe('WhatsAppManager', function () {
 
         expect($manager->normalizeDriverId('log'))->toBe('openkos/whatsapp-log');
         expect($manager->normalizeDriverId('openkos/log'))->toBe('openkos/whatsapp-log');
-        expect($manager->normalizeDriverId('baileys'))->toBe('openkos/baileys');
         expect($manager->normalizeDriverId('fonnte'))->toBe('openkos/fonnte');
-        expect($manager->normalizeDriverId('whatsapp_cloud'))->toBe('openkos/whatsapp-cloud');
-        expect($manager->normalizeDriverId('whatsapp_cloud_api'))->toBe('openkos/whatsapp-cloud');
         expect($manager->normalizeDriverId('custom/driver'))->toBe('custom/driver');
     });
 
