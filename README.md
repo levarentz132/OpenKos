@@ -16,7 +16,7 @@ OpenKOS handles the full rental lifecycle — properties, units, leases, tenants
 - **Multi-Property Support** — Dashboard, reports, and settings scoped per property
 - **Role-Based Access** — Owner, admin, and staff roles with granular Spatie permissions
 - **Plugin Architecture** — Extend via plugins (navigation, dashboard, settings, workspace tabs, notification drivers, payment gateways)
-- **WhatsApp Integration** — Pluggable WhatsApp driver system with log, Baileys, and cloud API drivers
+- **WhatsApp Integration** — Pluggable WhatsApp driver system with a built-in log driver and optional integrations
 
 ## Screenshots
 

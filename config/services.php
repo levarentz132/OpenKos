@@ -1,7 +1,5 @@
 <?php
 
-use App\Notifications\Drivers\BaileysDriver;
-use App\Notifications\Drivers\WhatsAppCloudApiDriver;
 use App\Notifications\Drivers\WhatsappLogDriver;
 
 return [
@@ -36,18 +34,6 @@ return [
             'log' => [
                 'class' => WhatsappLogDriver::class,
                 'label' => 'Log',
-            ],
-            'baileys' => [
-                'class' => BaileysDriver::class,
-                'label' => 'Baileys (Unofficial, Unstable)',
-                'url' => env('BAILEYS_URL'),
-                'api_key' => env('BAILEYS_API_KEY'),
-            ],
-            'whatsapp_cloud' => [
-                'class' => WhatsAppCloudApiDriver::class,
-                'label' => 'WhatsApp Cloud API (Official, Untested)',
-                'phone_number_id' => env('WHATSAPP_CLOUD_PHONE_NUMBER_ID'),
-                'access_token' => env('WHATSAPP_CLOUD_ACCESS_TOKEN'),
             ],
         ],
     ],

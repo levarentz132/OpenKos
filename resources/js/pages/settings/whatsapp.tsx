@@ -1,6 +1,4 @@
 import { Link, useForm } from '@inertiajs/react';
-import { useEffect, useRef, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -19,41 +17,38 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import {
     edit as editWhatsApp,
     update as updateWhatsApp,
     test as testWhatsApp,
-    pair as pairWhatsApp,
-    qr as qrWhatsApp,
-    disconnect as disconnectWhatsApp,
 } from '@/routes/settings/whatsapp';
 import type { Driver } from '@/types';
 
 const normalizeDriver = (name: string | null | undefined): string => {
-    if (!name) return 'openkos/whatsapp-log';
-    if (name === 'log' || name === 'openkos/log') return 'openkos/whatsapp-log';
-    if (name === 'baileys') return 'openkos/baileys';
-    if (name === 'fonnte') return 'openkos/fonnte';
-    if (name === 'whatsapp_cloud' || name === 'whatsapp_cloud_api') return 'openkos/whatsapp-cloud';
+    if (!name) {
+        return 'openkos/whatsapp-log';
+    }
+
+    if (name === 'log' || name === 'openkos/log') {
+        return 'openkos/whatsapp-log';
+    }
+
+    if (name === 'fonnte') {
+        return 'openkos/fonnte';
+    }
+
     return name;
 };
 
 export default function WhatsApp({
     drivers = [],
     settings,
-    connection,
 }: {
     drivers: Driver[];
     settings: {
         whatsapp_driver: string | null;
         whatsapp_config: Record<string, Record<string, string>> | null;
     };
-    connection: {
-        state: string;
-        phone: string | null;
-        lastConnected: string | null;
-    } | null;
 }) {
     const initialDriver = normalizeDriver(settings.whatsapp_driver);
 
@@ -64,21 +59,6 @@ export default function WhatsApp({
         whatsapp_driver: initialDriver,
         whatsapp_config: settings.whatsapp_config ?? {},
     });
-
-    const [qrCode, setQrCode] = useState<string | null>(null);
-    const [pairingLoading, setPairingLoading] = useState(false);
-    const [pairingError, setPairingError] = useState<string | null>(null);
-    const [connectionStatus, setConnectionStatus] = useState<
-        'unknown' | 'disconnected' | 'connecting' | 'connected'
-    >((connection?.state as 'connected' | 'disconnected') ?? 'unknown');
-    const [devicePhone, setDevicePhone] = useState<string | null>(
-        connection?.phone ?? null,
-    );
-    const [deviceLastConnected, setDeviceLastConnected] = useState<
-        string | null
-    >(connection?.lastConnected ?? null);
-
-    const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const activeDriverName = normalizeDriver(data.whatsapp_driver);
     const driver = activeDriverName;
@@ -93,65 +73,6 @@ export default function WhatsApp({
         data.whatsapp_config[activeDriverName] ??
         data.whatsapp_config[rawDriverKey] ??
         {};
-
-    const isBaileys = activeDriverName === 'openkos/baileys';
-    const showDisconnect = isBaileys && connectionStatus === 'connected';
-
-    const stopPolling = () => {
-        if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
-        }
-    };
-
-    const pollQr = async () => {
-        try {
-            const response = await fetch(qrWhatsApp().url);
-            const data = await response.json();
-
-            setConnectionStatus(data.state);
-            setQrCode(data.qr_code ?? null);
-            setDevicePhone(data.phone ?? null);
-            setDeviceLastConnected(data.lastConnected ?? null);
-
-            if (data.state === 'connected') {
-                stopPolling();
-            }
-        } catch {
-            stopPolling();
-        }
-    };
-
-    useEffect(() => {
-        if (!isBaileys) {
-            stopPolling();
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setQrCode(null);
-
-            setConnectionStatus('unknown');
-
-            setDevicePhone(null);
-
-            setDeviceLastConnected(null);
-        }
-
-        return () => stopPolling();
-    }, [driver, isBaileys]);
-
-    const handlePair = async () => {
-        setPairingLoading(true);
-        setPairingError(null);
-        setQrCode(null);
-
-        try {
-            await fetch(pairWhatsApp().url, { method: 'POST' });
-        } catch {
-            setPairingError('Failed to initiate pairing.');
-        }
-
-        setPairingLoading(false);
-        pollingRef.current = setInterval(pollQr, 2000);
-    };
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -272,99 +193,6 @@ export default function WhatsApp({
                     </CardFooter>
                 </Card>
             </form>
-
-            {isBaileys && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Device</CardTitle>
-                        <CardDescription>
-                            Manage your WhatsApp device connection.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="flex items-center gap-2">
-                            {connectionStatus === 'connected' ? (
-                                <>
-                                    <Badge variant="default">Connected</Badge>
-                                    {devicePhone && (
-                                        <span className="text-sm text-muted-foreground">
-                                            {devicePhone}
-                                        </span>
-                                    )}
-                                    {deviceLastConnected && (
-                                        <span className="text-xs text-muted-foreground">
-                                            Last connected:{' '}
-                                            {new Date(
-                                                deviceLastConnected,
-                                            ).toLocaleString()}
-                                        </span>
-                                    )}
-                                </>
-                            ) : connectionStatus === 'connecting' ? (
-                                <Badge variant="secondary">Connecting</Badge>
-                            ) : connectionStatus === 'disconnected' ? (
-                                <Badge variant="destructive">
-                                    Disconnected
-                                </Badge>
-                            ) : null}
-                        </div>
-
-                        {pairingError && (
-                            <p className="text-sm text-red-600">
-                                {pairingError}
-                            </p>
-                        )}
-
-                        {connectionStatus === 'connecting' &&
-                            !qrCode &&
-                            !pairingLoading && (
-                                <p className="text-sm text-muted-foreground">
-                                    Generating QR code...
-                                </p>
-                            )}
-
-                        {qrCode && (
-                            <div className="space-y-4">
-                                <Separator />
-                                <div className="space-y-3">
-                                    <div className="inline-block rounded-lg border p-2">
-                                        <img
-                                            src={`data:image/png;base64,${qrCode}`}
-                                            alt="QR Code"
-                                            className="size-48"
-                                        />
-                                    </div>
-                                    <p className="text-sm text-muted-foreground">
-                                        Scan this QR code with your WhatsApp app
-                                        to connect your device.
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-                    </CardContent>
-                    <CardFooter className="gap-2">
-                        {connectionStatus !== 'connected' && (
-                            <Button
-                                onClick={handlePair}
-                                disabled={pairingLoading}
-                            >
-                                {pairingLoading ? 'Pairing...' : 'Pair Device'}
-                            </Button>
-                        )}
-                        {showDisconnect && (
-                            <Button variant="destructive" asChild>
-                                <Link
-                                    href={disconnectWhatsApp().url}
-                                    method="delete"
-                                    as="button"
-                                >
-                                    Disconnect
-                                </Link>
-                            </Button>
-                        )}
-                    </CardFooter>
-                </Card>
-            )}
 
             <Card>
                 <CardHeader>

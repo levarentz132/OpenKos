@@ -22,44 +22,6 @@ class WhatsAppController extends Controller
         private UpdateSettings $updateSettings,
     ) {}
 
-    public function pair(): JsonResponse
-    {
-        $health = $this->whatsapp->health();
-
-        if ($health->healthy) {
-            return response()->json(['message' => 'Device is already connected.']);
-        }
-
-        try {
-            $this->whatsapp->pair();
-        } catch (\RuntimeException) {
-        }
-
-        $qrCode = $this->whatsapp->getPairingQrCode();
-
-        return response()->json([
-            'qr_code' => $qrCode,
-            'state' => $qrCode ? 'connecting' : 'connecting',
-        ]);
-    }
-
-    public function qr(): JsonResponse
-    {
-        $health = $this->whatsapp->health();
-        $qrCode = $this->whatsapp->getPairingQrCode();
-
-        return response()->json([
-            'qr_code' => $qrCode,
-            'state' => match (true) {
-                $health->healthy => 'connected',
-                $health->message && str_contains($health->message, 'connecting') => 'connecting',
-                default => 'disconnected',
-            },
-            'phone' => $health->phone,
-            'lastConnected' => $health->lastConnected,
-        ]);
-    }
-
     public function edit(): Response
     {
         $drivers = collect($this->registry->forChannel('whatsapp'))
@@ -92,24 +54,9 @@ class WhatsAppController extends Controller
         $rawDriver = $settings['whatsapp_driver'] ?? 'openkos/whatsapp-log';
         $settings['whatsapp_driver'] = $this->whatsapp->normalizeDriverId($rawDriver);
 
-        $connection = null;
-        if (in_array($settings['whatsapp_driver'], ['openkos/baileys', 'baileys'], true)) {
-            try {
-                $result = $this->whatsapp->health();
-                $connection = [
-                    'state' => $result->healthy ? 'connected' : 'disconnected',
-                    'phone' => $result->phone,
-                    'lastConnected' => $result->lastConnected,
-                ];
-            } catch (\Throwable) {
-                $connection = ['state' => 'disconnected', 'phone' => null, 'lastConnected' => null];
-            }
-        }
-
         return Inertia::render('settings/whatsapp', [
             'drivers' => $drivers,
             'settings' => $settings,
-            'connection' => $connection,
         ]);
     }
 
@@ -119,7 +66,7 @@ class WhatsAppController extends Controller
             fn (NotificationDriverRegistration $r) => $r->name,
             $this->registry->forChannel('whatsapp'),
         );
-        $aliases = ['log', 'baileys', 'whatsapp_cloud', 'whatsapp_cloud_api'];
+        $aliases = ['log'];
         if ($this->registry->has('openkos/fonnte')) {
             $aliases[] = 'fonnte';
         }
@@ -166,14 +113,5 @@ class WhatsAppController extends Controller
             'phone' => $result->phone,
             'lastConnected' => $result->lastConnected,
         ]);
-    }
-
-    public function disconnect(): RedirectResponse
-    {
-        $this->whatsapp->disconnect();
-
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('Device disconnected.')]);
-
-        return back();
     }
 }
