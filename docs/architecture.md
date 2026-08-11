@@ -48,7 +48,7 @@ app/
 └── Tables/           Reusable table/filter/column builders
 
 src/
-└── Plugins/          Application-owned plugin implementations (config/platform.php lists enabled plugins)
+└── Plugins/          Application-owned plugin implementations (explicit and discovered plugins share the platform lifecycle)
 
 openkos-platform/src/
 ├── Core/             Platform contracts, DTOs, and events

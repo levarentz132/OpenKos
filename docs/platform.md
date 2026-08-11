@@ -23,7 +23,7 @@ openkos/src/Plugins/
 
 The package exposes host-agnostic contracts and events such as `OpenKOS\Core\Events\PaymentRecorded`. OpenKOS may also dispatch its legacy `App\Events` counterparts for application subscribers; the package never imports application events or models.
 
-Composer package auto-discovery registers `PlatformServiceProvider`; the application does not list it again in `bootstrap/providers.php`. Plugin classes remain explicitly listed in `config/platform.php`. Composer-based plugin discovery is deferred to a follow-up ticket.
+Composer package auto-discovery registers `PlatformServiceProvider`; the application does not list it again in `bootstrap/providers.php`. The host merges explicit plugin classes from `config/platform.php` with trusted Composer-discovered plugins when `platform.discovery.enabled` is true.
 
 ## The Registries
 
@@ -187,7 +187,7 @@ class MyPlugin extends Plugin
 }
 ```
 
-Then list it in `config/platform.php` (order doesn't matter — dependencies decide it):
+Then list it in `config/platform.php` (explicit entries are processed first; dependencies decide the final lifecycle order):
 
 ```php
 'plugins' => [
@@ -209,16 +209,18 @@ src/Plugins/MyPlugin/
 
 The package `PlatformServiceProvider::boot()`:
 
-1. Instantiates every configured plugin through the container (so plugins can
-   constructor-inject dependencies).
-2. **Validates & orders** them with `PluginLoader`: checks each `coreVersion`
+1. Merges explicit plugin classes with the host's `PluginDiscovery` result and
+   removes duplicate class names.
+2. Resolves and validates **every** class before loading any plugin resources or
+   running lifecycle methods. Each class must extend `Plugin`.
+3. **Validates & orders** them with `PluginLoader`: checks each `coreVersion`
    against `config('platform.version')`, verifies declared `dependencies` exist,
    and topologically sorts so each plugin loads after its dependencies. Throws on
    an incompatible version, missing dependency, dependency cycle, or duplicate id.
-3. **Loads resources** — each plugin's `routes/web.php` and `database/migrations/`.
-4. Runs **two passes**: every plugin's `register()`, then every plugin's `boot()`
+4. **Loads resources** — each plugin's `routes/web.php` and `database/migrations/`.
+5. Runs **two passes**: every plugin's `register()`, then every plugin's `boot()`
    (so `boot()` can rely on all plugins having registered).
-5. **Wires event listeners** from each plugin's `listens()` onto Laravel's dispatcher.
+6. **Wires event listeners** from each plugin's `listens()` onto Laravel's dispatcher.
 
 ### Manifest, versioning & dependencies
 
@@ -243,12 +245,27 @@ legacy `App\Events` for host-only subscribers.
 
 ### Discovery
 
-Plugins are listed explicitly in `config/platform.php`. `OpenKOS\Core\Contracts\PluginDiscovery`
-(`discover(): array` of plugin class-strings) is the seam for future Composer-package
-discovery — interface only, no implementation. Note that shipping a plugin's **frontend**
-code (React pages/regions) still requires it to live in-repo under `resources/js/plugins/`;
-a bundling story (build-time registration or module federation) is the open problem
-that gates true external plugins.
+The standalone package exposes `OpenKOS\Core\Contracts\PluginDiscovery`, but does not
+scan Composer itself. OpenKOS provides the host implementation, which enumerates installed
+packages and accepts exactly one plugin class per package through this metadata:
+
+```json
+{
+    "extra": {
+        "openkos": {
+            "plugin": "Vendor\\Package\\MyPlugin"
+        }
+    }
+}
+```
+
+The host merges explicit classes first, then discovered classes, and removes duplicates.
+`PluginLoader` still controls dependency order. `platform.discovery.disabled_packages`
+accepts Composer package names for an explicit opt-out. Discovery is disabled by default
+in the standalone package and enabled by the OpenKOS application.
+
+Installing a Composer plugin grants trusted in-process PHP execution; disabled packages
+are not sandboxed. Frontend assets remain out of scope and must still be handled by the host.
 
 ### Security & permission boundaries
 
@@ -271,9 +288,7 @@ Composer dependency. What the platform **does** enforce:
   plugin from partially booting.
 
 Sandboxing (capability limits, resource isolation) is explicitly out of scope for the
-monolith; it would only matter for untrusted third-party marketplace plugins, which is a
-Composer plugin discovery is deferred to a follow-up ticket; configured plugins remain
-explicit in `config/platform.php` for this package extraction.
+monolith; it would only matter for untrusted third-party marketplace plugins.
 
 ## Notifications (WhatsApp) — consumed
 
@@ -313,7 +328,7 @@ The backend and client halves are independent: registry entries + route + listen
 ### Future work
 
 1. Move built-in nav/tabs into a core plugin so built-ins and plugins go through one path (only if the dual path starts to hurt).
-2. Composer-based `PluginDiscovery` implementation, including a story for shipping plugin frontend code (today it must live in-repo under `resources/js/plugins/`).
+2. A story for shipping plugin frontend code (today it must live in-repo under `resources/js/plugins/`).
 3. `PaymentGateway`/`PaymentRegistry` wiring once a real gateway (Midtrans/Xendit) is chosen.
 
 ## Testing

@@ -21,14 +21,20 @@ return [
 
     'version' => InstalledVersions::getPrettyVersion('openkos/platform') ?: '0.1.0',
 
+    'discovery' => [
+        // External plugin discovery is host policy and is enabled explicitly here.
+        'enabled' => true,
+        'disabled_packages' => [],
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Plugins
     |--------------------------------------------------------------------------
     |
-    | Plugin classes booted by the PlatformServiceProvider. Each must extend
-    | OpenKOS\Platform\Plugin\Plugin. Composer-based discovery may replace
-    | this list later (see OpenKOS\Core\Contracts\PluginDiscovery).
+    | Explicit plugin classes are merged with trusted Composer-discovered
+    | plugins when discovery is enabled. Each must extend
+    | OpenKOS\Platform\Plugin\Plugin.
     |
     */
 
