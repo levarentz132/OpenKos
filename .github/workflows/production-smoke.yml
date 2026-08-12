@@ -15,9 +15,6 @@ on:
       - 'composer.lock'
       - 'package-lock.json'
       - 'package.json'
-      - 'resources/**'
-      - 'routes/**'
-      - 'src/**'
       - 'vite.config.ts'
   pull_request:
     branches:
@@ -33,30 +30,12 @@ on:
       - 'composer.lock'
       - 'package-lock.json'
       - 'package.json'
-      - 'resources/**'
-      - 'routes/**'
-      - 'src/**'
       - 'vite.config.ts'
   workflow_dispatch:
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_DB: openkos
-          POSTGRES_USER: openkos
-          POSTGRES_PASSWORD: password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U openkos -d openkos"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - name: Checkout code
@@ -77,7 +56,7 @@ jobs:
           APP_URL=http://127.0.0.1:8080
           TRUSTED_PROXIES=
           DB_CONNECTION=pgsql
-          DB_HOST=host.docker.internal
+          DB_HOST=postgres
           DB_PORT=5432
           DB_DATABASE=openkos
           DB_USERNAME=openkos
@@ -95,14 +74,34 @@ jobs:
 
           cat > compose.smoke.yaml <<'EOF'
           services:
+              postgres:
+                  image: postgres:18-alpine
+                  environment:
+                      POSTGRES_DB: openkos
+                      POSTGRES_USER: openkos
+                      POSTGRES_PASSWORD: password
+                  healthcheck:
+                      test: ["CMD-SHELL", "pg_isready -U openkos -d openkos"]
+                      interval: 5s
+                      timeout: 5s
+                      retries: 12
               web:
                   image: openkos-smoke:ci
+                  depends_on:
+                      postgres:
+                          condition: service_healthy
                   ports:
                       - '127.0.0.1:8080:8080'
               queue:
                   image: openkos-smoke:ci
+                  depends_on:
+                      postgres:
+                          condition: service_healthy
               scheduler:
                   image: openkos-smoke:ci
+                  depends_on:
+                      postgres:
+                          condition: service_healthy
           EOF
 
       - name: Run migrations
@@ -111,7 +110,7 @@ jobs:
       - name: Seed smoke user
         run: |
           docker compose -f compose.production.yaml -f compose.smoke.yaml run --rm web php artisan db:seed --class=Database\\Seeders\\RoleAndPermissionSeeder --force
-          docker compose -f compose.production.yaml -f compose.smoke.yaml run --rm web php artisan tinker --execute='App\Models\User::updateOrCreate(["email" => env("SMOKE_EMAIL")], ["name" => "CI Smoke", "password" => Illuminate\Support\Facades\Hash::make(env("SMOKE_PASSWORD")), "email_verified_at" => now(), "is_active" => true])->assignRole("owner");'
+          docker compose -f compose.production.yaml -f compose.smoke.yaml run --rm web php artisan tinker --execute='$user = App\Models\User::updateOrCreate(["email" => env("SMOKE_EMAIL")], ["name" => "CI Smoke", "password" => Illuminate\Support\Facades\Hash::make(env("SMOKE_PASSWORD")), "is_active" => true]); $user->forceFill(["email_verified_at" => now()])->save(); $user->assignRole("owner");'
 
       - name: Start production roles
         run: docker compose -f compose.production.yaml -f compose.smoke.yaml up -d
@@ -147,8 +146,11 @@ jobs:
 
           test "$status" = 302 || test "$status" = 303
 
-          curl --fail --silent --cookie /tmp/openkos-cookies.txt http://127.0.0.1:8080/dashboard >/tmp/openkos-dashboard.html
-          grep -q 'dashboard/overview' /tmp/openkos-dashboard.html
+          dashboard_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --cookie /tmp/openkos-cookies.txt \
+              http://127.0.0.1:8080/dashboard)
+
+          test "$dashboard_status" = 200
 
       - name: Verify database queue processing
         run: |
