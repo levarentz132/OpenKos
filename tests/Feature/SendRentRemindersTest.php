@@ -376,6 +376,62 @@ describe('SendRentRemindersAction', function () {
 
         Carbon::setTestNow();
     });
+
+    it('uses a custom scheduled template without optional invoice sections', function () {
+        Carbon::setTestNow(Carbon::parse('2026-06-28'));
+        Setting::set('reminder_message_templates', [
+            'upcoming' => 'Custom reminder for :name',
+            'due_today' => '',
+            'overdue' => '',
+        ], 'array');
+        Notification::fake();
+
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-07-01']);
+        $lease->load(['primaryTenant']);
+        $tenant = $lease->primaryTenant;
+
+        app(SendRentReminders::class)->execute($lease);
+
+        Notification::assertSentTo(
+            $tenant,
+            RentReminder::class,
+            function (RentReminder $notification) use ($tenant): bool {
+                expect($notification->toWhatsAppChannel($tenant)->message)
+                    ->toBe('Custom reminder for '.$tenant->name);
+
+                return true;
+            },
+        );
+
+        Carbon::setTestNow();
+    });
+
+    it('includes the portal link in scheduled whatsapp reminders for portal tenants', function () {
+        Carbon::setTestNow(Carbon::parse('2026-07-01'));
+        Notification::fake();
+
+        $user = User::factory()->create();
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-07-01']);
+        $lease->primaryTenant->update(['user_id' => $user->id]);
+        $lease->load(['primaryTenant.user']);
+        $tenant = $lease->primaryTenant;
+        $invoice = $lease->invoices()->payable()->orderBy('period_start')->firstOrFail();
+
+        app(SendRentReminders::class)->execute($lease);
+
+        Notification::assertSentTo(
+            $tenant,
+            RentReminder::class,
+            function (RentReminder $notification) use ($invoice, $tenant): bool {
+                expect($notification->toWhatsAppChannel($tenant)->message)
+                    ->toContain(route('portal.billing.invoices.show', $invoice));
+
+                return true;
+            },
+        );
+
+        Carbon::setTestNow();
+    });
 });
 
 describe('Command', function () {
@@ -468,6 +524,77 @@ describe('Manual Send via Controller', function () {
                 expect($content->attachments)->toHaveCount(1);
                 expect($content->attachments[0]->filename)->toBe("invoice-{$invoice->reference}.pdf");
                 expect($content->attachments[0]->content)->toStartWith('%PDF-');
+
+                return true;
+            },
+        );
+
+        Carbon::setTestNow();
+    });
+
+    it('includes the portal link in a manual whatsapp reminder for portal tenants', function () {
+        Carbon::setTestNow(Carbon::parse('2026-06-20'));
+        Setting::set('reminder_channels', ['whatsapp'], 'array');
+        Notification::fake();
+
+        $owner = User::factory()->owner()->create();
+        $tenantUser = User::factory()->create();
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-07-01']);
+        $lease->primaryTenant->update(['user_id' => $tenantUser->id]);
+        $lease->unit->property->users()->attach($owner);
+        $lease->load(['primaryTenant.user']);
+        $tenant = $lease->primaryTenant;
+        $invoice = $lease->invoices()->payable()->orderBy('period_start')->firstOrFail();
+
+        $this->actingAs($owner)
+            ->post(route('leases.send-reminder', $lease))
+            ->assertRedirect();
+
+        Notification::assertSentTo(
+            $tenant,
+            RentReminder::class,
+            function (RentReminder $notification) use ($invoice, $tenant): bool {
+                expect($notification->toWhatsAppChannel($tenant)->message)
+                    ->toContain(route('portal.billing.invoices.show', $invoice));
+
+                return true;
+            },
+        );
+
+        Carbon::setTestNow();
+    });
+
+    it('uses a custom manual template without optional invoice sections', function () {
+        Carbon::setTestNow(Carbon::parse('2026-06-20'));
+        Setting::set('reminder_channels', ['mail'], 'array');
+        Setting::set('reminder_message_templates', [
+            'upcoming' => 'Manual reminder for :name',
+            'due_today' => '',
+            'overdue' => '',
+        ], 'array');
+        Notification::fake();
+
+        $owner = User::factory()->owner()->create();
+        $tenantUser = User::factory()->create(['email' => 'tenant@example.com']);
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-07-01']);
+        $lease->primaryTenant->update([
+            'phone' => null,
+            'user_id' => $tenantUser->id,
+        ]);
+        $lease->unit->property->users()->attach($owner);
+        $lease->load(['primaryTenant.user']);
+        $tenant = $lease->primaryTenant;
+
+        $this->actingAs($owner)
+            ->post(route('leases.send-reminder', $lease))
+            ->assertRedirect();
+
+        Notification::assertSentTo(
+            $tenant,
+            RentReminder::class,
+            function (RentReminder $notification) use ($tenant): bool {
+                expect($notification->toMailChannel($tenant)->plainTextBody)
+                    ->toBe('Manual reminder for '.$tenant->name);
 
                 return true;
             },

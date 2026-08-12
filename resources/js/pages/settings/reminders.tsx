@@ -23,6 +23,18 @@ const channelOptions = [
     { value: 'mail', label: 'Email' },
 ] as const;
 
+const templateOptions = [
+    { value: 'upcoming', label: 'Upcoming reminder' },
+    { value: 'due_today', label: 'Due today reminder' },
+    { value: 'overdue', label: 'Overdue reminder' },
+] as const;
+
+const defaultTemplates = {
+    upcoming: `Hi :name,\n\nRent for :unit is due in :days days.\n\nAmount: :amount\nDue date: :date\n\n:invoice_context\n\n:invoice_link`,
+    due_today: `Hi :name,\n\nRent for :unit is due today.\n\nAmount: :amount\n\n:invoice_context\n\n:invoice_link`,
+    overdue: `Hi :name,\n\nRent for :unit is overdue by :days day(s).\n\nAmount: :amount\n\n:invoice_context\n\n:invoice_link`,
+} as const;
+
 function renderTemplate(
     template: string | null,
     data: Record<string, string | number>,
@@ -32,7 +44,7 @@ function renderTemplate(
     }
 
     return Object.entries(data).reduce(
-        (str, [key, val]) => str.replace(`:${key}`, String(val)),
+        (str, [key, val]) => str.split(`:${key}`).join(String(val)),
         template,
     );
 }
@@ -44,7 +56,7 @@ export default function Reminders({
         reminder_enabled: boolean;
         reminder_days_before: number;
         reminder_overdue_intervals: number[];
-        reminder_message_template: string | null;
+        reminder_message_templates: Record<string, string | null>;
         reminder_channels: string[];
     };
 }) {
@@ -54,7 +66,11 @@ export default function Reminders({
         reminder_overdue_intervals:
             settings.reminder_overdue_intervals.join(', '),
         reminder_channels: settings.reminder_channels ?? ['log'],
-        reminder_message_template: settings.reminder_message_template ?? '',
+        reminder_message_templates: {
+            upcoming: settings.reminder_message_templates.upcoming ?? '',
+            due_today: settings.reminder_message_templates.due_today ?? '',
+            overdue: settings.reminder_message_templates.overdue ?? '',
+        },
     });
 
     function handleSubmit(e: React.FormEvent) {
@@ -75,17 +91,17 @@ export default function Reminders({
         overdueDays: 3,
     };
 
-    const renderedUpcoming = renderTemplate(data.reminder_message_template, {
-        name: preview.name,
-        unit: preview.unit,
-    });
-    const renderedOverdue = renderTemplate(data.reminder_message_template, {
+    const previewData = {
         name: preview.name,
         unit: preview.unit,
         days: preview.overdueDays,
         amount: preview.amount,
         date: preview.date,
-    });
+        invoice_context:
+            'Invoice: INV-2026-07\nPeriod: 01 Jul 2026 – 31 Jul 2026\nDue date: 01 Jul 2026\nOutstanding: 1,500,000',
+        invoice_link:
+            'View invoice: https://example.test/portal/billing/invoices/1',
+    };
 
     return (
         <div className="space-y-6">
@@ -164,13 +180,12 @@ export default function Reminders({
                                         Preview (upcoming)
                                     </p>
                                     <pre className="text-sm whitespace-pre-wrap">
-                                        {renderedUpcoming ??
-                                            `Hi ${preview.name},
-
-Rent for ${preview.unit} is due in ${preview.days} days.
-
-Amount: ${preview.amount}
-Due date: ${preview.date}`}
+                                        {renderTemplate(
+                                            data.reminder_message_templates
+                                                .upcoming ||
+                                                defaultTemplates.upcoming,
+                                            previewData,
+                                        )}
                                     </pre>
                                 </div>
                             )}
@@ -218,12 +233,12 @@ Due date: ${preview.date}`}
                                         Preview (overdue)
                                     </p>
                                     <pre className="text-sm whitespace-pre-wrap">
-                                        {renderedOverdue ??
-                                            `Hi ${preview.name},
-
-Rent for ${preview.unit} is overdue by ${preview.overdueDays} day(s).
-
-Amount: ${preview.amount}`}
+                                        {renderTemplate(
+                                            data.reminder_message_templates
+                                                .overdue ||
+                                                defaultTemplates.overdue,
+                                            previewData,
+                                        )}
                                     </pre>
                                 </div>
                             )}
@@ -276,44 +291,58 @@ Amount: ${preview.amount}`}
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Message Template</CardTitle>
+                            <CardTitle>Message Templates</CardTitle>
                             <CardDescription>
-                                Customize the reminder message. Available
+                                Customize each reminder message. Available
                                 placeholders: <code>:name</code>,{' '}
                                 <code>:unit</code>, <code>:days</code>,{' '}
-                                <code>:amount</code>, <code>:date</code>. Leave
-                                empty to use defaults.
+                                <code>:amount</code>, <code>:date</code>,{' '}
+                                <code>:invoice_context</code>, and{' '}
+                                <code>:invoice_link</code>. The invoice
+                                placeholders are optional.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <div className="grid gap-2">
-                                <Label htmlFor="reminder_message_template">
-                                    Template
-                                </Label>
-                                <Textarea
-                                    id="reminder_message_template"
-                                    name="reminder_message_template"
-                                    className="min-h-[120px]"
-                                    placeholder={`Hi :name,
-
-Rent for :unit is due in :days days.
-
-Amount: :amount
-Due date: :date`}
-                                    value={data.reminder_message_template}
-                                    onChange={(e) =>
-                                        setData(
-                                            'reminder_message_template',
-                                            e.target.value,
-                                        )
-                                    }
-                                />
-                                {errors.reminder_message_template && (
-                                    <p className="text-sm text-red-600">
-                                        {errors.reminder_message_template}
-                                    </p>
-                                )}
-                            </div>
+                        <CardContent className="grid gap-6">
+                            {templateOptions.map(({ value, label }) => (
+                                <div key={value} className="grid gap-2">
+                                    <Label
+                                        htmlFor={`reminder_${value}_template`}
+                                    >
+                                        {label}
+                                    </Label>
+                                    <Textarea
+                                        id={`reminder_${value}_template`}
+                                        name={`reminder_message_templates[${value}]`}
+                                        className="min-h-[120px]"
+                                        placeholder={defaultTemplates[value]}
+                                        value={
+                                            data.reminder_message_templates[
+                                                value
+                                            ]
+                                        }
+                                        onChange={(e) =>
+                                            setData(
+                                                'reminder_message_templates',
+                                                {
+                                                    ...data.reminder_message_templates,
+                                                    [value]: e.target.value,
+                                                },
+                                            )
+                                        }
+                                    />
+                                    {errors[
+                                        `reminder_message_templates.${value}`
+                                    ] && (
+                                        <p className="text-sm text-red-600">
+                                            {
+                                                errors[
+                                                    `reminder_message_templates.${value}`
+                                                ]
+                                            }
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
                         </CardContent>
                     </Card>
 

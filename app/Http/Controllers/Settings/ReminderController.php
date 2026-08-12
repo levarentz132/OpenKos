@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Actions\Settings\UpdateSettings;
+use App\Enums\ReminderType;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use Illuminate\Http\RedirectResponse;
@@ -22,10 +23,20 @@ class ReminderController extends Controller
             'reminder_enabled',
             'reminder_days_before',
             'reminder_overdue_intervals',
-            'reminder_message_template',
+            'reminder_message_templates',
             'reminder_channels',
         ]);
 
+        $legacyTemplate = Setting::get('reminder_message_template');
+        $templates = is_array($settings['reminder_message_templates'])
+            ? $settings['reminder_message_templates']
+            : [];
+
+        $settings['reminder_message_templates'] = collect(ReminderType::cases())
+            ->mapWithKeys(fn (ReminderType $type): array => [
+                $type->value => $templates[$type->value] ?? $legacyTemplate ?? '',
+            ])
+            ->all();
         $settings['reminder_channels'] ??= ['log'];
 
         return Inertia::render('settings/reminders', [
@@ -39,7 +50,10 @@ class ReminderController extends Controller
             'reminder_enabled' => ['boolean'],
             'reminder_days_before' => ['required', 'integer', 'min:0', 'max:30'],
             'reminder_overdue_intervals' => ['required', 'string', 'regex:/^\d+(?:\s*,\s*\d+)*$/'],
-            'reminder_message_template' => ['nullable', 'string', 'max:1000'],
+            'reminder_message_templates' => ['required', 'array:upcoming,due_today,overdue'],
+            'reminder_message_templates.upcoming' => ['nullable', 'string', 'max:1000'],
+            'reminder_message_templates.due_today' => ['nullable', 'string', 'max:1000'],
+            'reminder_message_templates.overdue' => ['nullable', 'string', 'max:1000'],
             'reminder_channels' => ['required', 'array', 'min:1'],
             'reminder_channels.*' => ['string', 'in:log,whatsapp,mail'],
         ]);
