@@ -27,6 +27,7 @@ describe('Reminder settings page', function () {
                 'reminder_enabled' => true,
                 'reminder_days_before' => 3,
                 'reminder_overdue_intervals' => '1, 3, 7',
+                'reminder_message_templates' => reminderTemplates(),
                 'reminder_channels' => ['log'],
             ])
             ->assertForbidden();
@@ -43,6 +44,14 @@ describe('Reminder settings page', function () {
                 ->has('settings.reminder_enabled')
                 ->has('settings.reminder_days_before')
                 ->has('settings.reminder_overdue_intervals')
+                ->has('settings.reminder_message_templates.upcoming')
+                ->has('settings.reminder_message_templates.due_today')
+                ->has('settings.reminder_message_templates.overdue')
+                ->has('defaultTemplates.upcoming')
+                ->has('defaultTemplates.due_today')
+                ->has('defaultTemplates.overdue')
+                ->has('previewInvoiceContext')
+                ->has('previewInvoiceLink')
             );
     });
 
@@ -54,6 +63,7 @@ describe('Reminder settings page', function () {
                 'reminder_enabled' => true,
                 'reminder_days_before' => 5,
                 'reminder_overdue_intervals' => '2, 5, 10',
+                'reminder_message_templates' => reminderTemplates(),
                 'reminder_channels' => ['log'],
             ])
             ->assertRedirect(route('settings.reminders.edit'));
@@ -74,6 +84,7 @@ describe('Reminder settings page', function () {
             ->patch(route('settings.reminders.update'), [
                 'reminder_days_before' => 3,
                 'reminder_overdue_intervals' => '1, 3, 7',
+                'reminder_message_templates' => reminderTemplates(),
                 'reminder_channels' => ['log', 'whatsapp', 'mail'],
             ])
             ->assertRedirect();
@@ -88,6 +99,7 @@ describe('Reminder settings page', function () {
             ->patch(route('settings.reminders.update'), [
                 'reminder_days_before' => 3,
                 'reminder_overdue_intervals' => '1, 3, 7',
+                'reminder_message_templates' => reminderTemplates(),
                 'reminder_channels' => [],
             ])
             ->assertSessionHasErrors(['reminder_channels']);
@@ -100,8 +112,38 @@ describe('Reminder settings page', function () {
             ->patch(route('settings.reminders.update'), [
                 'reminder_days_before' => 100,
                 'reminder_overdue_intervals' => 'invalid',
+                'reminder_message_templates' => reminderTemplates(),
                 'reminder_channels' => ['log'],
             ])
             ->assertSessionHasErrors(['reminder_days_before', 'reminder_overdue_intervals']);
     });
+
+    it('updates reminder templates by reminder type', function () {
+        $owner = User::factory()->owner()->create();
+        $templates = [
+            'upcoming' => 'Upcoming :name :invoice_context :invoice_link',
+            'due_today' => 'Due today :name',
+            'overdue' => 'Overdue :name :days',
+        ];
+
+        $this->actingAs($owner)
+            ->patch(route('settings.reminders.update'), [
+                'reminder_days_before' => 3,
+                'reminder_overdue_intervals' => '1, 3, 7',
+                'reminder_message_templates' => $templates,
+                'reminder_channels' => ['log'],
+            ])
+            ->assertRedirect();
+
+        expect(Setting::get('reminder_message_templates'))->toBe($templates);
+    });
 });
+
+function reminderTemplates(): array
+{
+    return [
+        'upcoming' => '',
+        'due_today' => '',
+        'overdue' => '',
+    ];
+}

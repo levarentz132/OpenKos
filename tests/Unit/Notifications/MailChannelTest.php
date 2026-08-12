@@ -158,3 +158,55 @@ test('RentReminder replaces every documented custom template placeholder', funct
 
     expect($content->plainTextBody)->toBe('Ayu|A-01|3|1,500,000|01 Aug 2026');
 });
+
+test('RentReminder selects templates by reminder type', function () {
+    Setting::set('reminder_message_templates', [
+        'upcoming' => 'Upcoming :name',
+        'due_today' => 'Due today :name',
+        'overdue' => 'Overdue :name :days',
+    ]);
+
+    $lease = new Lease;
+    $lease->setRelation('unit', new Unit(['name' => 'A-01']));
+
+    foreach ([
+        [ReminderType::Upcoming, 'Upcoming Ayu'],
+        [ReminderType::DueToday, 'Due today Ayu'],
+        [ReminderType::Overdue, 'Overdue Ayu 3'],
+    ] as [$type, $expected]) {
+        $event = new ReminderEvent(
+            lease: $lease,
+            type: $type,
+            periodStart: '2026-08-01',
+            periodEnd: '2026-08-31',
+            dueDate: '2026-08-01',
+            amount: 150000000,
+            overdueDays: $type === ReminderType::Overdue ? 3 : null,
+        );
+
+        expect((new RentReminder($event))->toLog((object) ['name' => 'Ayu']))
+            ->toBe($expected);
+    }
+});
+
+test('RentReminder only includes optional invoice placeholders when configured', function () {
+    Setting::set('reminder_message_templates', [
+        'upcoming' => ':name|:invoice_context|:invoice_link',
+        'due_today' => '',
+        'overdue' => '',
+    ]);
+
+    $lease = new Lease;
+    $lease->setRelation('unit', new Unit(['name' => 'A-01']));
+    $event = new ReminderEvent(
+        lease: $lease,
+        type: ReminderType::Upcoming,
+        periodStart: '2026-08-01',
+        periodEnd: '2026-08-31',
+        dueDate: '2026-08-01',
+        amount: 150000000,
+    );
+
+    expect((new RentReminder($event))->toLog((object) ['name' => 'Ayu']))
+        ->toBe('Ayu||');
+});

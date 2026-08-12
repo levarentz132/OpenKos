@@ -64,18 +64,20 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
         };
 
         $messageText = $this->renderMessage($notifiable);
-        $invoice = $this->invoice();
-        $invoiceUrl = $invoice && $notifiable instanceof Tenant && $notifiable->user_id
-            ? route('portal.billing.invoices.show', $invoice)
-            : null;
-        $htmlBody = '<div>'.nl2br(e($messageText)).'</div>';
-        $plainTextBody = $messageText;
+        $invoiceUrl = $this->invoiceUrl($notifiable);
+        $escapedMessage = e($messageText);
 
         if ($invoiceUrl) {
-            $label = __('notifications.rent.view_invoice');
-            $htmlBody .= '<p><a href="'.e($invoiceUrl).'">'.e($label).'</a></p>';
-            $plainTextBody .= "\n\n{$label}: {$invoiceUrl}";
+            $escapedMessage = str_replace(
+                e($invoiceUrl),
+                '<a href="'.e($invoiceUrl).'">'.e($invoiceUrl).'</a>',
+                $escapedMessage,
+            );
         }
+
+        $htmlBody = '<div>'.nl2br($escapedMessage).'</div>';
+        $plainTextBody = $messageText;
+        $invoice = $this->invoice();
 
         $attachments = [];
         if ($invoice && $notifiable instanceof Tenant && $notifiable->user?->email) {
@@ -141,7 +143,7 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
             'type' => 'rent_reminder',
             'title' => __('Rent reminder'),
             'message' => $this->renderMessage($notifiable),
-            'url' => $invoice ? route('portal.billing.invoices.show', $invoice) : route('portal.billing.index'),
+            'url' => $this->portalUrl($notifiable, $invoice),
         ];
     }
 
@@ -163,12 +165,31 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
         $amount = number_format($this->event->amount / 100, 0);
         $date = Carbon::parse($this->event->dueDate)->format('d M Y');
 
-        $template = Setting::get('reminder_message_template');
+        $templates = Setting::get('reminder_message_templates');
+        $template = is_array($templates)
+            ? ($templates[$this->event->type->value] ?? null)
+            : null;
+        $template ??= Setting::get('reminder_message_template');
+
+        $invoice = $this->invoice();
+        $invoiceContext = $invoice
+            ? __('notifications.rent.invoice_context', [
+                'reference' => $invoice->reference,
+                'period' => Carbon::parse($this->event->periodStart)->format('d M Y')
+                    .' – '.Carbon::parse($this->event->periodEnd)->format('d M Y'),
+                'date' => $date,
+                'amount' => $amount,
+            ])
+            : '';
+        $invoiceUrl = $this->invoiceUrl($notifiable);
+        $invoiceLink = $invoiceUrl
+            ? __('notifications.rent.view_invoice').': '.$invoiceUrl
+            : '';
 
         $message = $template
             ? str_replace(
-                [':name', ':unit', ':days', ':amount', ':date'],
-                [$notifiable->name, $this->event->lease->unit?->name ?? '—', $days, $amount, $date],
+                [':name', ':unit', ':days', ':amount', ':date', ':invoice_context', ':invoice_link'],
+                [$notifiable->name, $this->event->lease->unit?->name ?? '—', $days, $amount, $date, $invoiceContext, $invoiceLink],
                 $template,
             )
             : __("notifications.rent.{$this->event->type->value}", [
@@ -177,26 +198,38 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
                 'days' => $days,
                 'amount' => $amount,
                 'date' => $date,
+                'invoice_context' => $invoiceContext,
+                'invoice_link' => $invoiceLink,
             ]);
 
-        $invoice = $this->invoice();
-
-        if (! $invoice) {
-            return $message;
-        }
-
-        return $message."\n\n".__('notifications.rent.invoice_context', [
-            'reference' => $invoice->reference,
-            'period' => Carbon::parse($this->event->periodStart)->format('d M Y')
-                .' – '.Carbon::parse($this->event->periodEnd)->format('d M Y'),
-            'date' => $date,
-            'amount' => $amount,
-        ]);
+        return trim(preg_replace('/\n{3,}/', "\n\n", $message) ?? $message);
     }
 
     private function invoice(): ?Invoice
     {
         return isset($this->event->invoice) ? $this->event->invoice : null;
+    }
+
+    private function invoiceUrl(object $notifiable): ?string
+    {
+        return $this->portalUrl($notifiable, $this->invoice());
+    }
+
+    private function portalUrl(object $notifiable, ?Invoice $invoice = null): ?string
+    {
+        if (! ($notifiable instanceof Tenant)) {
+            return null;
+        }
+
+        $user = $notifiable->user;
+
+        if (! $user?->is_active || ! $user->hasVerifiedEmail()) {
+            return null;
+        }
+
+        return $invoice
+            ? route('portal.billing.invoices.show', $invoice)
+            : route('portal.billing.index');
     }
 
     private function invoicePdfContent(Invoice $invoice): string
