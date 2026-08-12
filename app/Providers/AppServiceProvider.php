@@ -12,6 +12,7 @@ use App\Models\MaintenanceTicket;
 use App\Models\Setting;
 use App\Notifications\RentReminder;
 use App\Notifications\TenantPortalNotification;
+use App\Services\Platform\ComposerPluginDiscovery;
 use App\Services\Settings\PlatformSettingsStore;
 use App\Services\Settings\SettingManager;
 use App\Services\WhatsAppManager;
@@ -24,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use OpenKOS\Core\Contracts\PluginDiscovery;
 use OpenKOS\Core\Contracts\SettingsStore;
 use OpenKOS\Platform\OpenKOSManager;
 use OpenKOS\Platform\Settings\SettingsPage;
@@ -33,6 +35,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SettingManager::class);
+        $this->app->singleton(PluginDiscovery::class, ComposerPluginDiscovery::class);
         $this->app->singleton(SettingsStore::class, PlatformSettingsStore::class);
         $this->app->singleton(MailManager::class);
         $this->app->singleton(WhatsAppManager::class);
