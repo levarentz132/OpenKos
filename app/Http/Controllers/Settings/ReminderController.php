@@ -41,6 +41,18 @@ class ReminderController extends Controller
 
         return Inertia::render('settings/reminders', [
             'settings' => $settings,
+            'defaultTemplates' => collect(ReminderType::cases())
+                ->mapWithKeys(fn (ReminderType $type): array => [
+                    $type->value => __("notifications.rent.{$type->value}"),
+                ])
+                ->all(),
+            'previewInvoiceContext' => __('notifications.rent.invoice_context', [
+                'reference' => 'INV-2026-07',
+                'period' => '01 Jul 2026 – 31 Jul 2026',
+                'date' => '01 Jul 2026',
+                'amount' => '1,500,000',
+            ]),
+            'previewInvoiceLink' => __('notifications.rent.view_invoice').': https://example.test/portal/billing/invoices/1',
         ]);
     }
 

@@ -29,12 +29,6 @@ const templateOptions = [
     { value: 'overdue', label: 'Overdue reminder' },
 ] as const;
 
-const defaultTemplates = {
-    upcoming: `Hi :name,\n\nRent for :unit is due in :days days.\n\nAmount: :amount\nDue date: :date\n\n:invoice_context\n\n:invoice_link`,
-    due_today: `Hi :name,\n\nRent for :unit is due today.\n\nAmount: :amount\n\n:invoice_context\n\n:invoice_link`,
-    overdue: `Hi :name,\n\nRent for :unit is overdue by :days day(s).\n\nAmount: :amount\n\n:invoice_context\n\n:invoice_link`,
-} as const;
-
 function renderTemplate(
     template: string | null,
     data: Record<string, string | number>,
@@ -51,6 +45,9 @@ function renderTemplate(
 
 export default function Reminders({
     settings,
+    defaultTemplates,
+    previewInvoiceContext,
+    previewInvoiceLink,
 }: {
     settings: {
         reminder_enabled: boolean;
@@ -59,6 +56,9 @@ export default function Reminders({
         reminder_message_templates: Record<string, string | null>;
         reminder_channels: string[];
     };
+    defaultTemplates: Record<string, string>;
+    previewInvoiceContext: string;
+    previewInvoiceLink: string;
 }) {
     const { data, setData, submit, transform, processing, errors } = useForm({
         reminder_enabled: settings.reminder_enabled,
@@ -91,16 +91,19 @@ export default function Reminders({
         overdueDays: 3,
     };
 
-    const previewData = {
+    const previewInvoiceData = {
         name: preview.name,
         unit: preview.unit,
-        days: preview.overdueDays,
         amount: preview.amount,
         date: preview.date,
-        invoice_context:
-            'Invoice: INV-2026-07\nPeriod: 01 Jul 2026 – 31 Jul 2026\nDue date: 01 Jul 2026\nOutstanding: 1,500,000',
-        invoice_link:
-            'View invoice: https://example.test/portal/billing/invoices/1',
+        invoice_context: previewInvoiceContext,
+        invoice_link: previewInvoiceLink,
+    };
+
+    const previewData = {
+        upcoming: { ...previewInvoiceData, days: preview.days },
+        due_today: { ...previewInvoiceData, days: 0 },
+        overdue: { ...previewInvoiceData, days: preview.overdueDays },
     };
 
     return (
@@ -184,7 +187,33 @@ export default function Reminders({
                                             data.reminder_message_templates
                                                 .upcoming ||
                                                 defaultTemplates.upcoming,
-                                            previewData,
+                                            previewData.upcoming,
+                                        )}
+                                    </pre>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Due Today</CardTitle>
+                            <CardDescription>
+                                Preview the reminder sent on the rent due date.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {data.reminder_enabled && (
+                                <div className="rounded-lg border bg-muted/50 p-4">
+                                    <p className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                                        Preview (due today)
+                                    </p>
+                                    <pre className="text-sm whitespace-pre-wrap">
+                                        {renderTemplate(
+                                            data.reminder_message_templates
+                                                .due_today ||
+                                                defaultTemplates.due_today,
+                                            previewData.due_today,
                                         )}
                                     </pre>
                                 </div>
@@ -237,7 +266,7 @@ export default function Reminders({
                                             data.reminder_message_templates
                                                 .overdue ||
                                                 defaultTemplates.overdue,
-                                            previewData,
+                                            previewData.overdue,
                                         )}
                                     </pre>
                                 </div>

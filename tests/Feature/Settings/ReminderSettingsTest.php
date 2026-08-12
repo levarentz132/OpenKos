@@ -47,6 +47,11 @@ describe('Reminder settings page', function () {
                 ->has('settings.reminder_message_templates.upcoming')
                 ->has('settings.reminder_message_templates.due_today')
                 ->has('settings.reminder_message_templates.overdue')
+                ->has('defaultTemplates.upcoming')
+                ->has('defaultTemplates.due_today')
+                ->has('defaultTemplates.overdue')
+                ->has('previewInvoiceContext')
+                ->has('previewInvoiceLink')
             );
     });
 

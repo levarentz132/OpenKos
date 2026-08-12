@@ -143,7 +143,7 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
             'type' => 'rent_reminder',
             'title' => __('Rent reminder'),
             'message' => $this->renderMessage($notifiable),
-            'url' => $invoice ? route('portal.billing.invoices.show', $invoice) : route('portal.billing.index'),
+            'url' => $this->portalUrl($notifiable, $invoice),
         ];
     }
 
@@ -212,11 +212,24 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
 
     private function invoiceUrl(object $notifiable): ?string
     {
-        $invoice = $this->invoice();
+        return $this->portalUrl($notifiable, $this->invoice());
+    }
 
-        return $invoice && $notifiable instanceof Tenant && $notifiable->user_id
+    private function portalUrl(object $notifiable, ?Invoice $invoice = null): ?string
+    {
+        if (! ($notifiable instanceof Tenant)) {
+            return null;
+        }
+
+        $user = $notifiable->user;
+
+        if (! $user?->is_active || ! $user->hasVerifiedEmail()) {
+            return null;
+        }
+
+        return $invoice
             ? route('portal.billing.invoices.show', $invoice)
-            : null;
+            : route('portal.billing.index');
     }
 
     private function invoicePdfContent(Invoice $invoice): string

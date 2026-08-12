@@ -432,6 +432,37 @@ describe('SendRentRemindersAction', function () {
 
         Carbon::setTestNow();
     });
+
+    it('omits portal links for users without portal access', function (array $userAttributes) {
+        Carbon::setTestNow(Carbon::parse('2026-07-01'));
+        Notification::fake();
+
+        $user = User::factory()->create($userAttributes);
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-07-01']);
+        $lease->primaryTenant->update(['user_id' => $user->id]);
+        $lease->load(['primaryTenant.user']);
+        $tenant = $lease->primaryTenant;
+        $invoice = $lease->invoices()->payable()->orderBy('period_start')->firstOrFail();
+
+        app(SendRentReminders::class)->execute($lease);
+
+        Notification::assertSentTo(
+            $tenant,
+            RentReminder::class,
+            function (RentReminder $notification) use ($invoice, $tenant): bool {
+                expect($notification->toWhatsAppChannel($tenant)->message)
+                    ->not->toContain(route('portal.billing.invoices.show', $invoice));
+                expect($notification->toArray($tenant)['url'])->toBeNull();
+
+                return true;
+            },
+        );
+
+        Carbon::setTestNow();
+    })->with([
+        'unverified user' => [['email_verified_at' => null]],
+        'inactive user' => [['is_active' => false]],
+    ]);
 });
 
 describe('Command', function () {
