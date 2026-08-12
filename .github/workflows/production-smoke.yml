@@ -1,0 +1,182 @@
+name: Production deployment smoke test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.dockerignore'
+      - '.docker/**'
+      - 'compose.production.yaml'
+      - 'docker/**'
+      - 'bootstrap/app.php'
+      - 'config/app.php'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'package-lock.json'
+      - 'package.json'
+      - 'resources/**'
+      - 'routes/**'
+      - 'src/**'
+      - 'vite.config.ts'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.dockerignore'
+      - '.docker/**'
+      - 'compose.production.yaml'
+      - 'docker/**'
+      - 'bootstrap/app.php'
+      - 'config/app.php'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'package-lock.json'
+      - 'package.json'
+      - 'resources/**'
+      - 'routes/**'
+      - 'src/**'
+      - 'vite.config.ts'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: openkos
+          POSTGRES_USER: openkos
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openkos -d openkos"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Build smoke image
+        run: docker build --file .docker/php/Dockerfile.prod --tag openkos-smoke:ci .
+
+      - name: Configure smoke environment
+        env:
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        run: |
+          cat > .env.production <<EOF
+          APP_NAME=OpenKOS Smoke
+          APP_ENV=production
+          APP_KEY=${APP_KEY}
+          APP_DEBUG=false
+          APP_URL=http://127.0.0.1:8080
+          TRUSTED_PROXIES=
+          DB_CONNECTION=pgsql
+          DB_HOST=host.docker.internal
+          DB_PORT=5432
+          DB_DATABASE=openkos
+          DB_USERNAME=openkos
+          DB_PASSWORD=password
+          SESSION_DRIVER=database
+          CACHE_STORE=database
+          QUEUE_CONNECTION=database
+          FILESYSTEM_DISK=local
+          LOG_CHANNEL=stderr
+          LOG_LEVEL=debug
+          MAIL_MAILER=array
+          SMOKE_EMAIL=ci-smoke@example.test
+          SMOKE_PASSWORD=SmokePassword123!
+          EOF
+
+          cat > compose.smoke.yaml <<'EOF'
+          services:
+              web:
+                  image: openkos-smoke:ci
+                  ports:
+                      - '127.0.0.1:8080:8080'
+              queue:
+                  image: openkos-smoke:ci
+              scheduler:
+                  image: openkos-smoke:ci
+          EOF
+
+      - name: Run migrations
+        run: docker compose -f compose.production.yaml -f compose.smoke.yaml run --rm web php artisan migrate --force
+
+      - name: Seed smoke user
+        run: |
+          docker compose -f compose.production.yaml -f compose.smoke.yaml run --rm web php artisan db:seed --class=Database\\Seeders\\RoleAndPermissionSeeder --force
+          docker compose -f compose.production.yaml -f compose.smoke.yaml run --rm web php artisan tinker --execute='App\Models\User::updateOrCreate(["email" => env("SMOKE_EMAIL")], ["name" => "CI Smoke", "password" => Illuminate\Support\Facades\Hash::make(env("SMOKE_PASSWORD")), "email_verified_at" => now(), "is_active" => true])->assignRole("owner");'
+
+      - name: Start production roles
+        run: docker compose -f compose.production.yaml -f compose.smoke.yaml up -d
+
+      - name: Wait for web health
+        run: |
+          for attempt in $(seq 1 30); do
+              if curl --fail --silent http://127.0.0.1:8080/up >/dev/null; then
+                  exit 0
+              fi
+
+              sleep 2
+          done
+
+          docker compose -f compose.production.yaml -f compose.smoke.yaml ps
+          exit 1
+
+      - name: Verify login and authenticated Inertia page
+        run: |
+          curl --fail --silent --cookie-jar /tmp/openkos-cookies.txt http://127.0.0.1:8080/login >/tmp/openkos-login.html
+          xsrf_token=$(awk '$6 == "XSRF-TOKEN" {print $7}' /tmp/openkos-cookies.txt | tail -1)
+          xsrf_token=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.unquote(sys.argv[1]))' "$xsrf_token")
+
+          status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --cookie /tmp/openkos-cookies.txt \
+              --cookie-jar /tmp/openkos-cookies.txt \
+              --request POST \
+              --header "X-XSRF-TOKEN: ${xsrf_token}" \
+              --header 'Accept: text/html' \
+              --data-urlencode 'email=ci-smoke@example.test' \
+              --data-urlencode 'password=SmokePassword123!' \
+              http://127.0.0.1:8080/login)
+
+          test "$status" = 302 || test "$status" = 303
+
+          curl --fail --silent --cookie /tmp/openkos-cookies.txt http://127.0.0.1:8080/dashboard >/tmp/openkos-dashboard.html
+          grep -q 'dashboard/overview' /tmp/openkos-dashboard.html
+
+      - name: Verify database queue processing
+        run: |
+          docker compose -f compose.production.yaml -f compose.smoke.yaml run --rm web php artisan tinker --execute='Illuminate\Support\Facades\Cache::put("smoke-queued", false, 60); dispatch(function () { Illuminate\Support\Facades\Cache::put("smoke-queued", true, 60); });'
+
+          for attempt in $(seq 1 30); do
+              processed=$(docker compose -f compose.production.yaml -f compose.smoke.yaml run --rm web php artisan tinker --execute='echo Illuminate\Support\Facades\Cache::get("smoke-queued", false) ? "true" : "false";')
+              if [ "$processed" = true ]; then
+                  exit 0
+              fi
+
+              sleep 2
+          done
+
+          docker compose -f compose.production.yaml -f compose.smoke.yaml logs queue
+          exit 1
+
+      - name: Verify scheduler and container health
+        run: |
+          docker compose -f compose.production.yaml -f compose.smoke.yaml ps
+          test "$(docker inspect --format='{{.State.Health.Status}}' $(docker compose -f compose.production.yaml -f compose.smoke.yaml ps -q web))" = healthy
+          test "$(docker inspect --format='{{.State.Status}}' $(docker compose -f compose.production.yaml -f compose.smoke.yaml ps -q scheduler))" = running
+          docker compose -f compose.production.yaml -f compose.smoke.yaml top scheduler | grep -q 'schedule:work'
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -f compose.production.yaml -f compose.smoke.yaml logs --no-color
+
+      - name: Tear down smoke deployment
+        if: always()
+        run: docker compose -f compose.production.yaml -f compose.smoke.yaml down --volumes --remove-orphans

@@ -1,0 +1,109 @@
+volumes:
+    uploads:
+        name: '${OPENKOS_UPLOAD_VOLUME:-openkos_uploads}'
+
+services:
+    web:
+        image: '${OPENKOS_IMAGE:-ghcr.io/senatroxx/openkos:latest}'
+        env_file:
+            - '${OPENKOS_ENV_FILE:-.env.production}'
+        environment:
+            LARAVEL_OPTIMIZE: '${LARAVEL_OPTIMIZE:-true}'
+        expose:
+            - '8080'
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        volumes:
+            - uploads:/app/storage/app/private
+        restart: unless-stopped
+        stop_grace_period: 30s
+        healthcheck:
+            test:
+                - CMD
+                - php
+                - -r
+                - "$$response = @file_get_contents('http://127.0.0.1:8080/up'); exit($$response === false ? 1 : 0);"
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
+        logging:
+            driver: json-file
+            options:
+                max-size: '${OPENKOS_LOG_MAX_SIZE:-10m}'
+                max-file: '${OPENKOS_LOG_MAX_FILES:-3}'
+        cpus: '${OPENKOS_WEB_CPUS:-1.0}'
+        mem_limit: '${OPENKOS_WEB_MEMORY:-512m}'
+
+    queue:
+        image: '${OPENKOS_IMAGE:-ghcr.io/senatroxx/openkos:latest}'
+        env_file:
+            - '${OPENKOS_ENV_FILE:-.env.production}'
+        environment:
+            LARAVEL_OPTIMIZE: '${LARAVEL_OPTIMIZE:-true}'
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        volumes:
+            - uploads:/app/storage/app/private
+        command:
+            - php
+            - artisan
+            - queue:work
+            - --sleep=3
+            - --tries=3
+            - --timeout=90
+            - --no-interaction
+        restart: unless-stopped
+        stop_grace_period: 30s
+        healthcheck:
+            test:
+                - CMD
+                - sh
+                - -c
+                - kill -0 1
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
+        logging:
+            driver: json-file
+            options:
+                max-size: '${OPENKOS_LOG_MAX_SIZE:-10m}'
+                max-file: '${OPENKOS_LOG_MAX_FILES:-3}'
+        cpus: '${OPENKOS_QUEUE_CPUS:-0.5}'
+        mem_limit: '${OPENKOS_QUEUE_MEMORY:-512m}'
+
+    scheduler:
+        image: '${OPENKOS_IMAGE:-ghcr.io/senatroxx/openkos:latest}'
+        env_file:
+            - '${OPENKOS_ENV_FILE:-.env.production}'
+        environment:
+            LARAVEL_OPTIMIZE: '${LARAVEL_OPTIMIZE:-true}'
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        volumes:
+            - uploads:/app/storage/app/private
+        command:
+            - php
+            - artisan
+            - schedule:work
+            - --no-interaction
+        restart: unless-stopped
+        stop_grace_period: 30s
+        healthcheck:
+            test:
+                - CMD
+                - sh
+                - -c
+                - kill -0 1
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
+        logging:
+            driver: json-file
+            options:
+                max-size: '${OPENKOS_LOG_MAX_SIZE:-10m}'
+                max-file: '${OPENKOS_LOG_MAX_FILES:-3}'
+        cpus: '${OPENKOS_SCHEDULER_CPUS:-0.25}'
+        mem_limit: '${OPENKOS_SCHEDULER_MEMORY:-256m}'
