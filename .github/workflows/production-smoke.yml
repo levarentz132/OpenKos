@@ -154,10 +154,10 @@ jobs:
 
       - name: Verify database queue processing
         run: |
-          docker compose -f compose.production.yaml -f compose.smoke.yaml run --rm web php artisan tinker --execute='Illuminate\Support\Facades\Cache::put("smoke-queued", false, 60); dispatch(function () { Illuminate\Support\Facades\Cache::put("smoke-queued", true, 60); });'
+          docker compose -f compose.production.yaml -f compose.smoke.yaml exec -T web php artisan tinker --execute='Illuminate\Support\Facades\Cache::put("smoke-queued", false, 60); App\Jobs\DeploymentSmokeJob::dispatch("smoke-queued");'
 
           for attempt in $(seq 1 30); do
-              processed=$(docker compose -f compose.production.yaml -f compose.smoke.yaml run --rm web php artisan tinker --execute='echo Illuminate\Support\Facades\Cache::get("smoke-queued", false) ? "true" : "false";')
+              processed=$(docker compose -f compose.production.yaml -f compose.smoke.yaml exec -T web php artisan tinker --execute='echo Illuminate\Support\Facades\Cache::get("smoke-queued", false) ? "true" : "false";')
               if [ "$processed" = true ]; then
                   exit 0
               fi
