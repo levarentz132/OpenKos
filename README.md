@@ -75,6 +75,8 @@ See [docs/platform.md](docs/platform.md) for the full guide, including manifests
 
 See [docs/architecture.md](docs/architecture.md) for layer conventions, data flow, domain model, state machines, and testing patterns.
 
+For production image deployment, see [docs/deployment.md](docs/deployment.md).
+
 Key decisions are recorded as Architecture Decision Records (ADRs) in [`docs/architecture/adr/`](docs/architecture/adr/README.md) — check there before making architectural changes.
 
 ## Project Status
