@@ -48,6 +48,7 @@ Route::middleware(['auth', 'verified'])->prefix('portal')->name('portal.')->grou
         Route::get('history/invoices', [TenantPortalPaymentController::class, 'invoiceHistory'])->name('history.invoices');
         Route::get('history/payments', [TenantPortalPaymentController::class, 'paymentHistory'])->name('history.payments');
         Route::get('invoices/{invoice}', [TenantPortalPaymentController::class, 'invoice'])->name('invoices.show');
+        Route::get('invoices/{invoice}/print', [TenantPortalPaymentController::class, 'print'])->name('invoices.print');
         Route::get('invoices/{invoice}/download', [TenantPortalPaymentController::class, 'download'])->name('invoices.download');
     });
 
@@ -145,6 +146,8 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
             Route::get('documents', [LeaseController::class, 'documents'])->name('workspace.documents')->middleware('permission:leases.view');
             Route::get('invoices', [LeaseInvoiceController::class, 'index'])->name('workspace.invoices')->middleware('permission:leases.view');
             Route::get('invoices/{invoice}', [LeaseInvoiceController::class, 'show'])->name('workspace.invoices.show')->middleware('permission:leases.view');
+            Route::get('invoices/{invoice}/print', [LeaseInvoiceController::class, 'print'])->name('workspace.invoices.print')->middleware('permission:leases.view');
+            Route::get('invoices/{invoice}/download', [LeaseInvoiceController::class, 'download'])->name('workspace.invoices.download')->middleware('permission:leases.view');
             Route::get('rent-schedule', LeaseRentScheduleController::class)->name('rent-schedule')->middleware('permission:leases.view');
             Route::post('move-out', [LeaseController::class, 'moveOut'])->name('move-out')->middleware('permission:leases.move_out');
             Route::post('renew', [LeaseController::class, 'renew'])->name('renew')->middleware('permission:leases.renew');

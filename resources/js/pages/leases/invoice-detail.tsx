@@ -1,19 +1,26 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Download, Printer } from 'lucide-react';
 import { useState } from 'react';
 import { PaymentDetailSheet } from '@/components/features';
 import { DocumentPreview } from '@/components/shared';
 import { StatusBadge } from '@/components/shared/status-badge';
+import { Button } from '@/components/ui/button';
+import { PAYMENT_METHOD_LABELS } from '@/lib/constants/billing';
 import { formatDate, formatPeriod, formatPrice } from '@/lib/formatters';
+import invoiceRoutes from '@/routes/leases/workspace/invoices';
 import paymentRoutes from '@/routes/payments';
 import type { Invoice, Payment, PaymentProof, WorkspaceLease } from '@/types';
 
 export default function InvoiceDetail({
     lease,
     invoice,
+    invoicePdf,
 }: {
     lease: WorkspaceLease;
     invoice: Invoice;
+    invoicePdf: {
+        status: 'disabled' | 'pending' | 'available';
+    };
 }) {
     const { auth } = usePage<{ auth: { permissions: string[] } }>().props;
     const [verifyingId, setVerifyingId] = useState<number | null>(null);
@@ -80,7 +87,7 @@ export default function InvoiceDetail({
             <div className="flex-1 space-y-6">
                 {/* Summary card */}
                 <div className="rounded-lg border p-6">
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-4">
                         <div>
                             <h2 className="text-lg font-semibold">
                                 {invoice.reference ?? 'Invoice'}
@@ -89,10 +96,43 @@ export default function InvoiceDetail({
                                 {formatPeriod(invoice.period_start, 'id-ID')}
                             </p>
                         </div>
-                        <StatusBadge
-                            domain="invoice"
-                            value={invoice.display_status ?? invoice.status}
-                        />
+                        <div className="flex flex-col items-end gap-3">
+                            <StatusBadge
+                                domain="invoice"
+                                value={invoice.display_status ?? invoice.status}
+                            />
+                            {invoicePdf.status === 'available' ? (
+                                <Button asChild size="sm" variant="outline">
+                                    <a
+                                        href={invoiceRoutes.download.url([
+                                            lease,
+                                            invoice,
+                                        ])}
+                                    >
+                                        <Download className="size-4" />
+                                        Download PDF
+                                    </a>
+                                </Button>
+                            ) : invoicePdf.status === 'pending' ? (
+                                <Button disabled size="sm" variant="outline">
+                                    PDF pending
+                                </Button>
+                            ) : (
+                                <Button asChild size="sm" variant="outline">
+                                    <a
+                                        href={invoiceRoutes.print.url([
+                                            lease,
+                                            invoice,
+                                        ])}
+                                        rel="noreferrer"
+                                        target="_blank"
+                                    >
+                                        <Printer className="size-4" />
+                                        Print / Save as PDF
+                                    </a>
+                                </Button>
+                            )}
+                        </div>
                     </div>
 
                     <div className="mt-6 grid grid-cols-3 gap-4 text-sm">
@@ -163,45 +203,67 @@ export default function InvoiceDetail({
                     </div>
                 )}
 
-                {/* Allocated payments */}
-                {invoice.payments && invoice.payments.length > 0 && (
-                    <div className="rounded-lg border">
-                        <div className="border-b px-4 py-3">
-                            <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                                Payments
-                            </h3>
-                        </div>
+                {/* Activity timeline */}
+                <section className="rounded-lg border">
+                    <div className="border-b px-4 py-3">
+                        <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                            Activity timeline
+                        </h3>
+                    </div>
+                    {invoice.payments && invoice.payments.length > 0 ? (
                         <div className="divide-y">
                             {invoice.payments.map((payment) => (
                                 <div
                                     key={payment.id}
-                                    className="flex cursor-pointer items-center justify-between px-4 py-3 text-sm hover:bg-muted/30"
+                                    className="flex cursor-pointer gap-3 px-4 py-3 text-sm hover:bg-muted/30"
                                     onClick={() => {
                                         setSelectedPaymentId(payment.id);
                                     }}
                                 >
-                                    <div>
-                                        <p className="font-medium tabular-nums">
+                                    <div className="flex w-3 shrink-0 justify-center">
+                                        <div className="mt-1.5 size-2 rounded-full bg-primary" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <p className="font-medium">
+                                                {payment.status === 'confirmed'
+                                                    ? 'Payment confirmed'
+                                                    : payment.status ===
+                                                        'cancelled'
+                                                      ? 'Payment cancelled'
+                                                      : 'Payment submitted'}
+                                            </p>
+                                            <StatusBadge
+                                                domain="payment"
+                                                value={payment.status}
+                                            />
+                                        </div>
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            {formatDate(payment.payment_date)} ·{' '}
+                                            {PAYMENT_METHOD_LABELS[
+                                                payment.payment_method
+                                            ] ?? payment.payment_method}
+                                        </p>
+                                        <p className="mt-1 font-medium tabular-nums">
                                             {formatPrice(payment.amount)}
                                         </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {formatDate(payment.payment_date)}
-                                        </p>
                                     </div>
-                                    <StatusBadge
-                                        domain="payment"
-                                        value={payment.status}
-                                    />
                                 </div>
                             ))}
                         </div>
-                    </div>
-                )}
+                    ) : (
+                        <p className="px-4 py-6 text-sm text-muted-foreground">
+                            No payment activity yet.
+                        </p>
+                    )}
+                </section>
 
-                {/* Timeline placeholder */}
-                <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    Activity timeline, reminders, and PDF download coming soon.
-                </div>
+                {invoicePdf.status === 'pending' && (
+                    <p className="text-right text-xs text-muted-foreground">
+                        A queue worker is preparing this PDF. Refresh this page
+                        when it is ready.
+                    </p>
+                )}
             </div>
 
             <PaymentDetailSheet

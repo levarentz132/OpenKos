@@ -200,5 +200,10 @@
 @endif
 
 <p class="footer">Generated on {{ $generatedAt }} WIB. This document reflects the invoice status at the time it was generated.</p>
+@if ($autoPrint ?? false)
+    <script>
+        window.addEventListener('load', () => window.print());
+    </script>
+@endif
 </body>
 </html>

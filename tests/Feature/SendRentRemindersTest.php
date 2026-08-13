@@ -5,6 +5,8 @@ use App\Actions\Reminders\SendRentReminders;
 use App\Business\Reminders\PaymentReminderScheduler;
 use App\Data\Reminder\ReminderSettings;
 use App\Enums\InvoiceStatus;
+use App\Jobs\GenerateInvoicePdfArtifact;
+use App\Models\Invoice;
 use App\Models\Lease;
 use App\Models\Property;
 use App\Models\ReminderLog;
@@ -13,12 +15,26 @@ use App\Models\Tenant;
 use App\Models\Unit;
 use App\Models\User;
 use App\Notifications\RentReminder;
+use App\Services\Invoices\InvoicePdfArtifact;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 
 uses()->beforeEach(function () {
     $this->seed(RoleAndPermissionSeeder::class);
+    Setting::set('invoice_pdf_enabled', true, 'boolean');
+    Storage::fake('local');
 });
+
+function prepareReminderInvoicePdf(Invoice $invoice): void
+{
+    $artifact = app(InvoicePdfArtifact::class);
+
+    GenerateInvoicePdfArtifact::dispatchSync(
+        $invoice->getKey(),
+        $artifact->fingerprint($invoice),
+    );
+}
 
 function createLeaseWithTenant(array $overrides = []): Lease
 {
@@ -307,6 +323,7 @@ describe('SendRentRemindersAction', function () {
         $lease->load(['primaryTenant.user']);
         $tenant = $lease->primaryTenant;
         $invoice = $lease->invoices()->payable()->orderBy('period_start')->firstOrFail();
+        prepareReminderInvoicePdf($invoice);
 
         app(SendRentReminders::class)->execute($lease);
 
@@ -345,6 +362,7 @@ describe('SendRentRemindersAction', function () {
         $lease->load(['primaryTenant']);
         $tenant = $lease->primaryTenant;
         $invoice = $lease->invoices()->payable()->orderBy('period_start')->firstOrFail();
+        prepareReminderInvoicePdf($invoice);
 
         app(SendRentReminders::class)->execute($lease);
 
@@ -369,6 +387,36 @@ describe('SendRentRemindersAction', function () {
                 expect($attachment->filename)->toBe("invoice-{$invoice->reference}.pdf");
                 expect($attachment->mimeType)->toBe('application/pdf');
                 expect($attachment->content)->toStartWith('%PDF-');
+
+                return true;
+            },
+        );
+
+        Carbon::setTestNow();
+    });
+
+    it('omits invoice attachments when PDF generation is disabled', function () {
+        Carbon::setTestNow(Carbon::parse('2026-07-01'));
+        Setting::set('invoice_pdf_enabled', false, 'boolean');
+        Setting::set('reminder_channels', ['mail'], 'array');
+        Notification::fake();
+
+        $user = User::factory()->create(['email' => 'tenant@example.com']);
+        $lease = createLeaseWithTenant(['rent_due_day' => 1, 'start_date' => '2026-07-01']);
+        $lease->primaryTenant->update([
+            'phone' => null,
+            'user_id' => $user->id,
+        ]);
+        $lease->load(['primaryTenant.user']);
+        $tenant = $lease->primaryTenant;
+
+        app(SendRentReminders::class)->execute($lease);
+
+        Notification::assertSentTo(
+            $tenant,
+            RentReminder::class,
+            function (RentReminder $notification) use ($tenant): bool {
+                expect($notification->toMailChannel($tenant)->attachments)->toBeEmpty();
 
                 return true;
             },
@@ -537,6 +585,7 @@ describe('Manual Send via Controller', function () {
         $lease->load(['primaryTenant.user']);
         $tenant = $lease->primaryTenant;
         $invoice = $lease->invoices()->payable()->orderBy('period_start')->firstOrFail();
+        prepareReminderInvoicePdf($invoice);
 
         $this->actingAs($owner)
             ->post(route('leases.send-reminder', $lease))

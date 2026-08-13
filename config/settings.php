@@ -8,6 +8,7 @@ return [
     'currency' => ['default' => 'IDR', 'cast' => 'string'],
     'timezone' => ['default' => 'Asia/Jakarta', 'cast' => 'string'],
     'lease_id_prefix' => ['default' => 'LSX', 'cast' => 'string'],
+    'invoice_pdf_enabled' => ['default' => false, 'cast' => 'boolean'],
     'reminder_enabled' => ['default' => true, 'cast' => 'boolean'],
     'reminder_days_before' => ['default' => 3, 'cast' => 'integer'],
     'reminder_overdue_intervals' => ['default' => [1, 3, 7], 'cast' => 'array'],
