@@ -88,8 +88,9 @@ export default function WhatsApp({
                 </p>
             </div>
 
-            <form onSubmit={handleSubmit}>
-                <Card>
+            <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+                <form onSubmit={handleSubmit}>
+                    <Card>
                     <CardHeader>
                         <CardTitle>WhatsApp Driver</CardTitle>
                         <CardDescription>
@@ -191,10 +192,10 @@ export default function WhatsApp({
                     <CardFooter>
                         <Button disabled={processing}>Save</Button>
                     </CardFooter>
-                </Card>
-            </form>
+                    </Card>
+                </form>
 
-            <Card>
+                <Card>
                 <CardHeader>
                     <CardTitle>Test Connection</CardTitle>
                     <CardDescription>
@@ -218,7 +219,8 @@ export default function WhatsApp({
                         </Link>
                     </Button>
                 </CardFooter>
-            </Card>
+                </Card>
+            </div>
         </div>
     );
 }

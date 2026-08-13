@@ -60,7 +60,16 @@ export default function Reminders({
     previewInvoiceContext: string;
     previewInvoiceLink: string;
 }) {
-    const { data, setData, submit, transform, processing, errors } = useForm({
+    const {
+        data,
+        setData,
+        submit,
+        transform,
+        setDefaults,
+        isDirty,
+        processing,
+        errors,
+    } = useForm({
         reminder_enabled: settings.reminder_enabled,
         reminder_days_before: String(settings.reminder_days_before),
         reminder_overdue_intervals:
@@ -79,7 +88,9 @@ export default function Reminders({
             ...d,
             reminder_enabled: d.reminder_enabled ? '1' : '0',
         }));
-        submit(updateReminders());
+        submit(updateReminders(), {
+            onSuccess: () => setDefaults(),
+        });
     }
 
     const preview = {
@@ -108,275 +119,289 @@ export default function Reminders({
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-lg font-medium">
-                    Default reminder settings
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Configure when and how rent reminders are sent to tenants.
-                </p>
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <h2 className="text-lg font-medium">
+                        Default reminder settings
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Configure when and how rent reminders are sent to
+                        tenants.
+                    </p>
+                </div>
+                <Button
+                    type="submit"
+                    form="reminder-settings-form"
+                    disabled={!isDirty || processing}
+                >
+                    Save
+                </Button>
             </div>
 
-            <form onSubmit={handleSubmit}>
-                <div className="space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Enable Reminders</CardTitle>
-                            <CardDescription>
-                                Automatically send rent reminders to tenants via
-                                WhatsApp.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex items-center gap-3">
-                                <Switch
-                                    checked={data.reminder_enabled}
-                                    onCheckedChange={(checked) =>
-                                        setData('reminder_enabled', checked)
-                                    }
-                                />
-                                <span className="text-sm text-muted-foreground">
-                                    {data.reminder_enabled
-                                        ? 'Reminders are active'
-                                        : 'Reminders are disabled'}
-                                </span>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Upcoming Reminder</CardTitle>
-                            <CardDescription>
-                                Send a reminder this many days before rent is
-                                due.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid max-w-xs gap-2">
-                                <Label htmlFor="reminder_days_before">
-                                    Days before due
-                                </Label>
-                                <Input
-                                    id="reminder_days_before"
-                                    name="reminder_days_before"
-                                    type="number"
-                                    min={0}
-                                    max={30}
-                                    value={data.reminder_days_before}
-                                    onChange={(e) =>
-                                        setData(
-                                            'reminder_days_before',
-                                            e.target.value,
-                                        )
-                                    }
-                                />
-                                {errors.reminder_days_before && (
-                                    <p className="text-sm text-red-600">
-                                        {errors.reminder_days_before}
-                                    </p>
-                                )}
-                            </div>
-                            {data.reminder_enabled && (
-                                <div className="mt-6 rounded-lg border bg-muted/50 p-4">
-                                    <p className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                                        Preview (upcoming)
-                                    </p>
-                                    <pre className="text-sm whitespace-pre-wrap">
-                                        {renderTemplate(
-                                            data.reminder_message_templates
-                                                .upcoming ||
-                                                defaultTemplates.upcoming,
-                                            previewData.upcoming,
-                                        )}
-                                    </pre>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Due Today</CardTitle>
-                            <CardDescription>
-                                Preview the reminder sent on the rent due date.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {data.reminder_enabled && (
-                                <div className="rounded-lg border bg-muted/50 p-4">
-                                    <p className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                                        Preview (due today)
-                                    </p>
-                                    <pre className="text-sm whitespace-pre-wrap">
-                                        {renderTemplate(
-                                            data.reminder_message_templates
-                                                .due_today ||
-                                                defaultTemplates.due_today,
-                                            previewData.due_today,
-                                        )}
-                                    </pre>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Overdue Follow-ups</CardTitle>
-                            <CardDescription>
-                                Send follow-up reminders at these intervals (in
-                                days) after the due date passes.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid max-w-xs gap-2">
-                                <Label htmlFor="reminder_overdue_intervals">
-                                    Intervals (days)
-                                </Label>
-                                <Input
-                                    id="reminder_overdue_intervals"
-                                    name="reminder_overdue_intervals"
-                                    value={data.reminder_overdue_intervals}
-                                    onChange={(e) =>
-                                        setData(
-                                            'reminder_overdue_intervals',
-                                            e.target.value,
-                                        )
-                                    }
-                                    placeholder="1, 3, 7"
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Comma-separated list of days after due date
-                                    to send reminders.
-                                </p>
-                                {errors.reminder_overdue_intervals && (
-                                    <p className="text-sm text-red-600">
-                                        {errors.reminder_overdue_intervals}
-                                    </p>
-                                )}
-                            </div>
-                            {data.reminder_enabled && (
-                                <div className="mt-6 rounded-lg border bg-muted/50 p-4">
-                                    <p className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                                        Preview (overdue)
-                                    </p>
-                                    <pre className="text-sm whitespace-pre-wrap">
-                                        {renderTemplate(
-                                            data.reminder_message_templates
-                                                .overdue ||
-                                                defaultTemplates.overdue,
-                                            previewData.overdue,
-                                        )}
-                                    </pre>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Notification Channels</CardTitle>
-                            <CardDescription>
-                                Choose how reminders are delivered. Reminders
-                                are always logged regardless of channel
-                                selection.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex flex-wrap gap-6">
-                                {channelOptions.map(({ value, label }) => (
-                                    <label
-                                        key={value}
-                                        className="flex items-center gap-2 text-sm"
-                                    >
-                                        <Checkbox
-                                            name={`reminder_channels[]`}
-                                            value={value}
-                                            checked={data.reminder_channels.includes(
-                                                value,
-                                            )}
-                                            onCheckedChange={(checked) => {
-                                                setData(
-                                                    'reminder_channels',
-                                                    checked
-                                                        ? [
-                                                              ...data.reminder_channels,
-                                                              value,
-                                                          ]
-                                                        : data.reminder_channels.filter(
-                                                              (c) =>
-                                                                  c !== value,
-                                                          ),
-                                                );
-                                            }}
-                                        />
-                                        {label}
-                                    </label>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Message Templates</CardTitle>
-                            <CardDescription>
-                                Customize each reminder message. Available
-                                placeholders: <code>:name</code>,{' '}
-                                <code>:unit</code>, <code>:days</code>,{' '}
-                                <code>:amount</code>, <code>:date</code>,{' '}
-                                <code>:invoice_context</code>, and{' '}
-                                <code>:invoice_link</code>. The invoice
-                                placeholders are optional.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="grid gap-6">
-                            {templateOptions.map(({ value, label }) => (
-                                <div key={value} className="grid gap-2">
-                                    <Label
-                                        htmlFor={`reminder_${value}_template`}
-                                    >
-                                        {label}
-                                    </Label>
-                                    <Textarea
-                                        id={`reminder_${value}_template`}
-                                        name={`reminder_message_templates[${value}]`}
-                                        className="min-h-[120px]"
-                                        placeholder={defaultTemplates[value]}
-                                        value={
-                                            data.reminder_message_templates[
-                                                value
-                                            ]
-                                        }
-                                        onChange={(e) =>
-                                            setData(
-                                                'reminder_message_templates',
-                                                {
-                                                    ...data.reminder_message_templates,
-                                                    [value]: e.target.value,
-                                                },
-                                            )
+            <form id="reminder-settings-form" onSubmit={handleSubmit}>
+                <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+                    <div className="space-y-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Enable Reminders</CardTitle>
+                                <CardDescription>
+                                    Automatically send rent reminders to tenants
+                                    via WhatsApp.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center gap-3">
+                                    <Switch
+                                        checked={data.reminder_enabled}
+                                        onCheckedChange={(checked) =>
+                                            setData('reminder_enabled', checked)
                                         }
                                     />
-                                    {errors[
-                                        `reminder_message_templates.${value}`
-                                    ] && (
-                                        <p className="text-sm text-red-600">
-                                            {
-                                                errors[
-                                                    `reminder_message_templates.${value}`
+                                    <span className="text-sm text-muted-foreground">
+                                        {data.reminder_enabled
+                                            ? 'Reminders are active'
+                                            : 'Reminders are disabled'}
+                                    </span>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Notification Channels</CardTitle>
+                                <CardDescription>
+                                    Choose how reminders are delivered.
+                                    Reminders are always logged regardless of
+                                    channel selection.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex flex-wrap gap-6">
+                                    {channelOptions.map(({ value, label }) => (
+                                        <label
+                                            key={value}
+                                            className="flex items-center gap-2 text-sm"
+                                        >
+                                            <Checkbox
+                                                name={`reminder_channels[]`}
+                                                value={value}
+                                                checked={data.reminder_channels.includes(
+                                                    value,
+                                                )}
+                                                onCheckedChange={(checked) => {
+                                                    setData(
+                                                        'reminder_channels',
+                                                        checked
+                                                            ? [
+                                                                  ...data.reminder_channels,
+                                                                  value,
+                                                              ]
+                                                            : data.reminder_channels.filter(
+                                                                  (c) =>
+                                                                      c !==
+                                                                      value,
+                                                              ),
+                                                    );
+                                                }}
+                                            />
+                                            {label}
+                                        </label>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Message Templates</CardTitle>
+                                <CardDescription>
+                                    Customize each reminder message. Available
+                                    placeholders: <code>:name</code>,{' '}
+                                    <code>:unit</code>, <code>:days</code>,{' '}
+                                    <code>:amount</code>, <code>:date</code>,{' '}
+                                    <code>:invoice_context</code>, and{' '}
+                                    <code>:invoice_link</code>. The invoice
+                                    placeholders are optional.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="grid gap-6">
+                                {templateOptions.map(({ value, label }) => (
+                                    <div key={value} className="grid gap-2">
+                                        <Label
+                                            htmlFor={`reminder_${value}_template`}
+                                        >
+                                            {label}
+                                        </Label>
+                                        <Textarea
+                                            id={`reminder_${value}_template`}
+                                            name={`reminder_message_templates[${value}]`}
+                                            className="min-h-[120px]"
+                                            placeholder={
+                                                defaultTemplates[value]
+                                            }
+                                            value={
+                                                data.reminder_message_templates[
+                                                    value
                                                 ]
                                             }
+                                            onChange={(e) =>
+                                                setData(
+                                                    'reminder_message_templates',
+                                                    {
+                                                        ...data.reminder_message_templates,
+                                                        [value]: e.target.value,
+                                                    },
+                                                )
+                                            }
+                                        />
+                                        {errors[
+                                            `reminder_message_templates.${value}`
+                                        ] && (
+                                            <p className="text-sm text-red-600">
+                                                {
+                                                    errors[
+                                                        `reminder_message_templates.${value}`
+                                                    ]
+                                                }
+                                            </p>
+                                        )}
+                                    </div>
+                                ))}
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Overdue Follow-ups</CardTitle>
+                                <CardDescription>
+                                    Send follow-up reminders at these intervals
+                                    (in days) after the due date passes.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid max-w-xs gap-2">
+                                    <Label htmlFor="reminder_overdue_intervals">
+                                        Intervals (days)
+                                    </Label>
+                                    <Input
+                                        id="reminder_overdue_intervals"
+                                        name="reminder_overdue_intervals"
+                                        value={data.reminder_overdue_intervals}
+                                        onChange={(e) =>
+                                            setData(
+                                                'reminder_overdue_intervals',
+                                                e.target.value,
+                                            )
+                                        }
+                                        placeholder="1, 3, 7"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Comma-separated list of days after due
+                                        date to send reminders.
+                                    </p>
+                                    {errors.reminder_overdue_intervals && (
+                                        <p className="text-sm text-red-600">
+                                            {errors.reminder_overdue_intervals}
                                         </p>
                                     )}
                                 </div>
-                            ))}
-                        </CardContent>
-                    </Card>
+                                {data.reminder_enabled && (
+                                    <div className="mt-6 rounded-lg border bg-muted/50 p-4">
+                                        <p className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                                            Preview (overdue)
+                                        </p>
+                                        <pre className="text-sm whitespace-pre-wrap">
+                                            {renderTemplate(
+                                                data.reminder_message_templates
+                                                    .overdue ||
+                                                    defaultTemplates.overdue,
+                                                previewData.overdue,
+                                            )}
+                                        </pre>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
 
-                    <div className="flex justify-end">
-                        <Button disabled={processing}>Save</Button>
+                    <div className="space-y-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Upcoming Reminder</CardTitle>
+                                <CardDescription>
+                                    Send a reminder this many days before rent
+                                    is due.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid max-w-xs gap-2">
+                                    <Label htmlFor="reminder_days_before">
+                                        Days before due
+                                    </Label>
+                                    <Input
+                                        id="reminder_days_before"
+                                        name="reminder_days_before"
+                                        type="number"
+                                        min={0}
+                                        max={30}
+                                        value={data.reminder_days_before}
+                                        onChange={(e) =>
+                                            setData(
+                                                'reminder_days_before',
+                                                e.target.value,
+                                            )
+                                        }
+                                    />
+                                    {errors.reminder_days_before && (
+                                        <p className="text-sm text-red-600">
+                                            {errors.reminder_days_before}
+                                        </p>
+                                    )}
+                                </div>
+                                {data.reminder_enabled && (
+                                    <div className="mt-6 rounded-lg border bg-muted/50 p-4">
+                                        <p className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                                            Preview (upcoming)
+                                        </p>
+                                        <pre className="text-sm whitespace-pre-wrap">
+                                            {renderTemplate(
+                                                data.reminder_message_templates
+                                                    .upcoming ||
+                                                    defaultTemplates.upcoming,
+                                                previewData.upcoming,
+                                            )}
+                                        </pre>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Due Today</CardTitle>
+                                <CardDescription>
+                                    Preview the reminder sent on the rent due
+                                    date.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {data.reminder_enabled && (
+                                    <div className="rounded-lg border bg-muted/50 p-4">
+                                        <p className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                                            Preview (due today)
+                                        </p>
+                                        <pre className="text-sm whitespace-pre-wrap">
+                                            {renderTemplate(
+                                                data.reminder_message_templates
+                                                    .due_today ||
+                                                    defaultTemplates.due_today,
+                                                previewData.due_today,
+                                            )}
+                                        </pre>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
                 </div>
             </form>
