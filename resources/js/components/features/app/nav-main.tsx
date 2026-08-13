@@ -25,7 +25,7 @@ export function NavMain({
     sections?: NavSection[];
     items?: NavItem[];
 }) {
-    const { isCurrentUrl, isCurrentOrParentUrl } = useCurrentUrl();
+    const { currentUrl, isCurrentUrl, isCurrentOrParentUrl } = useCurrentUrl();
 
     const displaySections: NavSection[] =
         sections.length > 0
@@ -59,18 +59,16 @@ export function NavMain({
                     <SidebarGroupLabel>{section.title}</SidebarGroupLabel>
                     <SidebarMenu className="gap-0.5">
                         {section.items.map((item) => {
-                            const hasMultipleChildren =
-                                Boolean(item.children) &&
-                                (item.children?.length ?? 0) > 1;
+                            const hasChildren = Boolean(item.children?.length);
 
-                            if (hasMultipleChildren && item.children) {
+                            if (hasChildren && item.children) {
                                 const hasActiveChild = isAnyChildActive(
                                     item.children,
                                 );
 
                                 return (
                                     <Collapsible
-                                        key={item.title}
+                                        key={`${item.title}-${currentUrl}`}
                                         defaultOpen={hasActiveChild}
                                         className="group/collapsible"
                                     >

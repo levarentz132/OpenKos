@@ -1,6 +1,20 @@
 import { usePage } from '@inertiajs/react';
 import type { LucideIcon } from 'lucide-react';
-import { Blocks, Puzzle } from 'lucide-react';
+import {
+    Bell,
+    BellRing,
+    Blocks,
+    Building2,
+    KeyRound,
+    Mail,
+    MessageCircle,
+    Plug,
+    Puzzle,
+    Settings,
+    Shield,
+    Tags,
+    User,
+} from 'lucide-react';
 import type { Auth, NavItem } from '@/types';
 import type {
     Platform,
@@ -13,6 +27,24 @@ import type {
 // fall back to Blocks. A full lucide name->component map would defeat tree-shaking.
 const iconMap: Record<string, LucideIcon> = {
     puzzle: Puzzle,
+};
+
+const settingsGroupIconMap: Record<string, LucideIcon> = {
+    Account: Shield,
+    Preferences: Settings,
+    Notifications: Bell,
+    Property: Building2,
+    Integrations: Plug,
+};
+
+const settingsPageIconMap: Record<string, LucideIcon> = {
+    general: Settings,
+    profile: User,
+    security: KeyRound,
+    reminders: BellRing,
+    'property-types': Tags,
+    mail: Mail,
+    whatsapp: MessageCircle,
 };
 
 export function canSee(permission: string | null, auth: Auth): boolean {
@@ -65,7 +97,11 @@ export function platformPageNavItems(
     const ungrouped: NavItem[] = [];
 
     for (const page of visible) {
-        const item: NavItem = { title: page.title, href: page.href };
+        const item: NavItem = {
+            title: page.title,
+            href: page.href,
+            icon: settingsPageIconMap[page.key] ?? Blocks,
+        };
 
         if (page.group) {
             (groups[page.group] ??= []).push(item);
@@ -78,6 +114,7 @@ export function platformPageNavItems(
         ...ungrouped,
         ...Object.entries(groups).map(([title, children]) => ({
             title,
+            icon: settingsGroupIconMap[title] ?? Blocks,
             children,
         })),
     ];

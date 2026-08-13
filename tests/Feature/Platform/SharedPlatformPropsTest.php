@@ -15,5 +15,11 @@ it('shares platform registry data with every Inertia page', function () {
             ->has('platform.navigation')
             ->has('platform.workspaces')
             ->has('platform.settings')
-            ->has('platform.dashboard'));
+            ->has('platform.dashboard')
+            ->where('platform.settings.0.key', 'general')
+            ->where('platform.settings.0.group', null)
+            ->where('platform.settings.1.key', 'profile')
+            ->where('platform.settings.1.group', 'Account')
+            ->where('platform.settings.2.key', 'reminders')
+            ->where('platform.settings.2.group', 'Notifications'));
 });

@@ -5,7 +5,6 @@ import {
     FileText,
     LayoutGrid,
     Receipt,
-    Settings,
     Shield,
     UserCog,
     Users,
@@ -34,7 +33,6 @@ import { index as portalBilling } from '@/routes/portal/billing';
 import { index as portalLease } from '@/routes/portal/lease';
 import properties from '@/routes/properties';
 import roles from '@/routes/roles';
-import { edit as generalSettings } from '@/routes/settings/general';
 import tenants from '@/routes/tenants';
 import userRoutes from '@/routes/users';
 import type { Auth, NavItem, NavSection } from '@/types';
@@ -46,6 +44,7 @@ export function AppSidebar() {
     const permissions = auth.permissions;
     const isOwner = auth.role === 'owner';
     const home = auth.tenant ? portalDashboard() : dashboard();
+    const settingsNavItems = platformPageNavItems(platform.settings, auth);
 
     const navSections: NavSection[] = auth.tenant
         ? [
@@ -215,17 +214,11 @@ export function AppSidebar() {
                         },
                     ]
                   : []),
-              ...(isOwner
+              ...(settingsNavItems.length > 0
                   ? [
                         {
                             title: 'SETTINGS',
-                            items: [
-                                {
-                                    title: 'General',
-                                    href: generalSettings.url(),
-                                    icon: Settings,
-                                },
-                            ],
+                            items: settingsNavItems,
                         },
                     ]
                   : []),

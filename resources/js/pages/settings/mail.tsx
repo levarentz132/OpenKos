@@ -77,8 +77,9 @@ export default function Mail({
                 </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-                <Card>
+            <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+                <form onSubmit={handleSubmit}>
+                    <Card>
                     <CardHeader>
                         <CardTitle>Mail Driver</CardTitle>
                         <CardDescription>
@@ -258,10 +259,10 @@ export default function Mail({
                     <CardFooter>
                         <Button disabled={processing}>Save</Button>
                     </CardFooter>
-                </Card>
-            </form>
+                    </Card>
+                </form>
 
-            <Card>
+                <Card>
                 <CardHeader>
                     <CardTitle>Test Mail Connection</CardTitle>
                     <CardDescription>
@@ -280,7 +281,8 @@ export default function Mail({
                         </Link>
                     </Button>
                 </CardFooter>
-            </Card>
+                </Card>
+            </div>
         </div>
     );
 }
