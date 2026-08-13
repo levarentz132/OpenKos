@@ -37,7 +37,7 @@ Nine singletons, each bound as a **container singleton** in `PlatformServiceProv
 | `SettingsRegistry`     | Settings pages + setting definitions             | `SettingsPage(key, title, href, permission?, group?, routeName?, order?)` — `group` renders under a nav section; `routeName` is resolved lazily in `toArray()` (safe for plugin `boot()`); pages sort by `order` (default 500) |
 | `SettingsManager`      | Settings storage (read/write by key)             | Injected class with `get(key)`, `set(key, value)`, `some(keys)` methods; persistence is supplied by the host through `SettingsStore`                                                                                             |
 | `PermissionRegistry`   | Plugin-declared permissions                      | `register(key, label)` — persisted to Spatie permissions table via `platform:permissions:sync`                                                                                                                                 |
-| `NotificationRegistry` | Notification drivers by name                     | `NotificationDriverRegistration(name, channel, driverClass, label, config[])`                                                                                                                                                  |
+| `NotificationRegistry` | Notification drivers by name                     | `NotificationDriverRegistration(name, channel, driverClass, label, config[], laravelMailer?)`                                                                                                                                  |
 | `PaymentRegistry`      | Payment gateways by key                          | class-string or instance of `PaymentGateway`                                                                                                                                                                                   |
 | `OpenKOSManager`       | Central manager — entry point for all registries | Injected into plugins; facade exposes `OpenKOS::navigation()->...`, `OpenKOS::dashboard()->...`, etc.                                                                                                                           |
 
@@ -299,6 +299,20 @@ monolith; it would only matter for untrusted third-party marketplace plugins.
 - **The WhatsApp settings page** (`WhatsAppController`) lists drivers via `$registry->forChannel('whatsapp')` and validates the selection against it.
 
 `NotificationDriverRegistration.driverClass` is a plain class-string, not a typed contract, because each channel brings its own driver interface shaped to its needs — WhatsApp drivers implement the stateful `OpenKOS\Core\Contracts\WhatsAppDriver` (pairing/health). A future SMS/Telegram/push channel follows the same pattern: define a channel-specific driver contract in the package, register implementations into `NotificationRegistry` with that `channel`, and add a small app-side manager that resolves and calls them. The registry, registration, and settings-page listing are channel-agnostic and reused as-is; only the per-channel contract and manager are new.
+
+### Mail drivers
+
+Mail drivers may optionally advertise the Laravel mailer they support:
+
+    $platform->notifications()->registerDriver(new NotificationDriverRegistration(
+        name: 'openkos/resend',
+        channel: 'mail',
+        driverClass: ResendDriver::class,
+        label: 'Resend',
+        laravelMailer: 'resend',
+    ));
+
+The plugin owns registration of the actual Laravel mailer and transport. Omitting `laravelMailer` keeps the driver valid for OpenKOS custom notifications through `MailManager`, but native Laravel notifications use the Laravel `log` fallback with an explicit warning. The platform does not contain provider-specific mappings.
 
 ## Payment Contracts — interface only
 

@@ -29,6 +29,7 @@ class MailPlugin extends Plugin
             channel: 'mail',
             driverClass: LogMailDriver::class,
             label: 'Log (Local / Testing)',
+            laravelMailer: 'log',
         ));
 
         $platform->notifications()->registerDriver(new NotificationDriverRegistration(
@@ -36,6 +37,7 @@ class MailPlugin extends Plugin
             channel: 'mail',
             driverClass: SmtpMailDriver::class,
             label: 'SMTP Server',
+            laravelMailer: 'smtp',
         ));
     }
 }
