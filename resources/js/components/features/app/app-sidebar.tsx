@@ -3,9 +3,11 @@ import {
     Building2,
     DollarSign,
     FileText,
+    Landmark,
     LayoutGrid,
     Receipt,
     Shield,
+    Tags,
     UserCog,
     Users,
     Wrench,
@@ -33,6 +35,7 @@ import { index as portalBilling } from '@/routes/portal/billing';
 import { index as portalLease } from '@/routes/portal/lease';
 import properties from '@/routes/properties';
 import roles from '@/routes/roles';
+import propertyTypes from '@/routes/settings/property-types';
 import tenants from '@/routes/tenants';
 import userRoutes from '@/routes/users';
 import type { Auth, NavItem, NavSection } from '@/types';
@@ -157,8 +160,23 @@ export function AppSidebar() {
                                     ? [
                                           {
                                               title: 'Properties',
-                                              href: properties.index(),
-                                              icon: Building2,
+                                              icon: Landmark,
+                                              children: [
+                                                  {
+                                                      title: 'All Properties',
+                                                      href: properties.index(),
+                                                      icon: Building2,
+                                                  },
+                                                  ...(isOwner
+                                                      ? [
+                                                            {
+                                                                title: 'Property Types',
+                                                                href: propertyTypes.index(),
+                                                                icon: Tags,
+                                                            },
+                                                        ]
+                                                      : []),
+                                              ],
                                           },
                                       ]
                                     : []),
