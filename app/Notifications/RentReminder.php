@@ -2,7 +2,6 @@
 
 namespace App\Notifications;
 
-use App\Actions\Invoices\GenerateInvoicePdf;
 use App\Data\Reminder\ReminderEvent;
 use App\Enums\ReminderType;
 use App\Models\Invoice;
@@ -11,6 +10,7 @@ use App\Models\Tenant;
 use App\Notifications\Channels\LogChannel;
 use App\Notifications\Channels\MailChannel;
 use App\Notifications\Channels\WhatsAppChannel;
+use App\Services\Invoices\InvoicePdfArtifact;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -87,11 +87,13 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
                 $invoice->reference ?? (string) $invoice->getKey(),
             );
 
-            $attachments[] = new MailAttachment(
-                content: $this->invoicePdfContent($invoice),
-                filename: 'invoice-'.($reference ?: $invoice->getKey()).'.pdf',
-                mimeType: 'application/pdf',
-            );
+            if ($content = $this->invoicePdfContent($invoice)) {
+                $attachments[] = new MailAttachment(
+                    content: $content,
+                    filename: 'invoice-'.($reference ?: $invoice->getKey()).'.pdf',
+                    mimeType: 'application/pdf',
+                );
+            }
         }
 
         return new MailContent(
@@ -107,7 +109,7 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
         $attachment = null;
         $invoice = $this->invoice();
 
-        if ($invoice) {
+        if ($invoice && ($content = $this->invoicePdfContent($invoice))) {
             $reference = preg_replace(
                 '/[^A-Za-z0-9_-]/',
                 '-',
@@ -115,7 +117,7 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
             );
 
             $attachment = new WhatsAppAttachment(
-                content: $this->invoicePdfContent($invoice),
+                content: $content,
                 filename: 'invoice-'.($reference ?: $invoice->getKey()).'.pdf',
                 mimeType: 'application/pdf',
             );
@@ -232,8 +234,8 @@ class RentReminder extends Notification implements MailChannelNotification, Shou
             : route('portal.billing.index');
     }
 
-    private function invoicePdfContent(Invoice $invoice): string
+    private function invoicePdfContent(Invoice $invoice): ?string
     {
-        return $this->invoicePdfContent ??= app(GenerateInvoicePdf::class)->execute($invoice);
+        return $this->invoicePdfContent ??= app(InvoicePdfArtifact::class)->content($invoice);
     }
 }

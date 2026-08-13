@@ -59,6 +59,7 @@ describe('General settings page', function () {
                 ->has('settings.timezone')
                 ->has('settings.lease_id_prefix')
                 ->has('settings.invoice_id_prefix')
+                ->has('settings.invoice_pdf_enabled')
                 ->has('timezone_list')
             );
     });
@@ -75,6 +76,7 @@ describe('General settings page', function () {
                 'timezone' => 'America/New_York',
                 'lease_id_prefix' => 'LSE',
                 'invoice_id_prefix' => 'INV',
+                'invoice_pdf_enabled' => true,
             ])
             ->assertRedirect(route('settings.general.edit'));
 
@@ -85,6 +87,7 @@ describe('General settings page', function () {
         expect(Setting::get('timezone'))->toBe('America/New_York');
         expect(Setting::get('lease_id_prefix'))->toBe('LSE');
         expect(Setting::get('invoice_id_prefix'))->toBe('INV');
+        expect(Setting::get('invoice_pdf_enabled'))->toBeTrue();
     });
 
     it('validates country_code is 2 uppercase letters', function () {

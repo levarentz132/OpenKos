@@ -28,6 +28,7 @@ class GeneralController extends Controller
                 'timezone',
                 'lease_id_prefix',
                 'invoice_id_prefix',
+                'invoice_pdf_enabled',
             ]),
             'timezone_list' => timezone_identifiers_list(),
         ]);
@@ -43,6 +44,7 @@ class GeneralController extends Controller
             'timezone' => ['sometimes', 'required', 'string', Rule::in(timezone_identifiers_list())],
             'lease_id_prefix' => ['sometimes', 'required', 'string', 'max:10', 'regex:/^[A-Z]+$/'],
             'invoice_id_prefix' => ['sometimes', 'required', 'string', 'max:10', 'regex:/^[A-Z]+$/'],
+            'invoice_pdf_enabled' => ['sometimes', 'boolean'],
         ]);
 
         $this->updateSettings->execute($validated, $request->user());

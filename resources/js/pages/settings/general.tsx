@@ -17,6 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import {
     edit as editGeneral,
     update as updateGeneral,
@@ -34,6 +35,7 @@ export default function General({
         timezone: string;
         lease_id_prefix: string;
         invoice_id_prefix: string;
+        invoice_pdf_enabled: boolean;
     };
     timezone_list: string[];
 }) {
@@ -51,6 +53,10 @@ export default function General({
     const referenceForm = useForm({
         lease_id_prefix: settings.lease_id_prefix,
         invoice_id_prefix: settings.invoice_id_prefix,
+    });
+
+    const invoicePdfForm = useForm({
+        invoice_pdf_enabled: settings.invoice_pdf_enabled,
     });
 
     return (
@@ -249,6 +255,58 @@ export default function General({
                             <AppearanceTabs />
                         </CardContent>
                     </Card>
+
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            invoicePdfForm.transform((data) => ({
+                                invoice_pdf_enabled: data.invoice_pdf_enabled
+                                    ? '1'
+                                    : '0',
+                            }));
+                            invoicePdfForm.submit(updateGeneral());
+                        }}
+                    >
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Invoice PDFs</CardTitle>
+                                <CardDescription>
+                                    PDF generation runs in the queue and needs a
+                                    running worker when enabled.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <Switch
+                                        id="invoice_pdf_enabled"
+                                        checked={
+                                            invoicePdfForm.data
+                                                .invoice_pdf_enabled
+                                        }
+                                        onCheckedChange={(checked) =>
+                                            invoicePdfForm.setData(
+                                                'invoice_pdf_enabled',
+                                                checked,
+                                            )
+                                        }
+                                    />
+                                    <Label htmlFor="invoice_pdf_enabled">
+                                        {invoicePdfForm.data.invoice_pdf_enabled
+                                            ? 'Invoice PDF generation is enabled'
+                                            : 'Invoice PDF generation is disabled'}
+                                    </Label>
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                    {invoicePdfForm.data.invoice_pdf_enabled
+                                        ? 'Invoice PDFs are generated in the background, stored privately, and reused for downloads and supported reminders.'
+                                        : 'Invoices remain available as web pages. Use the browser print or save-as-PDF flow; reminders include the invoice link without an attachment.'}
+                                </p>
+                                <Button disabled={invoicePdfForm.processing}>
+                                    Save
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </form>
 
                     <form
                         onSubmit={(e) => {

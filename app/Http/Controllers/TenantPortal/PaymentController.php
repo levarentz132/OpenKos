@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\TenantPortal;
 
-use App\Actions\Invoices\GenerateInvoicePdf;
 use App\Actions\Payments\RecordPayment;
 use App\Data\Payment\RecordPaymentData;
 use App\Enums\InvoiceStatus;
@@ -12,9 +11,13 @@ use App\Exceptions\PaymentOverflowException;
 use App\Http\Requests\Payment\StoreTenantPortalPaymentRequest;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Setting;
+use App\Services\Invoices\InvoicePdfArtifact;
+use Illuminate\Contracts\View\View as ViewContract;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 use OpenKOS\Core\Events\PaymentRecorded as PlatformPaymentRecorded;
@@ -149,15 +152,20 @@ class PaymentController extends TenantPortalController
         ]);
     }
 
-    public function invoice(Request $request, Invoice $invoice): Response
+    public function invoice(Request $request, Invoice $invoice, InvoicePdfArtifact $artifact): Response
     {
         $this->ensureTenantOwnsInvoice($request, $invoice);
 
         $invoice->load(['lease.unit.property', 'lineItems', 'payments']);
         $invoice->append(['outstanding', 'display_status']);
+        $invoicePdfStatus = $artifact->status($invoice);
+        if ($invoicePdfStatus === 'pending') {
+            $artifact->ensureQueued($invoice);
+        }
 
         return Inertia::render('tenant-portal/payments/invoice', [
             'invoice' => $invoice,
+            'invoicePdf' => ['status' => $invoicePdfStatus],
             'lease' => [
                 'reference' => $invoice->lease->reference,
                 'unit_name' => $invoice->lease->unit?->name,
@@ -166,35 +174,53 @@ class PaymentController extends TenantPortalController
         ]);
     }
 
-    public function download(Request $request, Invoice $invoice, GenerateInvoicePdf $action): StreamedResponse
+    public function download(Request $request, Invoice $invoice, InvoicePdfArtifact $artifact): StreamedResponse|RedirectResponse
     {
         $this->ensureTenantOwnsInvoice($request, $invoice);
 
-        $invoice->load([
-            'lease.primaryTenant.user',
-            'lease.unit.property',
-            'lineItems',
-            'payments' => fn ($query) => $query
-                ->where('status', PaymentStatus::Confirmed->value)
-                ->orderBy('payment_date')
-                ->orderBy('id'),
-        ]);
-        $invoice->append(['outstanding', 'display_status']);
+        if ($artifact->status($invoice) !== 'available') {
+            $artifact->ensureQueued($invoice);
 
-        $pdf = $action->execute($invoice);
+            return redirect()->route('portal.billing.invoices.show', $invoice);
+        }
+
         $reference = preg_replace(
             '/[^A-Za-z0-9_-]/',
             '-',
             $invoice->reference ?? (string) $invoice->getKey(),
         );
 
-        return response()->streamDownload(
-            static function () use ($pdf): void {
-                echo $pdf;
-            },
+        return Storage::disk('local')->download(
+            $artifact->path($invoice),
             "invoice-{$reference}.pdf",
             ['Content-Type' => 'application/pdf'],
         );
+    }
+
+    public function print(Request $request, Invoice $invoice): ViewContract
+    {
+        $this->ensureTenantOwnsInvoice($request, $invoice);
+
+        $invoice->load([
+            'lease.primaryTenant.user',
+            'lease.unit.property.city',
+            'lease.unit.property.region',
+            'lineItems',
+            'payments' => fn ($query) => $query
+                ->where('status', PaymentStatus::Confirmed)
+                ->orderBy('payment_date')
+                ->orderBy('id'),
+        ]);
+        $invoice->append(['outstanding', 'display_status']);
+        $settings = Setting::some(['site_name', 'locale', 'currency']);
+
+        return view('invoices.pdf', [
+            'autoPrint' => true,
+            'currency' => $settings['currency'] ?? 'IDR',
+            'invoice' => $invoice,
+            'locale' => $settings['locale'] ?? 'id',
+            'siteName' => $settings['site_name'] ?? config('app.name'),
+        ]);
     }
 
     public function store(StoreTenantPortalPaymentRequest $request, RecordPayment $action): RedirectResponse

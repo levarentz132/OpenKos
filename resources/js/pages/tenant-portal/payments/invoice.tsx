@@ -1,5 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
-import { ChevronLeft, Download } from 'lucide-react';
+import { ChevronLeft, Download, Printer } from 'lucide-react';
 import { useState } from 'react';
 import SubmitPortalPaymentSheet from '@/components/features/payments/submit-portal-payment-sheet';
 import { StatusBadge } from '@/components/shared/status-badge';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants/billing';
 import { formatDate, formatPeriod, formatPrice } from '@/lib/formatters';
 import { index } from '@/routes/portal/billing';
-import { download } from '@/routes/portal/billing/invoices';
+import { download, print } from '@/routes/portal/billing/invoices';
 import type { Invoice, Payment } from '@/types';
 
 type InvoiceLease = {
@@ -20,9 +20,13 @@ type InvoiceLease = {
 export default function InvoiceDetail({
     invoice,
     lease,
+    invoicePdf,
 }: {
     invoice: Invoice;
     lease: InvoiceLease;
+    invoicePdf: {
+        status: 'disabled' | 'pending' | 'available';
+    };
 }) {
     const [paymentOpen, setPaymentOpen] = useState(false);
     const isPayable = ['pending', 'partial'].includes(invoice.status);
@@ -213,16 +217,47 @@ export default function InvoiceDetail({
                                     Pay invoice
                                 </Button>
                             )}
-                            <Button
-                                asChild
-                                className="w-full"
-                                variant="outline"
-                            >
-                                <a href={download.url(invoice)}>
-                                    <Download className="size-4" />
-                                    Download PDF
-                                </a>
-                            </Button>
+                            {invoicePdf.status === 'available' ? (
+                                <Button
+                                    asChild
+                                    className="w-full"
+                                    variant="outline"
+                                >
+                                    <a href={download.url(invoice)}>
+                                        <Download className="size-4" />
+                                        Download PDF
+                                    </a>
+                                </Button>
+                            ) : invoicePdf.status === 'pending' ? (
+                                <>
+                                    <Button
+                                        className="w-full"
+                                        variant="outline"
+                                        disabled
+                                    >
+                                        PDF pending
+                                    </Button>
+                                    <p className="text-xs text-muted-foreground">
+                                        A queue worker is preparing this PDF.
+                                        Refresh this page when it is ready.
+                                    </p>
+                                </>
+                            ) : (
+                                <Button
+                                    asChild
+                                    className="w-full"
+                                    variant="outline"
+                                >
+                                    <a
+                                        href={print.url(invoice)}
+                                        rel="noreferrer"
+                                        target="_blank"
+                                    >
+                                        <Printer className="size-4" />
+                                        Print / Save as PDF
+                                    </a>
+                                </Button>
+                            )}
                         </div>
                     </aside>
                 </div>

@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'status',
     'total',
     'amount_paid',
+    'invoice_pdf_fingerprint',
 ])]
 class Invoice extends Model
 {

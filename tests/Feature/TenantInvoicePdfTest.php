@@ -2,14 +2,34 @@
 
 use App\Actions\Invoices\GenerateInvoicePdf;
 use App\Enums\InvoiceStatus;
+use App\Jobs\GenerateInvoicePdfArtifact;
 use App\Models\Invoice;
 use App\Models\Lease;
 use App\Models\Payment;
 use App\Models\Property;
+use App\Models\Setting;
 use App\Models\Tenant;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\Invoices\InvoicePdfArtifact;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Number;
+
+uses()->beforeEach(function () {
+    Setting::set('invoice_pdf_enabled', true, 'boolean');
+    Storage::fake('local');
+});
+
+function prepareTenantInvoicePdf(Invoice $invoice): void
+{
+    $artifact = app(InvoicePdfArtifact::class);
+
+    GenerateInvoicePdfArtifact::dispatchSync(
+        $invoice->getKey(),
+        $artifact->fingerprint($invoice),
+    );
+}
 
 function createTenantInvoicePdfFixture(?User $user = null): array
 {
@@ -62,6 +82,7 @@ test('tenant downloads their current invoice as a PDF', function () {
         'description' => 'Rent August 2026',
         'amount' => $invoice->total,
     ]);
+    prepareTenantInvoicePdf($invoice);
 
     $response = $this->actingAs($fixture['user'])
         ->get(route('portal.billing.invoices.download', $invoice));
@@ -87,6 +108,85 @@ test('invoice PDF download preserves tenant ownership rules', function () {
     $this->actingAs(User::factory()->create())
         ->get(route('portal.billing.invoices.download', $fixture['invoice']))
         ->assertForbidden();
+});
+
+test('tenant can open a print-ready invoice page', function () {
+    $fixture = createTenantInvoicePdfFixture();
+    $invoice = $fixture['invoice'];
+    $invoice->lineItems()->create([
+        'type' => 'rent',
+        'description' => 'Rent August 2026',
+        'amount' => $invoice->total,
+    ]);
+
+    $this->actingAs($fixture['user'])
+        ->get(route('portal.billing.invoices.print', $invoice))
+        ->assertOk()
+        ->assertSee($invoice->reference)
+        ->assertSee('Rent August 2026')
+        ->assertSee('window.print()');
+});
+
+test('invoice print page preserves tenant ownership rules', function () {
+    $fixture = createTenantInvoicePdfFixture();
+    $otherUser = User::factory()->create();
+    Tenant::factory()->withUser($otherUser)->create();
+
+    $this->actingAs($otherUser)
+        ->get(route('portal.billing.invoices.print', $fixture['invoice']))
+        ->assertNotFound();
+});
+
+test('disabled invoice PDFs leave the invoice page usable without queueing work', function () {
+    Setting::set('invoice_pdf_enabled', false, 'boolean');
+    Bus::fake();
+    $fixture = createTenantInvoicePdfFixture();
+
+    $this->actingAs($fixture['user'])
+        ->get(route('portal.billing.invoices.show', $fixture['invoice']))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('invoicePdf.status', 'disabled'));
+
+    Bus::assertNotDispatched(GenerateInvoicePdfArtifact::class);
+
+    $this->actingAs($fixture['user'])
+        ->get(route('portal.billing.invoices.download', $fixture['invoice']))
+        ->assertRedirect(route('portal.billing.invoices.show', $fixture['invoice']));
+});
+
+test('enabled invoice PDFs queue when the private artifact is missing', function () {
+    Bus::fake();
+    $fixture = createTenantInvoicePdfFixture();
+
+    $this->actingAs($fixture['user'])
+        ->get(route('portal.billing.invoices.show', $fixture['invoice']))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('invoicePdf.status', 'pending'));
+
+    Bus::assertDispatched(GenerateInvoicePdfArtifact::class);
+});
+
+test('invoice PDF artifacts are reused until rendered invoice data changes', function () {
+    $fixture = createTenantInvoicePdfFixture();
+    $invoice = $fixture['invoice'];
+    prepareTenantInvoicePdf($invoice);
+
+    $this->actingAs($fixture['user'])
+        ->get(route('portal.billing.invoices.download', $invoice))
+        ->assertOk();
+
+    $invoice->lineItems()->create([
+        'type' => 'rent',
+        'description' => 'Updated charge',
+        'amount' => '100.00',
+    ]);
+
+    Bus::fake();
+    $this->actingAs($fixture['user'])
+        ->get(route('portal.billing.invoices.show', $invoice))
+        ->assertInertia(fn ($page) => $page->where('invoicePdf.status', 'pending'));
+
+    Bus::assertDispatched(GenerateInvoicePdfArtifact::class);
 });
 
 test('invoice PDF view reflects the current aggregate for each payable state', function (
@@ -204,6 +304,7 @@ test('invoice PDF handles missing references and line items', function () {
     $invoice->update(['reference' => null]);
     $invoice->load(['lease.unit.property', 'lineItems']);
     $invoice->append(['outstanding', 'display_status']);
+    prepareTenantInvoicePdf($invoice);
 
     expect(renderTenantInvoicePdfView($invoice))
         ->toContain("#{$invoice->id}")
