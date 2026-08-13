@@ -3311,16 +3311,16 @@
         },
         {
             "name": "openkos/platform",
-            "version": "0.1.1",
+            "version": "0.1.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/senatroxx/openkos-platform.git",
-                "reference": "31db53d706184f4caba70bac1da331028b96fd59"
+                "reference": "1cddafa76ad5a83c8f496f7d1fe71bc0d671e13b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/senatroxx/openkos-platform/zipball/31db53d706184f4caba70bac1da331028b96fd59",
-                "reference": "31db53d706184f4caba70bac1da331028b96fd59",
+                "url": "https://api.github.com/repos/senatroxx/openkos-platform/zipball/1cddafa76ad5a83c8f496f7d1fe71bc0d671e13b",
+                "reference": "1cddafa76ad5a83c8f496f7d1fe71bc0d671e13b",
                 "shasum": ""
             },
             "require": {
@@ -3351,28 +3351,16 @@
                     "OpenKOS\\": "src/"
                 }
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "Tests\\": "tests/"
-                }
-            },
-            "scripts": {
-                "test": [
-                    "pest --compact"
-                ],
-                "lint": [
-                    "pint"
-                ]
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "Apache-2.0"
             ],
             "description": "The OpenKOS platform and plugin SDK.",
             "support": {
-                "source": "https://github.com/senatroxx/openkos-platform/tree/v0.1.1",
-                "issues": "https://github.com/senatroxx/openkos-platform/issues"
+                "issues": "https://github.com/senatroxx/openkos-platform/issues",
+                "source": "https://github.com/senatroxx/openkos-platform/tree/v0.1.2"
             },
-            "time": "2026-08-11T14:23:41+00:00"
+            "time": "2026-08-13T11:04:37+00:00"
         },
         {
             "name": "paragonie/constant_time_encoding",

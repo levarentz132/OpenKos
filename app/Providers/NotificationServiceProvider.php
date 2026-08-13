@@ -8,6 +8,7 @@ use App\Services\WhatsAppManager;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
+use OpenKOS\Platform\Notification\NotificationRegistry;
 
 class NotificationServiceProvider extends ServiceProvider
 {
@@ -50,6 +51,33 @@ class NotificationServiceProvider extends ServiceProvider
 
     private function resolveLaravelMailer(string $driver): string
     {
+        $registration = $this->app->make(NotificationRegistry::class)->driver('mail', $driver);
+
+        if ($registration) {
+            if ($registration->laravelMailer === null) {
+                Log::warning('OpenKOS mail driver has no Laravel mailer capability; falling back to Laravel log mailer.', [
+                    'driver' => $driver,
+                    'fallback' => 'log',
+                    'reason' => 'missing_capability',
+                ]);
+
+                return 'log';
+            }
+
+            if (array_key_exists($registration->laravelMailer, config('mail.mailers', []))) {
+                return $registration->laravelMailer;
+            }
+
+            Log::warning('Configured Laravel mailer for OpenKOS mail driver is unavailable; falling back to Laravel log mailer.', [
+                'driver' => $driver,
+                'mailer' => $registration->laravelMailer,
+                'fallback' => 'log',
+                'reason' => 'invalid_capability',
+            ]);
+
+            return 'log';
+        }
+
         $mailer = match ($driver) {
             'openkos/smtp', 'smtp' => 'smtp',
             'openkos/log', 'log' => 'log',
@@ -63,6 +91,7 @@ class NotificationServiceProvider extends ServiceProvider
         Log::warning('Unknown mail driver; falling back to Laravel log mailer.', [
             'driver' => $driver,
             'fallback' => 'log',
+            'reason' => 'unknown_driver',
         ]);
 
         return 'log';
