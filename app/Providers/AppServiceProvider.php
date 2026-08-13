@@ -2,7 +2,6 @@
 
 namespace App\Providers;
 
-use App\Database\PostgresConnection;
 use App\Enums\PaymentStatus;
 use App\Events\Maintenance\MaintenanceTicketCreated;
 use App\Events\Maintenance\MaintenanceTicketUpdated;
@@ -12,46 +11,21 @@ use App\Models\MaintenanceTicket;
 use App\Models\Setting;
 use App\Notifications\RentReminder;
 use App\Notifications\TenantPortalNotification;
-use App\Services\Platform\ComposerPluginDiscovery;
-use App\Services\Settings\PlatformSettingsStore;
-use App\Services\Settings\SettingManager;
-use App\Services\WhatsAppManager;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Login;
-use Illuminate\Database\Connection;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
-use OpenKOS\Core\Contracts\PluginDiscovery;
-use OpenKOS\Core\Contracts\SettingsStore;
-use OpenKOS\Platform\OpenKOSManager;
-use OpenKOS\Platform\Settings\SettingsPage;
 
 class AppServiceProvider extends ServiceProvider
 {
-    public function register(): void
-    {
-        $this->app->singleton(SettingManager::class);
-        $this->app->singleton(PluginDiscovery::class, ComposerPluginDiscovery::class);
-        $this->app->singleton(SettingsStore::class, PlatformSettingsStore::class);
-        $this->app->singleton(MailManager::class);
-        $this->app->singleton(WhatsAppManager::class);
-
-        Connection::resolverFor('pgsql', fn ($pdo, $database, $prefix, $config) => new PostgresConnection($pdo, $database, $prefix, $config));
-    }
-
     public function boot(): void
     {
         $this->configureDefaults();
         $this->configureAuthEvents();
-        $this->configureMail();
         $this->configureDomainEvents();
-        $this->app->booted(function (): void {
-            $this->registerPlatformSettingsPages();
-        });
     }
 
     protected function configureDefaults(): void
@@ -78,32 +52,6 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(Login::class, function (Login $event): void {
             $event->user->forceFill(['last_login_at' => now()])->save();
         });
-    }
-
-    protected function configureMail(): void
-    {
-        try {
-            $config = Setting::effectiveMailConfig();
-        } catch (QueryException) {
-            return;
-        }
-
-        config()->set('mail.default', $config['driver'] ?? 'log');
-
-        config()->set('mail.mailers.smtp.host', $config['host'] ?? '');
-        config()->set('mail.mailers.smtp.port', $config['port'] ?? 587);
-        config()->set('mail.mailers.smtp.username', $config['username'] ?? '');
-        config()->set('mail.mailers.smtp.password', $config['password'] ?? '');
-        $encryption = $config['encryption'] ?? null;
-        if ($encryption === 'null') {
-            $encryption = null;
-        }
-        config()->set('mail.mailers.smtp.encryption', $encryption);
-
-        if ($fromAddress = $config['from_address'] ?? null) {
-            config()->set('mail.from.address', $fromAddress);
-            config()->set('mail.from.name', $config['from_name'] ?? '');
-        }
     }
 
     protected function configureDomainEvents(): void
@@ -148,17 +96,6 @@ class AppServiceProvider extends ServiceProvider
 
             $tenant->notify(new RentReminder($event->event));
         });
-    }
-
-    private function registerPlatformSettingsPages(): void
-    {
-        app(OpenKOSManager::class)->settings()
-            ->registerPage(new SettingsPage('profile', 'Profile', '/settings/profile', ownerOnly: false, group: 'Account', order: 100, routeName: 'profile.edit'))
-            ->registerPage(new SettingsPage('security', 'Security', '/settings/security', ownerOnly: false, group: 'Account', order: 200, routeName: 'security.edit'))
-            ->registerPage(new SettingsPage('general', 'General', '/settings/general', group: 'Preferences', order: 100, routeName: 'settings.general.edit'))
-            ->registerPage(new SettingsPage('reminders', 'Reminders', '/settings/reminders', group: 'Preferences', order: 300, routeName: 'settings.reminders.edit'))
-            ->registerPage(new SettingsPage('property-types', 'Property Types', '/settings/property-types', group: 'Property', order: 100, routeName: 'settings.property-types.index'))
-            ->registerPage(new SettingsPage('mail', 'Mail', '/settings/mail', group: 'Integrations', order: 100, routeName: 'settings.mail.edit'));
     }
 
     private function notifyMaintenanceTenant(MaintenanceTicket $ticket, string $type): void
