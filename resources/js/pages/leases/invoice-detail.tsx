@@ -1,19 +1,25 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Download, Printer } from 'lucide-react';
 import { useState } from 'react';
 import { PaymentDetailSheet } from '@/components/features';
 import { DocumentPreview } from '@/components/shared';
 import { StatusBadge } from '@/components/shared/status-badge';
+import { Button } from '@/components/ui/button';
 import { formatDate, formatPeriod, formatPrice } from '@/lib/formatters';
+import invoiceRoutes from '@/routes/leases/workspace/invoices';
 import paymentRoutes from '@/routes/payments';
 import type { Invoice, Payment, PaymentProof, WorkspaceLease } from '@/types';
 
 export default function InvoiceDetail({
     lease,
     invoice,
+    invoicePdf,
 }: {
     lease: WorkspaceLease;
     invoice: Invoice;
+    invoicePdf: {
+        status: 'disabled' | 'pending' | 'available';
+    };
 }) {
     const { auth } = usePage<{ auth: { permissions: string[] } }>().props;
     const [verifyingId, setVerifyingId] = useState<number | null>(null);
@@ -80,7 +86,7 @@ export default function InvoiceDetail({
             <div className="flex-1 space-y-6">
                 {/* Summary card */}
                 <div className="rounded-lg border p-6">
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-4">
                         <div>
                             <h2 className="text-lg font-semibold">
                                 {invoice.reference ?? 'Invoice'}
@@ -89,10 +95,43 @@ export default function InvoiceDetail({
                                 {formatPeriod(invoice.period_start, 'id-ID')}
                             </p>
                         </div>
-                        <StatusBadge
-                            domain="invoice"
-                            value={invoice.display_status ?? invoice.status}
-                        />
+                        <div className="flex flex-col items-end gap-3">
+                            <StatusBadge
+                                domain="invoice"
+                                value={invoice.display_status ?? invoice.status}
+                            />
+                            {invoicePdf.status === 'available' ? (
+                                <Button asChild size="sm" variant="outline">
+                                    <a
+                                        href={invoiceRoutes.download.url([
+                                            lease,
+                                            invoice,
+                                        ])}
+                                    >
+                                        <Download className="size-4" />
+                                        Download PDF
+                                    </a>
+                                </Button>
+                            ) : invoicePdf.status === 'pending' ? (
+                                <Button disabled size="sm" variant="outline">
+                                    PDF pending
+                                </Button>
+                            ) : (
+                                <Button asChild size="sm" variant="outline">
+                                    <a
+                                        href={invoiceRoutes.print.url([
+                                            lease,
+                                            invoice,
+                                        ])}
+                                        rel="noreferrer"
+                                        target="_blank"
+                                    >
+                                        <Printer className="size-4" />
+                                        Print / Save as PDF
+                                    </a>
+                                </Button>
+                            )}
+                        </div>
                     </div>
 
                     <div className="mt-6 grid grid-cols-3 gap-4 text-sm">
@@ -198,10 +237,12 @@ export default function InvoiceDetail({
                     </div>
                 )}
 
-                {/* Timeline placeholder */}
-                <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    Activity timeline, reminders, and PDF download coming soon.
-                </div>
+                {invoicePdf.status === 'pending' && (
+                    <p className="text-right text-xs text-muted-foreground">
+                        A queue worker is preparing this PDF. Refresh this page
+                        when it is ready.
+                    </p>
+                )}
             </div>
 
             <PaymentDetailSheet

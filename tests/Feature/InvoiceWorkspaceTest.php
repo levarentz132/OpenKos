@@ -1,19 +1,36 @@
 <?php
 
 use App\Enums\InvoiceStatus;
+use App\Jobs\GenerateInvoicePdfArtifact;
 use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
 use App\Models\Lease;
 use App\Models\Payment;
 use App\Models\PaymentProof;
+use App\Models\Setting;
 use App\Models\User;
+use App\Services\Invoices\InvoicePdfArtifact;
 use Database\Seeders\RegionAndCitySeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Storage;
 
 uses()->beforeEach(function () {
     $this->seed([RoleAndPermissionSeeder::class, RegionAndCitySeeder::class]);
     $this->owner = User::factory()->owner()->create();
+    Setting::set('invoice_pdf_enabled', true, 'boolean');
+    Storage::fake('local');
 });
+
+function prepareWorkspaceInvoicePdf(Invoice $invoice): void
+{
+    $artifact = app(InvoicePdfArtifact::class);
+
+    GenerateInvoicePdfArtifact::dispatchSync(
+        $invoice->getKey(),
+        $artifact->fingerprint($invoice),
+    );
+}
 
 describe('invoice workspace index', function () {
     it('lists invoices for a lease', function () {
@@ -124,5 +141,56 @@ describe('invoice workspace show', function () {
         $this->actingAs($this->owner)
             ->get(route('leases.workspace.invoices.show', [$lease, $invoice]))
             ->assertNotFound();
+    });
+
+    it('queues and exposes invoice PDF status', function () {
+        Bus::fake();
+        $lease = Lease::factory()->create();
+        $invoice = Invoice::factory()->create(['lease_id' => $lease->id]);
+
+        $this->actingAs($this->owner)
+            ->get(route('leases.workspace.invoices.show', [$lease, $invoice]))
+            ->assertInertia(fn ($page) => $page->where('invoicePdf.status', 'pending'));
+
+        Bus::assertDispatched(GenerateInvoicePdfArtifact::class);
+    });
+
+    it('downloads a generated invoice PDF', function () {
+        $lease = Lease::factory()->create();
+        $invoice = Invoice::factory()->create(['lease_id' => $lease->id]);
+        prepareWorkspaceInvoicePdf($invoice);
+
+        $response = $this->actingAs($this->owner)
+            ->get(route('leases.workspace.invoices.download', [$lease, $invoice]));
+
+        $response
+            ->assertOk()
+            ->assertStreamed()
+            ->assertDownload("invoice-{$invoice->reference}.pdf")
+            ->assertHeader('content-type', 'application/pdf');
+    });
+
+    it('opens a print-ready invoice PDF page', function () {
+        $lease = Lease::factory()->create();
+        $invoice = Invoice::factory()->create(['lease_id' => $lease->id]);
+
+        $this->actingAs($this->owner)
+            ->get(route('leases.workspace.invoices.print', [$lease, $invoice]))
+            ->assertOk()
+            ->assertSee($invoice->reference)
+            ->assertSee('window.print()');
+    });
+
+    it('uses print fallback when invoice PDF generation is disabled', function () {
+        Setting::set('invoice_pdf_enabled', false, 'boolean');
+        Bus::fake();
+        $lease = Lease::factory()->create();
+        $invoice = Invoice::factory()->create(['lease_id' => $lease->id]);
+
+        $this->actingAs($this->owner)
+            ->get(route('leases.workspace.invoices.show', [$lease, $invoice]))
+            ->assertInertia(fn ($page) => $page->where('invoicePdf.status', 'disabled'));
+
+        Bus::assertNotDispatched(GenerateInvoicePdfArtifact::class);
     });
 });
