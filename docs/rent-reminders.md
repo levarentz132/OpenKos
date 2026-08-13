@@ -36,7 +36,7 @@ Initially built with a feature folder (`app/Reminders/`), then refactored into l
 
 `PaymentReminderScheduler` is pure logic — takes a `Lease` and `ReminderSettings`, returns an array of `ReminderEvent` value objects. It knows nothing about persistence or notifications.
 
-`SendRentReminders` Action calls the scheduler, feeds events to `ReminderRepository::recordIfAbsent()`, and dispatches `RentReminder` notification only for events that were successfully recorded (not duplicates).
+`SendRentReminders` Action calls the scheduler, feeds events to `ReminderRepository::recordIfAbsent()`, and dispatches `InvoiceReminderDispatched` only for events that were successfully recorded (not duplicates). `App\Listeners\SendInvoiceReminder` handles the event and sends the `RentReminder` notification through the configured channels.
 
 **Rationale:** Separates concerns — scheduler is testable without DB, repository handles dedup, action orchestrates the pipeline.
 
@@ -84,7 +84,7 @@ Scheduler methods accept `CarbonInterface` instead of `Carbon`.
 
 ### 11. Manual Send Goes Through ForceSendReminder Action
 
-`LeaseController::sendReminder()` delegates to `ForceSendReminder` Action, which first tries `PaymentReminderScheduler::pendingFor()` to find already-scheduled but unlogged events. If none exist, it falls back to the first payable invoice and creates a one-off `ReminderEvent`. In either case it records the log via `ReminderRepository::recordIfAbsent()` and dispatches `InvoiceReminderDispatched`. A listener in `AppServiceProvider` picks up that event and performs the actual notification delivery.
+`LeaseController::sendReminder()` delegates to `ForceSendReminder` Action, which first tries `PaymentReminderScheduler::pendingFor()` to find already-scheduled but unlogged events. If none exist, it falls back to the first payable invoice and creates a one-off `ReminderEvent`. In either case it records the log via `ReminderRepository::recordIfAbsent()` and dispatches `InvoiceReminderDispatched`. `App\Listeners\SendInvoiceReminder` picks up that event and performs the actual notification delivery.
 
 **Rationale:** Manual send is a one-off action for the landlord — send one reminder right now, regardless of whether the automated scheduler would have sent one. The scheduled-path fallback ensures consistency: manual send reuses the same event types, dedup, and logging as the automated path. Dispatching `InvoiceReminderDispatched` instead of calling `notifyNow()` directly lets the same listener handle both scheduled and manual sends, keeping channel resolution in one place.
 
@@ -106,7 +106,7 @@ Schedule (routes/console.php)
             │    └─ $lease->invoices()->payable()
             ├─ ReminderRepository::recordIfAbsent()
             └─ InvoiceReminderDispatched::dispatch()
-                 └─ AppServiceProvider listener
+                 └─ SendInvoiceReminder listener
                       └─ Notification delivery (WhatsApp, mail, etc.)
 
 Manual Send (LeaseController)
@@ -116,7 +116,7 @@ Manual Send (LeaseController)
             │    └─ $lease->invoices()->payable()
             ├─ ReminderRepository::recordIfAbsent()
             └─ InvoiceReminderDispatched::dispatch()
-                 └─ AppServiceProvider listener
+                 └─ SendInvoiceReminder listener
                       └─ Notification delivery (WhatsApp, mail, etc.)
 ```
 
