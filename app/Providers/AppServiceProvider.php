@@ -8,6 +8,7 @@ use App\Events\Maintenance\MaintenanceTicketUpdated;
 use App\Events\Payment\PaymentStatusChanged;
 use App\Events\Reminder\InvoiceReminderDispatched;
 use App\Models\MaintenanceTicket;
+use App\Models\Setting;
 use App\Notifications\RentReminder;
 use App\Notifications\TenantPortalNotification;
 use Carbon\CarbonImmutable;
