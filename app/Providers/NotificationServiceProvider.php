@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Services\MailManager;
 use App\Services\WhatsAppManager;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 
 class NotificationServiceProvider extends ServiceProvider
@@ -29,7 +30,7 @@ class NotificationServiceProvider extends ServiceProvider
             return;
         }
 
-        config()->set('mail.default', $config['driver'] ?? 'log');
+        config()->set('mail.default', $this->resolveLaravelMailer($config['driver'] ?? 'log'));
 
         config()->set('mail.mailers.smtp.host', $config['host'] ?? '');
         config()->set('mail.mailers.smtp.port', $config['port'] ?? 587);
@@ -45,5 +46,25 @@ class NotificationServiceProvider extends ServiceProvider
             config()->set('mail.from.address', $fromAddress);
             config()->set('mail.from.name', $config['from_name'] ?? '');
         }
+    }
+
+    private function resolveLaravelMailer(string $driver): string
+    {
+        $mailer = match ($driver) {
+            'openkos/smtp', 'smtp' => 'smtp',
+            'openkos/log', 'log' => 'log',
+            default => $driver,
+        };
+
+        if (array_key_exists($mailer, config('mail.mailers', []))) {
+            return $mailer;
+        }
+
+        Log::warning('Unknown mail driver; falling back to Laravel log mailer.', [
+            'driver' => $driver,
+            'fallback' => 'log',
+        ]);
+
+        return 'log';
     }
 }
