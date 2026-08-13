@@ -157,7 +157,7 @@ Payments settle invoices — `payments` has an `invoice_id` FK (not polymorphic)
 
 ### Reminders
 
-Reminders are scheduled by `SendRentRemindersCommand` (daily at 08:00), which calls `SendRentReminders` Action. The Action iterates active leases, calls `PaymentReminderScheduler` to generate events, records them in `reminder_logs` (deduped via unique constraint), and dispatches `RentReminder` via WhatsApp. Manual sending from the lease detail sheet bypasses the scheduler — sends one reminder immediately via `notifyNow()`. See `docs/rent-reminders.md`.
+Reminders are scheduled by `SendRentRemindersCommand` (daily at 08:00), which calls `SendRentReminders` Action. The Action iterates active leases, calls `PaymentReminderScheduler` to generate events, records them in `reminder_logs` (deduped via unique constraint), and dispatches `InvoiceReminderDispatched`. The `SendInvoiceReminder` listener sends `RentReminder` through the configured channels. Manual sending from the lease detail sheet bypasses the scheduler but uses the same event and listener pipeline. See `docs/rent-reminders.md`.
 
 ## Authentication & Authorization
 

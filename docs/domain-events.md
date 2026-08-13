@@ -76,7 +76,7 @@ public readonly ?int $actorId;      // ID of the acting user, null for system-tr
 | -------------------------------------- | ----------------------- | ------------------------------------- |
 | `Reminder\InvoiceReminderDispatched`   | `ReminderEvent $event`  | `SendRentReminders`, `ForceSendReminder` |
 
-`InvoiceReminderDispatched` fires to trigger a rent reminder notification — one event per reminder log entry created. The actual notification delivery (WhatsApp, mail, etc.) is handled by a listener in `AppServiceProvider`. Plugin consumers can use this event for analytics, tenant-facing notification history, or cross-channel relay, but should note it fires before delivery completes — it is not a delivery confirmation.
+`InvoiceReminderDispatched` fires to trigger a rent reminder notification — one event per reminder log entry created. The actual notification delivery (WhatsApp, mail, etc.) is handled by `App\Listeners\SendInvoiceReminder`. Plugin consumers can use this event for analytics, tenant-facing notification history, or cross-channel relay, but should note it fires before delivery completes — it is not a delivery confirmation.
 
 ### Settings
 

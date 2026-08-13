@@ -5,6 +5,7 @@ use App\Enums\PaymentStatus;
 use App\Enums\ReminderType;
 use App\Events\Maintenance\MaintenanceTicketUpdated;
 use App\Events\Payment\PaymentStatusChanged;
+use App\Events\Reminder\InvoiceReminderDispatched;
 use App\Models\Invoice;
 use App\Models\Lease;
 use App\Models\MaintenanceTicket;
@@ -16,6 +17,7 @@ use App\Notifications\RentReminder;
 use App\Notifications\TenantPortalNotification;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Notification;
 
 uses()->beforeEach(function () {
     $this->seed(RoleAndPermissionSeeder::class);
@@ -98,6 +100,21 @@ test('payment confirmation creates a tenant notification', function () {
     expect($tenant->notifications()->where('type', 'payment_confirmed')->exists())->toBeTrue();
 });
 
+test('non-confirmed payment status changes do not notify tenants', function () {
+    $tenant = Tenant::factory()->withUser()->create();
+    $lease = Lease::factory()->create(['primary_tenant_id' => $tenant->id]);
+    $invoice = Invoice::factory()->create(['lease_id' => $lease->id]);
+    $payment = $invoice->payments()->create([
+        'amount' => 100000,
+        'payment_date' => now(),
+        'status' => PaymentStatus::Pending,
+    ]);
+
+    PaymentStatusChanged::dispatch($payment, PaymentStatus::Pending, PaymentStatus::Pending);
+
+    expect($tenant->notifications()->where('type', 'payment_confirmed')->exists())->toBeFalse();
+});
+
 test('rent reminder channels contain database only once', function () {
     Setting::set('reminder_channels', ['database', 'log'], 'array');
     $lease = Lease::factory()->create();
@@ -142,6 +159,39 @@ test('maintenance ticket creation creates a tenant notification', function () {
         ->assertRedirect();
 
     expect($tenant->notifications()->where('type', 'maintenance_created')->exists())->toBeTrue();
+});
+
+test('maintenance ticket updates create a tenant notification', function () {
+    $user = User::factory()->create();
+    $tenant = Tenant::factory()->withUser($user)->create();
+    $ticket = MaintenanceTicket::factory()->create([
+        'created_by' => $user->id,
+        'title' => 'Leaking faucet',
+    ]);
+
+    MaintenanceTicketUpdated::dispatch($ticket);
+
+    expect($tenant->notifications()->where('type', 'maintenance_updated')->exists())->toBeTrue();
+});
+
+test('invoice reminder events notify tenants with a configured route', function () {
+    Notification::fake();
+    Setting::set('reminder_channels', ['log'], 'array');
+
+    $lease = Lease::factory()->create();
+    $tenant = $lease->primaryTenant;
+    $event = new ReminderEvent(
+        lease: $lease,
+        type: ReminderType::Upcoming,
+        periodStart: today()->toDateString(),
+        periodEnd: today()->addMonth()->toDateString(),
+        dueDate: today()->addDays(3)->toDateString(),
+        amount: 100000,
+    );
+
+    InvoiceReminderDispatched::dispatch($event);
+
+    Notification::assertSentTo($tenant, RentReminder::class);
 });
 
 test('lease expiration command creates only one notification at thirty days', function () {
