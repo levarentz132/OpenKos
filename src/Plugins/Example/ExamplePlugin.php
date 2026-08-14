@@ -29,7 +29,7 @@ class ExamplePlugin extends Plugin
             name: 'Example Plugin',
             version: '1.0.0',
             description: 'Reference plugin demonstrating every extension point.',
-            coreVersion: '^0.1',
+            coreVersion: '^0.2',
         );
     }
 
