@@ -38,6 +38,7 @@ $expected = [
 
     // SET NULL — nullable audit/user references, record survives
     'payments' => ['invoice_id' => 'CASCADE', 'confirmed_by' => 'SET NULL', 'recorded_by' => 'SET NULL', 'verified_by' => 'SET NULL'],
+    'payment_attempts' => ['invoice_id' => 'CASCADE', 'payment_id' => 'SET NULL'],
     'invoices' => ['lease_id' => 'CASCADE'],
     'invoice_line_items' => ['invoice_id' => 'CASCADE'],
     'properties' => ['region_id' => 'SET NULL', 'city_id' => 'SET NULL'],

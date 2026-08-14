@@ -19,7 +19,7 @@ return [
     |
     */
 
-    'version' => InstalledVersions::getPrettyVersion('openkos/platform') ?: '0.1.0',
+    'version' => InstalledVersions::getPrettyVersion('openkos/platform') ?: '0.2.0',
 
     'discovery' => [
         // External plugin discovery is host policy and is enabled explicitly here.

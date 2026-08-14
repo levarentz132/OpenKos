@@ -15,6 +15,7 @@ We introduce an `invoices` aggregate between Lease and Payment: `Lease → Invoi
 
 - An invoice is the billing obligation: period, due date, `total`, `amount_paid`, status. Snapshot detail lives in `invoice_line_items` (currently a single `rent` line), so historical invoices stay accurate when lease pricing changes.
 - A payment settles exactly one invoice (`payments.invoice_id`, NOT NULL). The `paymentable` polymorph and payment period columns are gone. Payment proofs stay attached to payments.
+- Gateway checkout attempts are separate `payment_attempts` records. They snapshot the requested amount/currency, provider references, normalized provider status, expiry, and safe metadata, but never contribute to invoice totals. OPE-132 must atomically transition a settled attempt, create/link its canonical `Payment` through existing payment logic, and recalculate the invoice so a crash cannot leave a settled attempt without its accounting record.
 - Invoices are **materialized upfront by the scheduler**: `invoices:generate` runs daily at 01:00 and creates Pending invoices for each active lease up to a 2-month horizon, backed by a unique `(lease_id, period_start)` index for idempotency. Lease creation, renewal, and unit transfer generate synchronously so the UI never waits for the scheduler. Move-out cancels future untouched Pending invoices.
 - **Invariant:** the generation horizon (2 months) must stay ≥ the reminder lookahead, and the generator is scheduled before the 08:00 reminder run — reminders read only from invoices and must never encounter an un-invoiced period.
 - Due dates support **advance** (default: due within the billed period, on `rent_due_day`) and **arrears** (due one billing period after consumption) via `leases.billing_strategy`. The strategy only shifts due-date derivation in `Lease::schedule()`; the generation engine is strategy-agnostic.
@@ -31,4 +32,4 @@ Harder: invoice rows must exist before payment (the generator and its invariant 
 
 Given up: multi-invoice payments (one transfer covering several months needs splitting into one payment per invoice), and `Lease::schedule()` remains only as the period calculator feeding generation.
 
-Revisit when: deposits or non-rent charges become invoice types, a gateway needs webhook-driven settlement, or one-payment-many-invoices becomes a real workflow (introduce a payment allocation table then).
+Revisit when: deposits or non-rent charges become invoice types, or one-payment-many-invoices becomes a real workflow (introduce a payment allocation table then).

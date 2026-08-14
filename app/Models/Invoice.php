@@ -80,6 +80,11 @@ class Invoice extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function paymentAttempts(): HasMany
+    {
+        return $this->hasMany(PaymentAttempt::class);
+    }
+
     public function allocations(): HasMany
     {
         return $this->hasMany(PaymentAllocation::class);

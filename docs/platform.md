@@ -145,7 +145,7 @@ class MyPlugin extends Plugin
             id: 'acme/my-plugin',      // unique, vendor-namespaced
             name: 'My Plugin',
             version: '1.0.0',
-            coreVersion: '^0.1',        // constraint against config('platform.version')
+            coreVersion: '^0.2',        // constraint against config('platform.version')
             dependencies: [],           // ids of plugins that must load first
         );
     }
@@ -228,7 +228,7 @@ The package `PlatformServiceProvider::boot()`:
   `coreVersion`, `dependencies`. It's a PHP value object, not a JSON file — type-safe
   and IDE-navigable; a JSON manifest can wrap it later if external discovery needs one.
 - **Version compatibility**: `coreVersion` is checked against `config('platform.version')`
-  (currently `0.1.0`). Supported constraints: any Composer semver constraint supported by `composer/semver`
+  (currently `0.2.0`). Supported constraints: any Composer semver constraint supported by `composer/semver`
   (`*`, `^`, `~`, ranges, wildcards like `1.*`, `||`, …). Incompatible plugins fail fast at boot rather than
   half-loading.
 - **Dependencies**: a plugin lists other plugin **ids**; the loader guarantees they're
@@ -314,9 +314,9 @@ Mail drivers may optionally advertise the Laravel mailer they support:
 
 The plugin owns registration of the actual Laravel mailer and transport. Omitting `laravelMailer` keeps the driver valid for OpenKOS custom notifications through `MailManager`, but native Laravel notifications use the Laravel `log` fallback with an explicit warning. The platform does not contain provider-specific mappings.
 
-## Payment Contracts — interface only
+## Payment Contracts
 
-`PaymentGateway` (`key()`, `displayName()`, `createPayment(array): array`, `handleCallback(array): array`, `configurationSchema()`) and `PaymentRegistry` exist but have no implementations. Deliberately dormant until a real gateway (Midtrans/Xendit) forces the payload shape — the first integration should define the interface, not a guess.
+`PaymentGateway` is the typed, provider-independent contract for creating payments and normalizing webhook results. `PaymentRegistry` resolves gateways by key. Gateway-specific attempt persistence belongs to the app: `PaymentAttempt` records the local invoice checkout lifecycle, while the existing canonical `Payment` remains the only source used for invoice accounting.
 
 ## How Registrations Reach the UI
 

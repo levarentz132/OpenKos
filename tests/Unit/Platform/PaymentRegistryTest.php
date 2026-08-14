@@ -1,6 +1,12 @@
 <?php
 
 use OpenKOS\Core\Contracts\PaymentGateway;
+use OpenKOS\Core\Data\Payment\CheckoutInstructions;
+use OpenKOS\Core\Data\Payment\PaymentCreationResult;
+use OpenKOS\Core\Data\Payment\PaymentRequest;
+use OpenKOS\Core\Data\Payment\PaymentWebhookRequest;
+use OpenKOS\Core\Data\Payment\PaymentWebhookResult;
+use OpenKOS\Core\Enums\PaymentStatus;
 use OpenKOS\Platform\Payment\PaymentRegistry;
 
 function fakePaymentGateway(): PaymentGateway
@@ -17,14 +23,23 @@ function fakePaymentGateway(): PaymentGateway
             return 'Fake Gateway';
         }
 
-        public function createPayment(array $payload): array
+        public function createPayment(PaymentRequest $request): PaymentCreationResult
         {
-            return [];
+            return new PaymentCreationResult(
+                providerReference: 'provider-reference',
+                status: PaymentStatus::Pending,
+                amount: $request->amount,
+                instructions: new CheckoutInstructions,
+            );
         }
 
-        public function handleCallback(array $payload): array
+        public function handleCallback(PaymentWebhookRequest $request): PaymentWebhookResult
         {
-            return [];
+            return new PaymentWebhookResult(
+                eventReference: 'event-reference',
+                providerReference: 'provider-reference',
+                status: PaymentStatus::Pending,
+            );
         }
 
         public function configurationSchema(): array
