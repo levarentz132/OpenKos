@@ -126,6 +126,11 @@ class SettingManager
             ];
         }
 
+        $config['from'] ??= array_filter([
+            'address' => $fromAddress ?: null,
+            'name' => $fromName ?: null,
+        ], static fn ($value) => $value !== null);
+
         foreach ($config['drivers'] ?? [] as $key => $driverConfig) {
             if (
                 isset($driverConfig['encryption']) &&

@@ -53,7 +53,7 @@ class UpdateSettings
                 $data[$key] = '[REDACTED]';
             } elseif (in_array($key, ['mail_config', 'whatsapp_config'], true) && is_array($value)) {
                 array_walk_recursive($data[$key], function (&$v, $k): void {
-                    if (is_string($v) && in_array($k, ['password', 'api_key', 'token', 'access_token', 'secret'], true)) {
+                    if (is_string($v) && in_array($k, ['key', 'password', 'api_key', 'token', 'access_token', 'secret'], true)) {
                         $v = '[REDACTED]';
                     }
                 });

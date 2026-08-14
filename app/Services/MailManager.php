@@ -67,9 +67,12 @@ class MailManager
             throw MailDriverNotFoundException::for($normalizedId);
         }
 
-        $driverConfig = $effectiveConfig['drivers'][$normalizedId] ?? [];
+        $driverConfig = array_merge(
+            $registration->config,
+            $effectiveConfig['drivers'][$normalizedId] ?? [],
+        );
 
-        if (! isset($driverConfig['from']) && isset($effectiveConfig['from'])) {
+        if (isset($effectiveConfig['from'])) {
             $driverConfig['from'] = $effectiveConfig['from'];
         }
 

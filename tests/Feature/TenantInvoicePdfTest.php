@@ -228,7 +228,7 @@ test('invoice PDF view reflects the current aggregate for each payable state', f
         ->toContain('Kos Sriwijaya')
         ->toContain('Unit A-01')
         ->toContain('Bill To')
-        ->toContain($fixture['tenant']->name)
+        ->toContain(e($fixture['tenant']->name))
         ->toContain('Tenant ID '.$fixture['tenant']->id)
         ->toContain('john@example.com')
         ->toContain('+62 812 3456 7890')

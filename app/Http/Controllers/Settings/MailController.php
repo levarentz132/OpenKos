@@ -44,13 +44,40 @@ class MailController extends Controller
             })
             ->values();
 
+        $storedMailConfig = Setting::get('mail_config') ?? [];
+        $storedMailConfig = is_array($storedMailConfig) ? $storedMailConfig : [];
         $mailConfig = Setting::effectiveMailConfig();
+        $credentialStatus = [];
         unset($mailConfig['password']);
+
+        foreach ($storedMailConfig['drivers'] ?? [] as $driver => $driverConfig) {
+            if (! is_array($driverConfig)) {
+                continue;
+            }
+
+            $credentialStatus[$driver] = collect(['key', 'api_key', 'password', 'token', 'secret'])
+                ->contains(fn (string $field) => filled($driverConfig[$field] ?? null));
+
+            foreach (['key', 'api_key', 'password', 'token', 'secret'] as $field) {
+                unset($mailConfig['drivers'][$driver][$field]);
+            }
+        }
+
+        foreach ($mailConfig['drivers'] ?? [] as $driver => $driverConfig) {
+            if (! is_array($driverConfig)) {
+                continue;
+            }
+
+            foreach (['key', 'api_key', 'password', 'token', 'secret'] as $field) {
+                unset($mailConfig['drivers'][$driver][$field]);
+            }
+        }
 
         return Inertia::render('settings/mail', [
             'drivers' => $drivers,
             'settings' => [
                 'mail_config' => $mailConfig,
+                'credential_status' => $credentialStatus,
             ],
         ]);
     }
@@ -72,15 +99,40 @@ class MailController extends Controller
             'mail_config.encryption' => ['nullable', 'string', 'in:tls,ssl,null'],
             'mail_config.from_address' => ['nullable', 'email', 'max:255'],
             'mail_config.from_name' => ['nullable', 'string', 'max:255'],
+            'mail_config.drivers' => ['nullable', 'array'],
         ]);
 
-        $data = $validated['mail_config'] ?? [];
-
+        $submitted = $validated['mail_config'] ?? [];
         $existing = Setting::get('mail_config') ?? [];
-        if (blank($data['password'] ?? null)) {
-            unset($data['password']);
+
+        if (blank($submitted['password'] ?? null)) {
+            unset($submitted['password']);
         }
-        $data = array_merge($existing, $data);
+
+        $data = array_merge($existing, $submitted);
+
+        if (isset($submitted['drivers']) && is_array($submitted['drivers'])) {
+            $drivers = is_array($existing['drivers'] ?? null) ? $existing['drivers'] : [];
+
+            foreach ($submitted['drivers'] as $driver => $driverConfig) {
+                if (! is_array($driverConfig)) {
+                    continue;
+                }
+
+                foreach (['key', 'api_key', 'password', 'token', 'secret'] as $field) {
+                    if (blank($driverConfig[$field] ?? null)) {
+                        unset($driverConfig[$field]);
+                    }
+                }
+
+                $drivers[$driver] = array_merge(
+                    is_array($drivers[$driver] ?? null) ? $drivers[$driver] : [],
+                    $driverConfig,
+                );
+            }
+
+            $data['drivers'] = $drivers;
+        }
 
         $this->updateSettings->execute(['mail_config' => $data], $request->user());
 

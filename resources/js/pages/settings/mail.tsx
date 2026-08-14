@@ -33,6 +33,7 @@ interface MailConfig {
     from_address?: string;
     from_name?: string;
     from?: { address?: string; name?: string };
+    drivers?: Record<string, Record<string, string>>;
 }
 
 export default function Mail({
@@ -40,7 +41,10 @@ export default function Mail({
     settings,
 }: {
     drivers?: Driver[];
-    settings: { mail_config: MailConfig | null };
+    settings: {
+        mail_config: MailConfig | null;
+        credential_status?: Record<string, boolean>;
+    };
 }) {
     const config = settings.mail_config ?? {};
 
@@ -56,12 +60,22 @@ export default function Mail({
             encryption: config.encryption ?? 'null',
             from_address: config.from_address ?? config.from?.address ?? '',
             from_name: config.from_name ?? config.from?.name ?? '',
+            drivers: config.drivers ?? {},
         },
     });
 
     const activeDriverName = data.mail_config.driver;
     const currentDriver = drivers.find((d) => d.name === activeDriverName) ?? drivers.find((d) => d.name === 'openkos/smtp');
     const fields = currentDriver?.configuration_schema ?? {};
+    const rawDriverKey = activeDriverName.replace(/^openkos\//, '');
+    const driverConfig =
+        data.mail_config.drivers[activeDriverName] ??
+        data.mail_config.drivers[rawDriverKey] ??
+        {};
+    const hasSavedCredentials =
+        settings.credential_status?.[activeDriverName] ??
+        settings.credential_status?.[rawDriverKey] ??
+        false;
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -120,14 +134,13 @@ export default function Mail({
 
                         {Object.keys(fields).length > 0 && (
                             <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-                                Values saved below override environment defaults. Leave fields blank to use environment variable fallbacks.
+                                Values saved below override environment defaults. Leave password fields blank to preserve saved values or use environment fallbacks.
                             </div>
                         )}
 
                         {Object.keys(fields).length > 0 ? (
                             Object.entries(fields).map(([key, field]) => {
-                                const fieldKey = key as keyof typeof data.mail_config;
-                                const errorKey = `mail_config.${key}` as keyof typeof errors;
+                                const errorKey = `mail_config.drivers.${activeDriverName}.${key}` as keyof typeof errors;
 
                                 if (field.type === 'select' && field.options) {
                                     return (
@@ -137,11 +150,17 @@ export default function Mail({
                                                 {field.required && <span className="text-destructive"> *</span>}
                                             </Label>
                                             <Select
-                                                value={(data.mail_config[fieldKey] as string) || 'null'}
+                                                value={driverConfig[key] || 'null'}
                                                 onValueChange={(val) =>
                                                     setData('mail_config', {
                                                         ...data.mail_config,
-                                                        [key]: val,
+                                                        drivers: {
+                                                            ...data.mail_config.drivers,
+                                                            [activeDriverName]: {
+                                                                ...driverConfig,
+                                                                [key]: val,
+                                                            },
+                                                        },
                                                     })
                                                 }
                                             >
@@ -173,7 +192,7 @@ export default function Mail({
                                         </Label>
                                         <Input
                                             id={`mail_config_${key}`}
-                                            name={`mail_config[${key}]`}
+                                            name={`mail_config[drivers][${activeDriverName}][${key}]`}
                                             type={
                                                 field.type === 'password'
                                                     ? 'password'
@@ -181,15 +200,30 @@ export default function Mail({
                                                       ? 'number'
                                                       : 'text'
                                             }
-                                            value={(data.mail_config[fieldKey] as string) ?? ''}
+                                            value={driverConfig[key] ?? ''}
                                             onChange={(e) =>
                                                 setData('mail_config', {
                                                     ...data.mail_config,
-                                                    [key]: e.target.value,
+                                                    drivers: {
+                                                        ...data.mail_config.drivers,
+                                                        [activeDriverName]: {
+                                                            ...driverConfig,
+                                                            [key]: e.target.value,
+                                                        },
+                                                    },
                                                 })
                                             }
-                                            placeholder={field.placeholder ?? ''}
+                                            placeholder={
+                                                field.type === 'password' && hasSavedCredentials
+                                                    ? '••••••••••••'
+                                                    : field.placeholder ?? ''
+                                            }
                                         />
+                                        {field.type === 'password' && hasSavedCredentials && (
+                                            <p className="text-xs text-muted-foreground">
+                                                A value is saved. Leave blank to keep it.
+                                            </p>
+                                        )}
                                         {errors[errorKey] && (
                                             <p className="text-sm text-red-600">
                                                 {errors[errorKey]}
@@ -200,7 +234,7 @@ export default function Mail({
                             })
                         ) : (
                             <p className="text-sm text-muted-foreground">
-                                The Log driver does not require any credential configuration. Outgoing emails will be logged to storage/logs/mail.log.
+                                This driver has no additional settings in this form.
                             </p>
                         )}
 

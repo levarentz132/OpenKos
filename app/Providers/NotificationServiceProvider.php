@@ -31,7 +31,8 @@ class NotificationServiceProvider extends ServiceProvider
             return;
         }
 
-        config()->set('mail.default', $this->resolveLaravelMailer($config['driver'] ?? 'log'));
+        $driver = $config['driver'] ?? 'log';
+        config()->set('mail.default', $this->resolveLaravelMailer($driver));
 
         config()->set('mail.mailers.smtp.host', $config['host'] ?? '');
         config()->set('mail.mailers.smtp.port', $config['port'] ?? 587);
@@ -47,6 +48,8 @@ class NotificationServiceProvider extends ServiceProvider
             config()->set('mail.from.address', $fromAddress);
             config()->set('mail.from.name', $config['from_name'] ?? '');
         }
+
+        $this->configureLaravelMailer($driver, $config);
     }
 
     private function resolveLaravelMailer(string $driver): string
@@ -95,5 +98,26 @@ class NotificationServiceProvider extends ServiceProvider
         ]);
 
         return 'log';
+    }
+
+    private function configureLaravelMailer(string $driver, array $config): void
+    {
+        $registration = $this->app->make(NotificationRegistry::class)->driver('mail', $driver);
+
+        if (! $registration?->laravelMailer) {
+            return;
+        }
+
+        $driverConfig = $config['drivers'][$driver] ?? [];
+
+        if (! is_array($driverConfig) || $driverConfig === []) {
+            return;
+        }
+
+        $mailer = $registration->laravelMailer;
+        config()->set("mail.mailers.{$mailer}", array_replace(
+            config("mail.mailers.{$mailer}", []),
+            $driverConfig,
+        ));
     }
 }

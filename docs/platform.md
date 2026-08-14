@@ -305,11 +305,11 @@ monolith; it would only matter for untrusted third-party marketplace plugins.
 Mail drivers may optionally advertise the Laravel mailer they support:
 
     $platform->notifications()->registerDriver(new NotificationDriverRegistration(
-        name: 'openkos/resend',
+        name: 'third-party/acme-mail',
         channel: 'mail',
-        driverClass: ResendDriver::class,
-        label: 'Resend',
-        laravelMailer: 'resend',
+        driverClass: AcmeMailDriver::class,
+        label: 'Acme Mail',
+        laravelMailer: 'acme-mail',
     ));
 
 The plugin owns registration of the actual Laravel mailer and transport. Omitting `laravelMailer` keeps the driver valid for OpenKOS custom notifications through `MailManager`, but native Laravel notifications use the Laravel `log` fallback with an explicit warning. The platform does not contain provider-specific mappings.
