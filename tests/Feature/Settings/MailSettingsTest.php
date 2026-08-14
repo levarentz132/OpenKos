@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AuditLog;
 use App\Models\Setting;
 use App\Models\User;
 
@@ -60,6 +61,45 @@ describe('Mail settings page', function () {
         $config = Setting::get('mail_config');
 
         expect($config['password'])->toBe('secret123');
+    });
+
+    it('stores driver credentials in the encrypted driver settings', function () {
+        $owner = User::factory()->owner()->create();
+
+        $this->from(route('settings.mail.edit'))->actingAs($owner)
+            ->patch(route('settings.mail.update'), [
+                'mail_config' => [
+                    'driver' => 'openkos/smtp',
+                    'drivers' => [
+                        'openkos/smtp' => ['password' => 'secret123'],
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('settings.mail.edit'));
+
+        $config = Setting::get('mail_config');
+        $audit = AuditLog::where('operation', 'settings.update')->latest('id')->first();
+
+        expect($config['drivers']['openkos/smtp']['password'])->toBe('secret123')
+            ->and($audit->after['mail_config']['drivers']['openkos/smtp']['password'])->toBe('[REDACTED]');
+    });
+
+    it('does not return saved driver credentials to the settings page', function () {
+        Setting::set('mail_config', [
+            'driver' => 'openkos/smtp',
+            'drivers' => [
+                'openkos/smtp' => ['password' => 'secret123'],
+            ],
+        ]);
+
+        $owner = User::factory()->owner()->create();
+        $props = $this->actingAs($owner)
+            ->get(route('settings.mail.edit'))
+            ->viewData('page')['props'];
+
+        expect(data_get($props, 'settings.mail_config.drivers.openkos/smtp.password'))->toBeNull()
+            ->and(data_get($props, 'settings.credential_status.openkos/smtp'))->toBeTrue()
+            ->and(json_encode($props))->not->toContain('secret123');
     });
 
     it('validates mail settings', function () {

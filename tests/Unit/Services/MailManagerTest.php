@@ -9,11 +9,47 @@ use App\Notifications\Drivers\SmtpMailDriver;
 use App\Services\MailManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use OpenKOS\Core\Contracts\MailDriver;
+use OpenKOS\Core\Data\Mail\DriverHealthResult;
 use OpenKOS\Core\Data\Mail\MailAddress;
 use OpenKOS\Core\Data\Mail\MailMessage;
+use OpenKOS\Core\Data\Mail\MailSendResult;
+use OpenKOS\Platform\Notification\NotificationDriverRegistration;
+use OpenKOS\Platform\Notification\NotificationRegistry;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
+
+class MailManagerConfigProbeDriver implements MailDriver
+{
+    public static array $configs = [];
+
+    public function __construct(private array $config = [])
+    {
+        self::$configs[] = $config;
+    }
+
+    public function send(MailMessage $message): MailSendResult
+    {
+        return new MailSendResult;
+    }
+
+    public function health(): DriverHealthResult
+    {
+        return new DriverHealthResult(true);
+    }
+}
+
+function registerMailManagerConfigProbe(array $config = []): void
+{
+    app(NotificationRegistry::class)->registerDriver(new NotificationDriverRegistration(
+        name: 'test/config-probe',
+        channel: 'mail',
+        driverClass: MailManagerConfigProbeDriver::class,
+        label: 'Config Probe',
+        config: $config,
+    ));
+}
 
 test('mail manager resolves driver using normalizeDriverId alias mapping', function () {
     Setting::set('mail_config', ['driver' => 'smtp', 'host' => '127.0.0.1', 'port' => 1025]);
@@ -22,6 +58,52 @@ test('mail manager resolves driver using normalizeDriverId alias mapping', funct
     $driver = $manager->driver();
 
     expect($driver)->toBeInstanceOf(SmtpMailDriver::class);
+});
+
+test('mail manager passes registration defaults to third-party drivers', function () {
+    MailManagerConfigProbeDriver::$configs = [];
+    registerMailManagerConfigProbe(['api_key' => 'registration-key']);
+    Setting::set('mail_config', ['driver' => 'test/config-probe']);
+
+    app(MailManager::class)->driver();
+
+    expect(MailManagerConfigProbeDriver::$configs[0]['api_key'])->toBe('registration-key');
+});
+
+test('stored driver configuration overrides registration defaults', function () {
+    MailManagerConfigProbeDriver::$configs = [];
+    registerMailManagerConfigProbe(['api_key' => 'registration-key']);
+    Setting::set('mail_config', [
+        'driver' => 'test/config-probe',
+        'drivers' => [
+            'test/config-probe' => ['api_key' => 'stored-key'],
+        ],
+        'from' => ['address' => 'global@example.com'],
+    ]);
+
+    app(MailManager::class)->driver();
+
+    expect(MailManagerConfigProbeDriver::$configs[0]['api_key'])->toBe('stored-key');
+});
+
+test('effective global sender configuration overrides driver-specific sender configuration', function () {
+    MailManagerConfigProbeDriver::$configs = [];
+    registerMailManagerConfigProbe([
+        'from' => ['address' => 'registration@example.com'],
+    ]);
+    Setting::set('mail_config', [
+        'driver' => 'test/config-probe',
+        'drivers' => [
+            'test/config-probe' => [
+                'from' => ['address' => 'driver@example.com'],
+            ],
+        ],
+        'from' => ['address' => 'global@example.com'],
+    ]);
+
+    app(MailManager::class)->driver();
+
+    expect(MailManagerConfigProbeDriver::$configs[0]['from'])->toBe(['address' => 'global@example.com']);
 });
 
 test('mail manager dispatches MailSent event on successful send', function () {

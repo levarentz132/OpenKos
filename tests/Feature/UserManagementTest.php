@@ -10,8 +10,10 @@ use App\Notifications\UserInvitation;
 use Database\Seeders\RegionAndCitySeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
+use Symfony\Component\Mailer\Exception\TransportException;
 
 uses()->beforeEach(function () {
     $this->seed(RoleAndPermissionSeeder::class);
@@ -112,6 +114,48 @@ test('owner can invite user with multiple roles', function () {
 
     expect($user->hasRole('admin'))->toBeTrue()
         ->and($user->hasRole('staff'))->toBeTrue();
+});
+
+test('handles invitation mail failures without exposing transport errors', function () {
+    $owner = User::factory()->owner()->create();
+    RoleModel::findOrCreate('admin');
+
+    Mail::shouldReceive('mailer')
+        ->once()
+        ->andThrow(new TransportException('The example.com domain is not verified.'));
+
+    $this->from(route('users.index'))->actingAs($owner)
+        ->post(route('users.store'), [
+            'name' => 'Mail Failure User',
+            'email' => 'mail-failure@example.com',
+            'roles' => ['admin'],
+        ])
+        ->assertRedirect(route('users.index'))
+        ->assertSessionHas('inertia.flash_data.toast.type', 'error')
+        ->assertSessionHas('inertia.flash_data.toast.message', 'Email could not be sent. Check your mail settings and try again.');
+
+    expect(User::where('email', 'mail-failure@example.com')->exists())->toBeFalse();
+});
+
+test('returns a generic JSON response for invitation mail failures', function () {
+    $owner = User::factory()->owner()->create();
+    RoleModel::findOrCreate('admin');
+
+    Mail::shouldReceive('mailer')
+        ->once()
+        ->andThrow(new TransportException('The example.com domain is not verified.'));
+
+    $this->actingAs($owner)
+        ->withHeader('Accept', 'application/json')
+        ->post(route('users.store'), [
+            'name' => 'JSON Mail Failure User',
+            'email' => 'json-mail-failure@example.com',
+            'roles' => ['admin'],
+        ])
+        ->assertStatus(503)
+        ->assertJson([
+            'message' => 'Email could not be sent. Check your mail settings and try again.',
+        ]);
 });
 
 test('owner can invite user with custom role', function () {

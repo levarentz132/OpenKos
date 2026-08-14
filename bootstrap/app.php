@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\MailDeliveryException;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -13,6 +14,7 @@ use Inertia\Inertia;
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
 use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -48,6 +50,21 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (MailDeliveryException|TransportExceptionInterface $exception, Request $request) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => __('Email could not be sent. Check your mail settings and try again.'),
+                ], 503);
+            }
+
+            Inertia::flash('toast', [
+                'type' => 'error',
+                'message' => __('Email could not be sent. Check your mail settings and try again.'),
+            ]);
+
+            return redirect()->back();
+        });
+
         $exceptions->render(function (QueryException $e) {
             if ($e->getCode() === '23503') {
                 if (request()->isMethod('delete')) {
