@@ -57,7 +57,7 @@ export type PaymentGateway = {
     error: string | null;
 };
 
-export type BillingSettingsProps = {
+export type PaymentGatewaySettingsProps = {
     gateways: PaymentGateway[];
     active_key: string | null;
     active_status: 'none' | 'active' | 'incomplete' | 'unavailable';

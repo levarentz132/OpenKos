@@ -13,7 +13,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use OpenKOS\Platform\Settings\SettingsManager;
 
-class BillingController extends Controller
+class PaymentGatewayController extends Controller
 {
     public function __construct(
         private PaymentGatewayManager $gateways,
@@ -26,7 +26,7 @@ class BillingController extends Controller
         $activeKey = $this->gateways->activeKey();
         $activeGateway = collect($gateways)->firstWhere('key', $activeKey);
 
-        return Inertia::render('settings/billing', [
+        return Inertia::render('settings/payment-gateway', [
             'gateways' => $gateways,
             'active_key' => $activeKey,
             'active_status' => match (true) {

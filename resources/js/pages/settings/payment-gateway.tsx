@@ -19,20 +19,20 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { update as updateBilling } from '@/routes/settings/billing';
+import { update as updatePaymentGateway } from '@/routes/settings/payment-gateway';
 import type {
-    BillingSettingsProps,
     PaymentGateway,
     PaymentGatewayField,
+    PaymentGatewaySettingsProps,
 } from '@/types/settings';
 
 const NONE = '__none__';
 
-export default function Billing({
+export default function PaymentGateway({
     gateways,
     active_key: activeKey,
     active_status: activeStatus,
-}: BillingSettingsProps) {
+}: PaymentGatewaySettingsProps) {
     const initialKey = gateways.some((gateway) => gateway.key === activeKey)
         ? activeKey!
         : NONE;
@@ -82,13 +82,13 @@ export default function Billing({
             ...form,
             gateway: form.gateway === NONE ? null : form.gateway,
         }));
-        submit(updateBilling());
+        submit(updatePaymentGateway());
     }
 
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-lg font-medium">Billing settings</h2>
+                <h2 className="text-lg font-medium">Payment Gateway</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                     Configure the payment gateway used for online invoice payments.
                 </p>

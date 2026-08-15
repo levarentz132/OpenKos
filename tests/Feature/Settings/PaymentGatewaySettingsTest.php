@@ -31,10 +31,10 @@ it('renders registered gateways and redacts only secret values', function () {
     Setting::set(PaymentGatewayManager::ACTIVE_KEY, 'test/billing');
 
     $this->actingAs($owner)
-        ->get(route('settings.billing.edit'))
+        ->get(route('settings.payment-gateway.edit'))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->component('settings/billing')
+            ->component('settings/payment-gateway')
             ->where('active_key', 'test/billing')
             ->where('active_status', 'active')
             ->where('gateways.0.configuration.environment', 'sandbox')
@@ -45,16 +45,16 @@ it('renders registered gateways and redacts only secret values', function () {
 it('encrypts configuration and activates a complete gateway', function () {
     $owner = User::factory()->owner()->create();
 
-    $this->from(route('settings.billing.edit'))
+    $this->from(route('settings.payment-gateway.edit'))
         ->actingAs($owner)
-        ->patch(route('settings.billing.update'), [
+        ->patch(route('settings.payment-gateway.update'), [
             'gateway' => 'test/billing',
             'configuration' => [
                 'environment' => 'production',
                 'secret_key' => 'top-secret',
             ],
         ])
-        ->assertRedirect(route('settings.billing.edit'));
+        ->assertRedirect(route('settings.payment-gateway.edit'));
 
     $stored = Setting::where('key', PaymentGatewayManager::CONFIG_KEY)->firstOrFail();
 
@@ -67,9 +67,9 @@ it('encrypts configuration and activates a complete gateway', function () {
 it('rejects activating an incomplete gateway', function () {
     $owner = User::factory()->owner()->create();
 
-    $this->from(route('settings.billing.edit'))
+    $this->from(route('settings.payment-gateway.edit'))
         ->actingAs($owner)
-        ->patch(route('settings.billing.update'), [
+        ->patch(route('settings.payment-gateway.update'), [
             'gateway' => 'test/billing',
             'configuration' => ['environment' => 'sandbox'],
         ])
@@ -90,7 +90,7 @@ it('preserves an existing secret when the password field is left blank', functio
     Setting::set(PaymentGatewayManager::ACTIVE_KEY, 'test/billing');
 
     $this->actingAs($owner)
-        ->patch(route('settings.billing.update'), [
+        ->patch(route('settings.payment-gateway.update'), [
             'gateway' => 'test/billing',
             'configuration' => ['environment' => 'production'],
         ])
@@ -107,7 +107,7 @@ it('shows a missing active provider without clearing its configured key', functi
     Setting::set(PaymentGatewayManager::ACTIVE_KEY, 'missing/gateway');
 
     $this->actingAs($owner)
-        ->get(route('settings.billing.edit'))
+        ->get(route('settings.payment-gateway.edit'))
         ->assertInertia(fn ($page) => $page
             ->where('active_key', 'missing/gateway')
             ->where('active_status', 'unavailable'));
@@ -118,11 +118,11 @@ it('forbids tenant-linked users from viewing and updating Billing settings', fun
     Tenant::factory()->withUser($tenantUser)->create();
 
     $this->actingAs($tenantUser)
-        ->get(route('settings.billing.edit'))
+        ->get(route('settings.payment-gateway.edit'))
         ->assertForbidden();
 
     $this->actingAs($tenantUser)
-        ->patch(route('settings.billing.update'), [
+        ->patch(route('settings.payment-gateway.update'), [
             'gateway' => 'test/billing',
             'configuration' => [],
         ])
