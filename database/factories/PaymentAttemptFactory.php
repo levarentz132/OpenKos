@@ -26,6 +26,10 @@ class PaymentAttemptFactory extends Factory
             'currency' => 'IDR',
             'status' => PaymentStatus::Pending,
             'expires_at' => now()->addHour(),
+            'checkout_instructions' => [
+                'url' => 'https://example.test/checkout',
+                'entries' => [],
+            ],
             'metadata' => ['source' => 'test'],
             'initiated_at' => now(),
             'settled_at' => null,

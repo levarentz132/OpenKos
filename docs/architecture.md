@@ -252,6 +252,7 @@ Created as `Confirmed` (auto-verify or no proof) or `Pending` (proof uploaded, c
 - **Cast on** `Payment.status`
 
 Gateway payment attempts use the provider-independent `OpenKOS\Core\Enums\PaymentStatus` lifecycle in `PaymentAttempt`. An attempt is not a canonical `Payment`: pending, failed, expired, canceled, and settled attempts do not affect invoice totals. OPE-132 must transition a settled attempt, create/link exactly one canonical payment through existing payment logic, and recalculate the invoice in one database transaction. Gateway amount conversion to platform minor units is deferred to the OPE-131 gateway boundary and must use the currency's actual minor-unit scale.
+Gateway payment creation outcomes that cannot be proven are intentionally ambiguous: OPE-131 keeps the local attempt pending and marks creation as uncertain when a provider request may have reached the provider. OPE-136 must reconcile that state before any provider retry is introduced.
 
 ### Maintenance Ticket Lifecycle
 
