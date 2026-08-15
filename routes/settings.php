@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\BillingController;
 use App\Http\Controllers\Settings\GeneralController;
 use App\Http\Controllers\Settings\MailController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -32,6 +33,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('role:owner')->group(function () {
         Route::get('settings/general', [GeneralController::class, 'edit'])->name('settings.general.edit');
         Route::patch('settings/general', [GeneralController::class, 'update'])->name('settings.general.update');
+
+        Route::get('settings/billing', [BillingController::class, 'edit'])->name('settings.billing.edit');
+        Route::patch('settings/billing', [BillingController::class, 'update'])->name('settings.billing.update');
 
         Route::get('settings/reminders', [ReminderController::class, 'edit'])->name('settings.reminders.edit');
         Route::patch('settings/reminders', [ReminderController::class, 'update'])->name('settings.reminders.update');

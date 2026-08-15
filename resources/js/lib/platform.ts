@@ -6,6 +6,7 @@ import {
     Blocks,
     Building2,
     KeyRound,
+    Receipt,
     Mail,
     MessageCircle,
     Plug,
@@ -45,6 +46,7 @@ const settingsPageIconMap: Record<string, LucideIcon> = {
     'property-types': Tags,
     mail: Mail,
     whatsapp: MessageCircle,
+    billing: Receipt,
 };
 
 export function canSee(permission: string | null, auth: Auth): boolean {
