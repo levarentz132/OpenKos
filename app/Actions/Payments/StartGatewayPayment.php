@@ -178,6 +178,7 @@ class StartGatewayPayment
         return new StartGatewayPaymentResult(
             attempt: $attempt->fresh(),
             instructions: $result->instructions,
+            reused: false,
         );
     }
 
@@ -201,7 +202,17 @@ class StartGatewayPayment
             if ($result->status !== PaymentStatus::Pending) {
                 $this->statuses->validate($locked->status, $result->status);
                 $updates['status'] = $result->status;
-                $updates[$result->status->value.'_at'] = now();
+                $timestampColumn = match ($result->status) {
+                    PaymentStatus::Pending => null,
+                    PaymentStatus::Settled => 'settled_at',
+                    PaymentStatus::Failed => 'failed_at',
+                    PaymentStatus::Expired => 'expired_at',
+                    PaymentStatus::Canceled => 'canceled_at',
+                };
+
+                if ($timestampColumn !== null) {
+                    $updates[$timestampColumn] = now();
+                }
             }
 
             $locked->update($updates);
@@ -212,9 +223,9 @@ class StartGatewayPayment
     private function markCreationUncertain(PaymentAttempt $attempt): void
     {
         DB::transaction(function () use ($attempt): void {
-            $locked = PaymentAttempt::query()->lockForUpdate()->find($attempt->id);
+            $locked = PaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
 
-            if ($locked?->status === PaymentStatus::Pending) {
+            if ($locked->status === PaymentStatus::Pending) {
                 $locked->update([
                     'metadata' => array_merge($locked->metadata ?? [], [
                         'provider_creation_state' => 'uncertain',
@@ -228,9 +239,9 @@ class StartGatewayPayment
     private function markFailed(PaymentAttempt $attempt): void
     {
         DB::transaction(function () use ($attempt): void {
-            $locked = PaymentAttempt::query()->lockForUpdate()->find($attempt->id);
+            $locked = PaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
 
-            if ($locked?->status === PaymentStatus::Pending) {
+            if ($locked->status === PaymentStatus::Pending) {
                 $this->statuses->validate($locked->status, PaymentStatus::Failed);
                 $locked->update([
                     'status' => PaymentStatus::Failed,

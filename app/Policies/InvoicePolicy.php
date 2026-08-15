@@ -19,7 +19,10 @@ class InvoicePolicy
                 ->exists();
         }
 
+        $propertyId = $invoice->lease?->unit?->property_id;
+
         return $user->can('payments.create')
-            && $user->canAccessProperty($invoice->lease->unit->property_id);
+            && $propertyId !== null
+            && $user->canAccessProperty($propertyId);
     }
 }

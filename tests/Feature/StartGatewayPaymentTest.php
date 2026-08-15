@@ -4,10 +4,12 @@ use App\Actions\Payments\StartGatewayPayment;
 use App\Exceptions\InvoiceNotPayableException;
 use App\Exceptions\PaymentGatewayCreationException;
 use App\Models\Invoice;
+use App\Models\Lease;
 use App\Models\PaymentAttempt;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\Payments\PaymentGatewayManager;
+use Illuminate\Support\Facades\Gate;
 use OpenKOS\Core\Contracts\PaymentGateway;
 use OpenKOS\Core\Data\Payment\CheckoutInstruction;
 use OpenKOS\Core\Data\Payment\CheckoutInstructions;
@@ -15,6 +17,7 @@ use OpenKOS\Core\Data\Payment\Money;
 use OpenKOS\Core\Data\Payment\PaymentCreationResult;
 use OpenKOS\Core\Data\Payment\PaymentRequest;
 use OpenKOS\Core\Enums\PaymentStatus;
+use Spatie\Permission\Models\Permission as SpatiePermission;
 
 function startGatewayPaymentAction(PaymentGateway $gateway): StartGatewayPayment
 {
@@ -186,4 +189,14 @@ it('blocks a new checkout after a settled attempt', function () {
 
     expect(fn () => startGatewayPaymentAction($gateway)->execute($invoice, User::factory()->owner()->create()))
         ->toThrow(InvoiceNotPayableException::class);
+});
+
+it('denies payment when the invoice lease is no longer available', function () {
+    $user = User::factory()->create();
+    $user->givePermissionTo(SpatiePermission::findOrCreate('payments.create'));
+    $lease = Lease::factory()->create();
+    $invoice = Invoice::factory()->for($lease)->create();
+    $lease->delete();
+
+    expect(Gate::forUser($user)->allows('pay', $invoice))->toBeFalse();
 });
