@@ -21,5 +21,9 @@ it('shares platform registry data with every Inertia page', function () {
             ->where('platform.settings.1.key', 'profile')
             ->where('platform.settings.1.group', 'Account')
             ->where('platform.settings.2.key', 'reminders')
-            ->where('platform.settings.2.group', 'Notifications'));
+            ->where('platform.settings.2.group', 'Notifications')
+            ->where('platform.settings.3.key', 'mail')
+            ->where('platform.settings.3.group', 'Integrations')
+            ->where('platform.settings.4.key', 'payment-gateway')
+            ->where('platform.settings.4.group', 'Integrations'));
 });
