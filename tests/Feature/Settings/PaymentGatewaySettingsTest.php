@@ -5,6 +5,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Payments\PaymentGatewayManager;
 use Database\Seeders\RoleAndPermissionSeeder;
+use Illuminate\Support\Collection;
 use OpenKOS\Core\Contracts\PaymentGateway;
 use OpenKOS\Core\Data\Payment\CheckoutInstructions;
 use OpenKOS\Core\Data\Payment\PaymentCreationResult;
@@ -37,9 +38,13 @@ it('renders registered gateways and redacts only secret values', function () {
             ->component('settings/payment-gateway')
             ->where('active_key', 'test/billing')
             ->where('active_status', 'active')
-            ->where('gateways.0.configuration.environment', 'sandbox')
-            ->missing('gateways.0.configuration.secret_key')
-            ->where('gateways.0.secret_fields.0', 'secret_key'));
+            ->where('gateways', function (Collection $gateways): bool {
+                $gateway = $gateways->firstWhere('key', 'test/billing');
+
+                return ($gateway['configuration']['environment'] ?? null) === 'sandbox'
+                    && ! array_key_exists('secret_key', $gateway['configuration'] ?? [])
+                    && ($gateway['secret_fields'][0] ?? null) === 'secret_key';
+            }));
 });
 
 it('encrypts configuration and activates a complete gateway', function () {

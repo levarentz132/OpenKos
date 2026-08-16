@@ -47,10 +47,18 @@ class ComposerDiscoverySecondFixturePlugin extends Plugin
 function withComposerDiscoveryFixtures(array $packages, Closure $callback): mixed
 {
     $original = require base_path('vendor/composer/installed.php');
+    $originalDisabledPackages = config('platform.discovery.disabled_packages', []);
     $versions = [];
     $directories = [];
 
     try {
+        config([
+            'platform.discovery.disabled_packages' => array_values(array_unique([
+                ...$originalDisabledPackages,
+                'openkos/payment-xendit',
+            ])),
+        ]);
+
         foreach ($packages as $name => $metadata) {
             $directory = sys_get_temp_dir().'/openkos-plugin-'.str_replace('/', '-', $name).'-'.uniqid('', true);
             mkdir($directory, 0755, true);
@@ -88,6 +96,7 @@ function withComposerDiscoveryFixtures(array $packages, Closure $callback): mixe
         return $callback();
     } finally {
         InstalledVersions::reload($original);
+        config(['platform.discovery.disabled_packages' => $originalDisabledPackages]);
 
         foreach ($directories as $directory) {
             unlink($directory.'/composer.json');
