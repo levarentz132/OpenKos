@@ -23,6 +23,7 @@ function startGatewayPaymentAction(PaymentGateway $gateway): StartGatewayPayment
 {
     $manager = Mockery::mock(PaymentGatewayManager::class);
     $manager->shouldReceive('active')->andReturn($gateway);
+    $manager->shouldReceive('activeKey')->andReturn('test-gateway');
 
     app()->instance(PaymentGatewayManager::class, $manager);
 
@@ -67,6 +68,7 @@ it('creates a provider attempt with exact currency-aware money and normalized in
         ->and($result->instructions->entries[0]->value)->toBe('1234567890')
         ->and($result->attempt->fresh()->amount)->toBe('1500000.00')
         ->and($result->attempt->fresh()->currency)->toBe('IDR')
+        ->and($result->attempt->fresh()->gateway_key)->toBe('test-gateway')
         ->and($result->attempt->fresh()->status)->toBe(PaymentStatus::Pending)
         ->and($result->attempt->fresh()->checkout_instructions['entries'][0]['key'])->toBe('va_number')
         ->and($result->attempt->fresh()->metadata['channel'])->toBe('virtual_account');

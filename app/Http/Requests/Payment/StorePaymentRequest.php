@@ -38,7 +38,7 @@ class StorePaymentRequest extends FormRequest
     {
         return [
             'amount' => ['required', 'numeric', 'min:1'],
-            'payment_method' => ['required', 'string', Rule::in(PaymentMethod::values())],
+            'payment_method' => ['required', 'string', Rule::in(PaymentMethod::manualValues())],
             'paid_at' => ['required', 'date'],
             'notes' => ['nullable', 'string', 'max:65535'],
             'proof' => ['nullable', 'file', 'max:10240', 'mimes:jpg,jpeg,png,pdf'],

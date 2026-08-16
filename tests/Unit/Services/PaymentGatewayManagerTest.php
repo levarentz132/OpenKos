@@ -72,6 +72,16 @@ it('keeps broken providers visible without making enumeration throw', function (
         ->and($gateway->find('broken/gateway'))->toBeNull();
 });
 
+it('rejects gateways whose contract key differs from the registry key', function () {
+    $registry = new PaymentRegistry;
+    $registry->registerGateway('registry/gateway', MismatchedManagerTestPaymentGateway::class);
+
+    $gateway = new PaymentGatewayManager($registry, app(SettingsManager::class), app());
+
+    expect($gateway->find('registry/gateway'))->toBeNull()
+        ->and($gateway->all()[0]['status'])->toBe('unavailable');
+});
+
 class ManagerTestPaymentGateway implements PaymentGateway
 {
     public function __construct(public array $config = []) {}
@@ -156,5 +166,13 @@ class BrokenManagerTestPaymentGateway implements PaymentGateway
     public function configurationSchema(): array
     {
         return [];
+    }
+}
+
+class MismatchedManagerTestPaymentGateway extends ManagerTestPaymentGateway
+{
+    public function key(): string
+    {
+        return 'provider/gateway';
     }
 }

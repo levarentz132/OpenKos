@@ -165,6 +165,20 @@ describe('payment recording', function () {
             ->and($invoice->payments()->first()->confirmedBy->id)->toBe($admin->id);
     });
 
+    it('rejects the gateway method from manual payment recording', function () {
+        $user = User::factory()->owner()->create();
+        $lease = createLeaseForProperty();
+        $invoice = createInvoiceFor($lease);
+
+        $this->actingAs($user)
+            ->post(route('leases.payments.store', $lease), paymentPayload($invoice, [
+                'payment_method' => 'gateway',
+            ]))
+            ->assertSessionHasErrors('payment_method');
+
+        expect($invoice->payments()->count())->toBe(0);
+    });
+
     it('denies admin not assigned to property from recording payment', function () {
         $admin = User::factory()->admin()->create();
         $lease = createLeaseForProperty();

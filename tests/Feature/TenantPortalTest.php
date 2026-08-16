@@ -501,6 +501,29 @@ test('tenant submits a pending invoice payment for verification', function () {
         ->and($invoice->fresh()->status)->toBe(InvoiceStatus::Paid);
 });
 
+test('tenant cannot submit the gateway method as a manual payment', function () {
+    $tenantUser = User::factory()->create();
+    $tenant = Tenant::factory()->withUser($tenantUser)->create();
+    $lease = Lease::factory()->create(['primary_tenant_id' => $tenant->id]);
+    $invoice = Invoice::factory()->create([
+        'lease_id' => $lease->id,
+        'total' => 1_500_000,
+        'amount_paid' => 0,
+        'status' => InvoiceStatus::Pending,
+    ]);
+
+    $this->actingAs($tenantUser)
+        ->post(route('portal.billing.store'), [
+            'invoice_id' => $invoice->id,
+            'amount' => 1_500_000,
+            'payment_method' => 'gateway',
+            'paid_at' => now()->toDateString(),
+        ])
+        ->assertSessionHasErrors('payment_method');
+
+    expect($invoice->payments()->count())->toBe(0);
+});
+
 test('tenant cannot submit a payment for another tenants invoice', function () {
     $tenantUser = User::factory()->create();
     Tenant::factory()->withUser($tenantUser)->create();
