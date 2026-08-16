@@ -52,13 +52,6 @@ function withComposerDiscoveryFixtures(array $packages, Closure $callback): mixe
     $directories = [];
 
     try {
-        config([
-            'platform.discovery.disabled_packages' => array_values(array_unique([
-                ...$originalDisabledPackages,
-                'openkos/payment-xendit',
-            ])),
-        ]);
-
         foreach ($packages as $name => $metadata) {
             $directory = sys_get_temp_dir().'/openkos-plugin-'.str_replace('/', '-', $name).'-'.uniqid('', true);
             mkdir($directory, 0755, true);
