@@ -18,5 +18,6 @@ export const PAYMENT_METHOD_LABELS: Partial<Record<string, string>> = {
     cash: 'Cash',
     transfer: 'Bank Transfer',
     ewallet: 'E-Wallet',
+    gateway: 'Online Gateway',
     other: 'Other',
 };

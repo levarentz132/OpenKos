@@ -70,7 +70,11 @@ class PaymentGatewayManager
         $registered = $this->registry->gateways()[$key] ?? null;
 
         if ($registered instanceof PaymentGateway) {
-            return $registered;
+            try {
+                return $registered->key() === $key ? $registered : null;
+            } catch (\Throwable) {
+                return null;
+            }
         }
 
         if (! is_string($registered)) {
@@ -85,7 +89,15 @@ class PaymentGatewayManager
             return null;
         }
 
-        return $gateway instanceof PaymentGateway ? $gateway : null;
+        if (! $gateway instanceof PaymentGateway) {
+            return null;
+        }
+
+        try {
+            return $gateway->key() === $key ? $gateway : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public function active(): ?PaymentGateway

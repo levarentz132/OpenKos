@@ -95,13 +95,14 @@ class StartGatewayPayment
                 ];
             }
 
+            $gatewayKey = $this->gateways->activeKey();
             $gateway = $this->gateways->active();
-            if ($gateway === null) {
+            if ($gatewayKey === null || $gateway === null) {
                 throw new PaymentGatewayUnavailableException('No active payment gateway is configured.');
             }
 
             $attempt = $locked->paymentAttempts()->create([
-                'gateway_key' => $gateway->key(),
+                'gateway_key' => $gatewayKey,
                 'reference' => (string) str()->uuid(),
                 'amount' => $outstanding->toString(),
                 'currency' => $currency,

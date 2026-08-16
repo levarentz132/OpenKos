@@ -1,0 +1,324 @@
+<?php
+
+namespace App\Actions\Payments;
+
+use App\Actions\Invoices\AllocatePayment;
+use App\Business\Payments\PaymentAttemptStatusValidator;
+use App\Enums\InvoiceStatus;
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus as ApplicationPaymentStatus;
+use App\Events\Payment\PaymentRecorded;
+use App\Models\Invoice;
+use App\Models\PaymentAttempt;
+use App\Results\Payment\ApplyGatewayPaymentResult as ApplyGatewayPaymentResultData;
+use App\Services\Payments\MoneyConverter;
+use Brick\Math\BigDecimal;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use OpenKOS\Core\Data\Payment\PaymentWebhookResult;
+use OpenKOS\Core\Enums\PaymentStatus;
+use OpenKOS\Core\Events\PaymentRecorded as PlatformPaymentRecorded;
+
+class ApplyGatewayPaymentResult
+{
+    public function __construct(
+        private AllocatePayment $allocatePayment,
+        private MoneyConverter $money,
+        private PaymentAttemptStatusValidator $statuses,
+    ) {}
+
+    public function execute(string $gatewayKey, PaymentWebhookResult $result): ApplyGatewayPaymentResultData
+    {
+        $located = $this->locate($gatewayKey, $result);
+
+        if ($located['status'] !== 'found') {
+            $this->logAnomaly($gatewayKey, $result, $located['status']);
+
+            return new ApplyGatewayPaymentResultData(
+                status: $located['status'] === 'unknown'
+                    ? ApplyGatewayPaymentResultData::UNKNOWN
+                    : ApplyGatewayPaymentResultData::ANOMALY,
+            );
+        }
+
+        $processed = DB::transaction(function () use ($gatewayKey, $result, $located): ApplyGatewayPaymentResultData {
+            // Keep lock order aligned with payment initiation and manual payment recording.
+            $invoice = Invoice::query()->lockForUpdate()->find($located['attempt']->invoice_id);
+
+            if ($invoice === null) {
+                return new ApplyGatewayPaymentResultData(ApplyGatewayPaymentResultData::UNKNOWN);
+            }
+
+            $locked = $this->locate($gatewayKey, $result);
+
+            if ($locked['status'] !== 'found') {
+                $this->logAnomaly($gatewayKey, $result, $locked['status']);
+
+                return new ApplyGatewayPaymentResultData(
+                    status: $locked['status'] === 'unknown'
+                        ? ApplyGatewayPaymentResultData::UNKNOWN
+                        : ApplyGatewayPaymentResultData::ANOMALY,
+                );
+            }
+
+            $attempt = PaymentAttempt::query()
+                ->lockForUpdate()
+                ->find($locked['attempt']->id);
+
+            if ($attempt === null || $attempt->invoice_id !== $invoice->id) {
+                return new ApplyGatewayPaymentResultData(ApplyGatewayPaymentResultData::UNKNOWN);
+            }
+
+            if ($reason = $this->invalidPaymentLinkReason($attempt)) {
+                $this->logAnomaly($gatewayKey, $result, $reason, $attempt);
+
+                return new ApplyGatewayPaymentResultData(
+                    status: ApplyGatewayPaymentResultData::ANOMALY,
+                    attempt: $attempt,
+                );
+            }
+
+            if ($reason = $this->invalidCallbackReason($attempt, $result)) {
+                $this->logAnomaly($gatewayKey, $result, $reason, $attempt);
+
+                return new ApplyGatewayPaymentResultData(
+                    status: ApplyGatewayPaymentResultData::ANOMALY,
+                    attempt: $attempt,
+                );
+            }
+
+            if ($attempt->status !== PaymentStatus::Pending) {
+                return $this->applyTerminalCallback($gatewayKey, $attempt, $result);
+            }
+
+            $metadata = $this->webhookMetadata($attempt->metadata ?? [], $result);
+
+            if ($result->status !== PaymentStatus::Settled) {
+                $timestampColumn = match ($result->status) {
+                    PaymentStatus::Failed => 'failed_at',
+                    PaymentStatus::Expired => 'expired_at',
+                    PaymentStatus::Canceled => 'canceled_at',
+                    PaymentStatus::Pending, PaymentStatus::Settled => null,
+                };
+
+                $updates = [
+                    'provider_reference' => $attempt->provider_reference ?? $result->providerReference,
+                    'metadata' => $metadata,
+                ];
+
+                if ($timestampColumn !== null) {
+                    $this->statuses->validate($attempt->status, $result->status);
+                    $updates['status'] = $result->status;
+                    $updates[$timestampColumn] = $result->occurredAt ?? now();
+                }
+
+                $attempt->update($updates);
+
+                return new ApplyGatewayPaymentResultData(
+                    status: ApplyGatewayPaymentResultData::PROCESSED,
+                    attempt: $attempt->fresh(),
+                );
+            }
+
+            if ($this->cannotSettle($invoice, $attempt)) {
+                $this->logAnomaly($gatewayKey, $result, 'invoice_balance_conflict', $attempt);
+
+                return new ApplyGatewayPaymentResultData(
+                    status: ApplyGatewayPaymentResultData::ANOMALY,
+                    attempt: $attempt,
+                );
+            }
+
+            $this->statuses->validate($attempt->status, PaymentStatus::Settled);
+
+            $payment = $invoice->payments()->create([
+                'amount' => $attempt->amount,
+                'payment_date' => ($result->occurredAt ?? now())->format('Y-m-d'),
+                'payment_method' => PaymentMethod::Gateway->value,
+                'reference_number' => $attempt->reference,
+                'status' => ApplicationPaymentStatus::Confirmed,
+                'verified_at' => now(),
+            ]);
+
+            $this->allocatePayment->execute($payment);
+
+            $attempt->update([
+                'provider_reference' => $attempt->provider_reference ?? $result->providerReference,
+                'status' => PaymentStatus::Settled,
+                'payment_id' => $payment->id,
+                'settled_at' => $result->occurredAt ?? now(),
+                'metadata' => $metadata,
+            ]);
+
+            return new ApplyGatewayPaymentResultData(
+                status: ApplyGatewayPaymentResultData::PROCESSED,
+                attempt: $attempt->fresh(),
+                payment: $payment->fresh(),
+            );
+        });
+
+        if ($processed->payment !== null) {
+            PaymentRecorded::dispatch($processed->payment);
+            event(new PlatformPaymentRecorded(paymentId: $processed->payment->id));
+        }
+
+        return $processed;
+    }
+
+    /**
+     * @return array{status: 'found'|'unknown'|'conflict', attempt?: PaymentAttempt}
+     */
+    private function locate(string $gatewayKey, PaymentWebhookResult $result): array
+    {
+        $byProviderReference = PaymentAttempt::query()
+            ->where('gateway_key', $gatewayKey)
+            ->where('provider_reference', $result->providerReference)
+            ->first();
+
+        $byReference = $result->reference === null
+            ? null
+            : PaymentAttempt::query()
+                ->where('gateway_key', $gatewayKey)
+                ->where('reference', $result->reference)
+                ->first();
+
+        if ($byProviderReference !== null && $byReference !== null && $byProviderReference->id !== $byReference->id) {
+            return ['status' => 'conflict'];
+        }
+
+        $attempt = $byProviderReference ?? $byReference;
+
+        if ($attempt === null) {
+            return ['status' => 'unknown'];
+        }
+
+        if (
+            ($result->reference !== null && $attempt->reference !== $result->reference)
+            || ($attempt->provider_reference !== null && $attempt->provider_reference !== $result->providerReference)
+        ) {
+            return ['status' => 'conflict'];
+        }
+
+        return ['status' => 'found', 'attempt' => $attempt];
+    }
+
+    private function invalidCallbackReason(PaymentAttempt $attempt, PaymentWebhookResult $result): ?string
+    {
+        if ($result->reference !== null && $result->reference !== $attempt->reference) {
+            return 'openkos_reference_mismatch';
+        }
+
+        if ($attempt->provider_reference !== null && $attempt->provider_reference !== $result->providerReference) {
+            return 'provider_reference_mismatch';
+        }
+
+        if ($result->amount === null) {
+            return null;
+        }
+
+        $expected = $this->money->toMoney((string) $attempt->amount, $attempt->currency);
+
+        return $expected->minorUnits === $result->amount->minorUnits
+            && $expected->currency === $result->amount->currency
+            ? null
+            : 'amount_or_currency_mismatch';
+    }
+
+    private function invalidPaymentLinkReason(PaymentAttempt $attempt): ?string
+    {
+        if ($attempt->status !== PaymentStatus::Settled && $attempt->payment_id !== null) {
+            return 'non_settled_attempt_with_payment';
+        }
+
+        if ($attempt->status !== PaymentStatus::Settled) {
+            return null;
+        }
+
+        if ($attempt->payment_id === null) {
+            return 'settled_attempt_without_payment';
+        }
+
+        $payment = $attempt->payment()->first();
+
+        if ($payment === null) {
+            return 'settled_attempt_with_missing_payment';
+        }
+
+        return $payment->invoice_id === $attempt->invoice_id
+            ? null
+            : 'settled_attempt_payment_invoice_mismatch';
+    }
+
+    private function cannotSettle(Invoice $invoice, PaymentAttempt $attempt): bool
+    {
+        if (in_array($invoice->status, [InvoiceStatus::Cancelled, InvoiceStatus::Void], true)) {
+            return true;
+        }
+
+        $outstanding = BigDecimal::of((string) $invoice->total)
+            ->minus((string) $invoice->amount_paid);
+
+        return $outstanding->compareTo(BigDecimal::of((string) $attempt->amount)) < 0;
+    }
+
+    private function applyTerminalCallback(
+        string $gatewayKey,
+        PaymentAttempt $attempt,
+        PaymentWebhookResult $result,
+    ): ApplyGatewayPaymentResultData {
+        if ($attempt->status === PaymentStatus::Settled && $result->status === PaymentStatus::Settled) {
+            return new ApplyGatewayPaymentResultData(
+                status: ApplyGatewayPaymentResultData::DUPLICATE,
+                attempt: $attempt,
+                payment: $attempt->payment()->first(),
+            );
+        }
+
+        if ($attempt->status === $result->status) {
+            return new ApplyGatewayPaymentResultData(
+                status: ApplyGatewayPaymentResultData::DUPLICATE,
+                attempt: $attempt,
+            );
+        }
+
+        $this->logAnomaly($gatewayKey, $result, 'terminal_state_conflict', $attempt);
+
+        return new ApplyGatewayPaymentResultData(
+            status: ApplyGatewayPaymentResultData::ANOMALY,
+            attempt: $attempt,
+        );
+    }
+
+    /**
+     * @param  array<string, bool|int|string|null>  $metadata
+     * @return array<string, bool|int|string|null>
+     */
+    private function webhookMetadata(array $metadata, PaymentWebhookResult $result): array
+    {
+        foreach ($result->metadata as $key => $value) {
+            $metadata['webhook_'.$key] = $value;
+        }
+
+        $metadata['webhook_event_reference'] = $result->eventReference;
+
+        return $metadata;
+    }
+
+    private function logAnomaly(
+        string $gatewayKey,
+        PaymentWebhookResult $result,
+        string $reason,
+        ?PaymentAttempt $attempt = null,
+    ): void {
+        Log::warning('Payment webhook anomaly.', [
+            'gateway' => $gatewayKey,
+            'attempt_id' => $attempt?->id,
+            'attempt_status' => $attempt?->status->value,
+            'provider_reference' => $result->providerReference,
+            'openkos_reference' => $result->reference,
+            'event_reference' => $result->eventReference,
+            'callback_status' => $result->status->value,
+            'reason' => $reason,
+        ]);
+    }
+}
