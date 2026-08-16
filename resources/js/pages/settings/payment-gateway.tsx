@@ -337,6 +337,11 @@ function GatewayField({
                     }
                 />
             )}
+            {field.description && (
+                <p className="text-sm text-muted-foreground">
+                    {field.description}
+                </p>
+            )}
             {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
     );

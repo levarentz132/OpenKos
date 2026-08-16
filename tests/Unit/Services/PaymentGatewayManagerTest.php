@@ -34,6 +34,7 @@ it('returns provider metadata without exposing secret values', function () {
         ->and($provider['secret_fields'])->toBe(['secret_key'])
         ->and($provider['configuration_schema']['environment']['presentation'])->toBe('segmented')
         ->and($provider['configuration_schema']['environment']['default'])->toBe('sandbox')
+        ->and($provider['configuration_schema']['secret_key']['description'])->toBe('Keep this value secret.')
         ->and($provider['configuration_schema']['secret_key']['visible_when'])->toBe([
             'field' => 'environment',
             'value' => 'sandbox',
@@ -139,6 +140,7 @@ class ManagerTestPaymentGateway implements PaymentGateway
                 'label' => 'Secret key',
                 'type' => 'password',
                 'required' => true,
+                'description' => 'Keep this value secret.',
                 'visible_when' => [
                     'field' => 'environment',
                     'value' => 'sandbox',

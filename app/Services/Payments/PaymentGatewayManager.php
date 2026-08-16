@@ -190,6 +190,7 @@ class PaymentGatewayManager
                 'type' => $field['type'] ?? 'text',
                 'required' => (bool) ($field['required'] ?? false),
                 'placeholder' => $field['placeholder'] ?? null,
+                'description' => $field['description'] ?? null,
                 'options' => $field['options'] ?? null,
                 'presentation' => $field['presentation'] ?? null,
                 'default' => $field['default'] ?? null,

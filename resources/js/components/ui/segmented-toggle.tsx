@@ -24,12 +24,12 @@ export function SegmentedToggle({
             aria-label={ariaLabel}
             role="group"
             className={cn(
-                'relative flex h-10 w-full rounded-full bg-primary p-1',
+                'relative flex h-10 w-full rounded-full bg-muted p-1',
                 className,
             )}
         >
             <div
-                className="absolute inset-y-1 rounded-full bg-background shadow-sm transition-all duration-200 ease-in-out"
+                className="absolute inset-y-1 rounded-full bg-primary shadow-sm transition-all duration-200 ease-in-out"
                 style={{
                     width: `calc(${segmentPct}% - ${padRem * 2}rem)`,
                     left: `calc(${activeIndex * segmentPct}% + ${padRem}rem)`,
@@ -44,8 +44,8 @@ export function SegmentedToggle({
                     className={cn(
                         'relative z-10 flex flex-1 cursor-pointer items-center justify-center rounded-full text-sm font-medium transition-colors duration-200',
                         option.value === value
-                            ? 'text-primary'
-                            : 'text-primary-foreground',
+                            ? 'text-primary-foreground'
+                            : 'text-muted-foreground',
                     )}
                 >
                     {option.label}
