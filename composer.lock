@@ -3317,16 +3317,16 @@
         },
         {
             "name": "openkos/payment-xendit",
-            "version": "v0.1.1",
+            "version": "v0.1.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/senatroxx/openkos-payment-xendit.git",
-                "reference": "ec0bad48761ec70cfc10ef1d10ff72ad17bcf7d7"
+                "reference": "2fb9c0ad063ff9e074d38a3e6d17c54388df1d08"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/senatroxx/openkos-payment-xendit/zipball/ec0bad48761ec70cfc10ef1d10ff72ad17bcf7d7",
-                "reference": "ec0bad48761ec70cfc10ef1d10ff72ad17bcf7d7",
+                "url": "https://api.github.com/repos/senatroxx/openkos-payment-xendit/zipball/2fb9c0ad063ff9e074d38a3e6d17c54388df1d08",
+                "reference": "2fb9c0ad063ff9e074d38a3e6d17c54388df1d08",
                 "shasum": ""
             },
             "require": {
@@ -3359,9 +3359,9 @@
             "description": "Xendit Payment Session gateway for OpenKOS.",
             "support": {
                 "issues": "https://github.com/senatroxx/openkos-payment-xendit/issues",
-                "source": "https://github.com/senatroxx/openkos-payment-xendit/tree/v0.1.1"
+                "source": "https://github.com/senatroxx/openkos-payment-xendit/tree/v0.1.2"
             },
-            "time": "2026-08-16T11:15:32+00:00"
+            "time": "2026-08-16T13:08:29+00:00"
         },
         {
             "name": "openkos/platform",

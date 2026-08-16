@@ -43,6 +43,12 @@ export type PaymentGatewayField = {
     required?: boolean;
     placeholder?: string;
     options?: Array<{ value: string; label: string }>;
+    presentation?: string;
+    default?: string | number | boolean;
+    visible_when?: {
+        field: string;
+        value: string;
+    };
     secret?: boolean;
 };
 

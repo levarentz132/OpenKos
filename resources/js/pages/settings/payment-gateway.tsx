@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SegmentedToggle } from '@/components/ui/segmented-toggle';
 import {
     Select,
     SelectContent,
@@ -36,15 +37,16 @@ export default function PaymentGateway({
     const initialKey = gateways.some((gateway) => gateway.key === activeKey)
         ? activeKey!
         : NONE;
-    const [configs, setConfigs] = useState<Record<string, Record<string, string>>>(
+    const [configs, setConfigs] = useState<
+        Record<string, Record<string, string>>
+    >(
         Object.fromEntries(
             gateways.map((gateway) => [
                 gateway.key,
                 Object.fromEntries(
-                    Object.entries(gateway.configuration).map(([key, value]) => [
-                        key,
-                        String(value),
-                    ]),
+                    Object.entries(gateway.configuration).map(
+                        ([key, value]) => [key, String(value)],
+                    ),
                 ),
             ]),
         ),
@@ -90,7 +92,8 @@ export default function PaymentGateway({
             <div>
                 <h2 className="text-lg font-medium">Payment Gateway</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Configure the payment gateway used for online invoice payments.
+                    Configure the payment gateway used for online invoice
+                    payments.
                 </p>
             </div>
 
@@ -98,8 +101,9 @@ export default function PaymentGateway({
                 <Alert variant="destructive">
                     <AlertTitle>Payment gateway unavailable</AlertTitle>
                     <AlertDescription>
-                        The configured gateway ({activeKey}) is not currently installed or could not be loaded.
-                        Select another gateway to recover.
+                        The configured gateway ({activeKey}) is not currently
+                        installed or could not be loaded. Select another gateway
+                        to recover.
                     </AlertDescription>
                 </Alert>
             )}
@@ -108,7 +112,8 @@ export default function PaymentGateway({
                 <Alert>
                     <AlertTitle>Payment gateway needs configuration</AlertTitle>
                     <AlertDescription>
-                        Complete the required fields before online payments can use the active gateway.
+                        Complete the required fields before online payments can
+                        use the active gateway.
                     </AlertDescription>
                 </Alert>
             )}
@@ -117,7 +122,8 @@ export default function PaymentGateway({
                 <Alert>
                     <AlertTitle>No payment gateways installed</AlertTitle>
                     <AlertDescription>
-                        Install a payment gateway plugin before activating online invoice payments.
+                        Install a payment gateway plugin before activating
+                        online invoice payments.
                     </AlertDescription>
                 </Alert>
             ) : (
@@ -126,12 +132,15 @@ export default function PaymentGateway({
                         <CardHeader>
                             <CardTitle>Payment gateway</CardTitle>
                             <CardDescription>
-                                Only one installed and fully configured gateway can be active at a time.
+                                Only one installed and fully configured gateway
+                                can be active at a time.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="grid max-w-md gap-2">
-                                <Label htmlFor="payment_gateway">Active gateway</Label>
+                                <Label htmlFor="payment_gateway">
+                                    Active gateway
+                                </Label>
                                 <Select
                                     value={data.gateway}
                                     onValueChange={selectGateway}
@@ -140,38 +149,54 @@ export default function PaymentGateway({
                                         <SelectValue placeholder="Select a gateway" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value={NONE}>No active gateway</SelectItem>
+                                        <SelectItem value={NONE}>
+                                            No active gateway
+                                        </SelectItem>
                                         {gateways.map((gateway) => (
                                             <SelectItem
                                                 key={gateway.key}
                                                 value={gateway.key}
-                                                disabled={gateway.status === 'unavailable' && gateway.key !== activeKey}
+                                                disabled={
+                                                    gateway.status ===
+                                                        'unavailable' &&
+                                                    gateway.key !== activeKey
+                                                }
                                             >
-                                                {gateway.label}{gateway.status !== 'configured' ? ` (${gateway.status})` : ''}
+                                                {gateway.label}
+                                                {gateway.status !== 'configured'
+                                                    ? ` (${gateway.status})`
+                                                    : ''}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                                 {errors.gateway && (
-                                    <p className="text-sm text-red-600">{errors.gateway}</p>
+                                    <p className="text-sm text-red-600">
+                                        {errors.gateway}
+                                    </p>
                                 )}
                             </div>
 
                             {selectedGateway?.status === 'unavailable' && (
                                 <Alert variant="destructive">
-                                    <AlertTitle>{selectedGateway.label}</AlertTitle>
-                                    <AlertDescription>{selectedGateway.error}</AlertDescription>
+                                    <AlertTitle>
+                                        {selectedGateway.label}
+                                    </AlertTitle>
+                                    <AlertDescription>
+                                        {selectedGateway.error}
+                                    </AlertDescription>
                                 </Alert>
                             )}
 
-                            {selectedGateway && selectedGateway.status !== 'unavailable' && (
-                                <GatewayConfiguration
-                                    gateway={selectedGateway}
-                                    configuration={selectedConfig}
-                                    errors={errors}
-                                    onChange={setConfiguration}
-                                />
-                            )}
+                            {selectedGateway &&
+                                selectedGateway.status !== 'unavailable' && (
+                                    <GatewayConfiguration
+                                        gateway={selectedGateway}
+                                        configuration={selectedConfig}
+                                        errors={errors}
+                                        onChange={setConfiguration}
+                                    />
+                                )}
                         </CardContent>
                         <CardFooter>
                             <Button disabled={processing}>Save</Button>
@@ -195,6 +220,21 @@ function GatewayConfiguration({
     onChange: (key: string, value: string) => void;
 }) {
     const fields = Object.entries(gateway.configuration_schema);
+    const resolvedConfiguration = Object.fromEntries(
+        fields.map(([key, field]) => [
+            key,
+            configuration[key] ??
+                (field.default === undefined ? '' : String(field.default)),
+        ]),
+    );
+    const visibleFields = fields.filter(([, field]) => {
+        const condition = field.visible_when;
+
+        return (
+            condition === undefined ||
+            resolvedConfiguration[condition.field] === condition.value
+        );
+    });
 
     if (fields.length === 0) {
         return (
@@ -206,12 +246,12 @@ function GatewayConfiguration({
 
     return (
         <div className="space-y-4">
-            {fields.map(([key, field]) => (
+            {visibleFields.map(([key, field]) => (
                 <GatewayField
                     key={key}
                     fieldKey={key}
                     field={field}
-                    value={configuration[key] ?? ''}
+                    value={resolvedConfiguration[key] ?? ''}
                     hasSavedSecret={gateway.secret_fields.includes(key)}
                     error={errors[`configuration.${key}`]}
                     onChange={onChange}
@@ -245,11 +285,32 @@ function GatewayField({
 
     return (
         <div className="grid max-w-md gap-2">
-            <Label htmlFor={`payment_gateway_${fieldKey}`}>{label}</Label>
-            {field.type === 'select' && field.options ? (
-                <Select value={value} onValueChange={(next) => onChange(fieldKey, next)}>
+            <Label
+                htmlFor={
+                    field.presentation === 'segmented'
+                        ? undefined
+                        : `payment_gateway_${fieldKey}`
+                }
+            >
+                {label}
+            </Label>
+            {field.presentation === 'segmented' && field.options ? (
+                <SegmentedToggle
+                    ariaLabel={field.label}
+                    className="max-w-md"
+                    options={field.options}
+                    value={value}
+                    onChange={(next) => onChange(fieldKey, next)}
+                />
+            ) : field.type === 'select' && field.options ? (
+                <Select
+                    value={value}
+                    onValueChange={(next) => onChange(fieldKey, next)}
+                >
                     <SelectTrigger id={`payment_gateway_${fieldKey}`}>
-                        <SelectValue placeholder={field.placeholder ?? 'Select...'} />
+                        <SelectValue
+                            placeholder={field.placeholder ?? 'Select...'}
+                        />
                     </SelectTrigger>
                     <SelectContent>
                         {field.options.map((option) => (
@@ -262,10 +323,18 @@ function GatewayField({
             ) : (
                 <Input
                     id={`payment_gateway_${fieldKey}`}
-                    type={field.type === 'password' || field.secret ? 'password' : field.type === 'number' ? 'number' : 'text'}
+                    type={
+                        field.type === 'password' || field.secret
+                            ? 'password'
+                            : field.type === 'number'
+                              ? 'number'
+                              : 'text'
+                    }
                     value={value}
                     onChange={(event) => onChange(fieldKey, event.target.value)}
-                    placeholder={hasSavedSecret ? '••••••••••••' : field.placeholder}
+                    placeholder={
+                        hasSavedSecret ? '••••••••••••' : field.placeholder
+                    }
                 />
             )}
             {error && <p className="text-sm text-red-600">{error}</p>}

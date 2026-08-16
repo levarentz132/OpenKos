@@ -31,7 +31,13 @@ it('returns provider metadata without exposing secret values', function () {
 
     expect($provider['status'])->toBe('configured')
         ->and($provider['configuration'])->toBe(['environment' => 'sandbox'])
-        ->and($provider['secret_fields'])->toBe(['secret_key']);
+        ->and($provider['secret_fields'])->toBe(['secret_key'])
+        ->and($provider['configuration_schema']['environment']['presentation'])->toBe('segmented')
+        ->and($provider['configuration_schema']['environment']['default'])->toBe('sandbox')
+        ->and($provider['configuration_schema']['secret_key']['visible_when'])->toBe([
+            'field' => 'environment',
+            'value' => 'sandbox',
+        ]);
 });
 
 it('resolves only a configured active gateway', function () {
@@ -122,6 +128,8 @@ class ManagerTestPaymentGateway implements PaymentGateway
                 'label' => 'Environment',
                 'type' => 'select',
                 'required' => true,
+                'presentation' => 'segmented',
+                'default' => 'sandbox',
                 'options' => [
                     ['value' => 'sandbox', 'label' => 'Sandbox'],
                     ['value' => 'production', 'label' => 'Production'],
@@ -131,6 +139,10 @@ class ManagerTestPaymentGateway implements PaymentGateway
                 'label' => 'Secret key',
                 'type' => 'password',
                 'required' => true,
+                'visible_when' => [
+                    'field' => 'environment',
+                    'value' => 'sandbox',
+                ],
             ],
         ];
     }

@@ -191,6 +191,9 @@ class PaymentGatewayManager
                 'required' => (bool) ($field['required'] ?? false),
                 'placeholder' => $field['placeholder'] ?? null,
                 'options' => $field['options'] ?? null,
+                'presentation' => $field['presentation'] ?? null,
+                'default' => $field['default'] ?? null,
+                'visible_when' => $field['visible_when'] ?? null,
                 'secret' => $this->isSecretField($field),
             ], static fn (mixed $value): bool => $value !== null);
         }
