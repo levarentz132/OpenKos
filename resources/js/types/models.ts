@@ -240,6 +240,25 @@ export type PaymentAllocation = {
     amount: string;
 };
 
+export type GatewayPaymentAttempt = {
+    id: number;
+    invoice_id: number;
+    amount: string;
+    currency: string;
+    status: 'pending' | 'settled' | 'failed' | 'expired' | 'canceled';
+    expires_at: string | null;
+    resumable: boolean;
+    checkout_instructions: {
+        url: string | null;
+        entries: Array<{
+            key: string;
+            value: string;
+            label: string | null;
+        }>;
+    } | null;
+    initiated_at: string;
+};
+
 export type Invoice = {
     id: number;
     lease_id: number;

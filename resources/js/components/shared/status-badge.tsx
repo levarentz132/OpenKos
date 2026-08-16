@@ -120,6 +120,21 @@ const STATUS_CONFIGS: Record<string, Record<string, StatusConfig>> = {
         },
         expired: { label: 'Expired', variant: 'secondary' },
     },
+    gateway_attempt: {
+        pending: {
+            label: 'Awaiting payment',
+            className:
+                'bg-surface-amber/70 text-surface-amber-foreground border-surface-amber-border/80',
+        },
+        settled: {
+            label: 'Settled',
+            className:
+                'bg-surface-green/70 text-surface-green-foreground border-surface-green-border/80',
+        },
+        failed: { label: 'Failed', variant: 'destructive' },
+        expired: { label: 'Expired', variant: 'secondary' },
+        canceled: { label: 'Canceled', variant: 'secondary' },
+    },
     maintenance: {
         reported: {
             label: 'Reported',

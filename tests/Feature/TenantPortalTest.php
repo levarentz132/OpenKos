@@ -1,21 +1,39 @@
 <?php
 
+use App\Actions\Payments\StartGatewayPayment;
 use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Invoice;
 use App\Models\Lease;
 use App\Models\LeaseUnitHistory;
 use App\Models\Payment;
+use App\Models\PaymentAttempt;
 use App\Models\Tenant;
 use App\Models\Unit;
 use App\Models\User;
+use App\Results\Payment\StartGatewayPaymentResult;
+use App\Services\Payments\PaymentGatewayManager;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use OpenKOS\Core\Contracts\PaymentGateway;
+use OpenKOS\Core\Data\Payment\CheckoutInstructions;
+use OpenKOS\Core\Data\Payment\PaymentCreationResult;
+use OpenKOS\Core\Data\Payment\PaymentRequest;
+use OpenKOS\Core\Enums\PaymentStatus as GatewayPaymentStatus;
 
 uses()->beforeEach(function () {
     $this->seed(RoleAndPermissionSeeder::class);
 });
+
+function bindTenantPortalGateway(?PaymentGateway $gateway): void
+{
+    $manager = Mockery::mock(PaymentGatewayManager::class);
+    $manager->shouldReceive('activeKey')->andReturn($gateway ? 'test-gateway' : null);
+    $manager->shouldReceive('active')->andReturn($gateway);
+
+    app()->instance(PaymentGatewayManager::class, $manager);
+}
 
 test('tenant sees a payment-required dashboard action', function () {
     $user = User::factory()->create(['email' => 'tenant@example.com']);
@@ -268,6 +286,183 @@ test('tenant sees only their invoices in billing', function () {
 
     $this->get(route('portal.billing.invoices.show', $otherInvoice))
         ->assertNotFound();
+});
+
+test('tenant can start an online invoice payment without changing invoice accounting', function () {
+    $user = User::factory()->create();
+    $tenant = Tenant::factory()->withUser($user)->create();
+    $lease = Lease::factory()->create(['primary_tenant_id' => $tenant->id]);
+    $invoice = Invoice::factory()->create([
+        'lease_id' => $lease->id,
+        'total' => 1_500_000,
+        'amount_paid' => 0,
+        'status' => InvoiceStatus::Pending,
+    ]);
+    $gateway = Mockery::mock(PaymentGateway::class);
+    $gateway->shouldReceive('createPayment')
+        ->once()
+        ->andReturnUsing(fn (PaymentRequest $request) => new PaymentCreationResult(
+            providerReference: 'provider-reference',
+            status: GatewayPaymentStatus::Pending,
+            amount: $request->amount,
+            instructions: new CheckoutInstructions(url: 'https://example.test/checkout'),
+        ));
+    bindTenantPortalGateway($gateway);
+
+    $this->actingAs($user)
+        ->post(route('portal.billing.invoices.pay', $invoice))
+        ->assertRedirect('https://example.test/checkout');
+
+    expect($invoice->fresh()->amount_paid)->toBe('0.00')
+        ->and($invoice->fresh()->status)->toBe(InvoiceStatus::Pending)
+        ->and($invoice->paymentAttempts()->sole()->status)->toBe(GatewayPaymentStatus::Pending);
+});
+
+test('tenant receives a safe error when checkout instructions are empty', function () {
+    $user = User::factory()->create();
+    $tenant = Tenant::factory()->withUser($user)->create();
+    $lease = Lease::factory()->create(['primary_tenant_id' => $tenant->id]);
+    $invoice = Invoice::factory()->create([
+        'lease_id' => $lease->id,
+        'status' => InvoiceStatus::Pending,
+    ]);
+    $attempt = PaymentAttempt::factory()->for($invoice)->create();
+    $action = Mockery::mock(StartGatewayPayment::class);
+    $action->shouldReceive('execute')
+        ->once()
+        ->andReturn(new StartGatewayPaymentResult(
+            attempt: $attempt,
+            instructions: new CheckoutInstructions,
+        ));
+    app()->instance(StartGatewayPayment::class, $action);
+
+    $this->actingAs($user)
+        ->post(route('portal.billing.invoices.pay', $invoice))
+        ->assertInertiaFlash('toast', [
+            'type' => 'error',
+            'message' => 'Online payment instructions were not returned. Please try again.',
+        ]);
+});
+
+test('tenant can resume a persisted checkout when no gateway is active', function () {
+    $user = User::factory()->create();
+    $tenant = Tenant::factory()->withUser($user)->create();
+    $lease = Lease::factory()->create(['primary_tenant_id' => $tenant->id]);
+    $invoice = Invoice::factory()->create([
+        'lease_id' => $lease->id,
+        'status' => InvoiceStatus::Pending,
+    ]);
+    $attempt = PaymentAttempt::factory()->for($invoice)->create([
+        'expires_at' => now()->addHour(),
+        'checkout_instructions' => [
+            'url' => 'https://example.test/resume',
+            'entries' => [],
+        ],
+    ]);
+    bindTenantPortalGateway(null);
+
+    $this->actingAs($user)
+        ->get(route('portal.billing.invoices.show', $invoice))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('onlinePaymentAvailable', true)
+            ->where('gatewayAttempts.0.id', $attempt->id)
+            ->where('gatewayAttempts.0.status', 'pending')
+            ->where('gatewayAttempts.0.checkout_instructions.url', 'https://example.test/resume')
+            ->missing('gatewayAttempts.0.provider_reference')
+            ->missing('gatewayAttempts.0.metadata'));
+
+    $this->post(route('portal.billing.invoices.pay', $invoice))
+        ->assertRedirect('https://example.test/resume');
+
+    expect($invoice->paymentAttempts()->count())->toBe(1);
+});
+
+test('tenant invoice payment status does not come from browser query parameters', function () {
+    $user = User::factory()->create();
+    $tenant = Tenant::factory()->withUser($user)->create();
+    $lease = Lease::factory()->create(['primary_tenant_id' => $tenant->id]);
+    $invoice = Invoice::factory()->create([
+        'lease_id' => $lease->id,
+        'status' => InvoiceStatus::Pending,
+        'amount_paid' => 0,
+    ]);
+    PaymentAttempt::factory()->for($invoice)->create([
+        'status' => GatewayPaymentStatus::Pending,
+    ]);
+    bindTenantPortalGateway(null);
+
+    $this->actingAs($user)
+        ->get(route('portal.billing.invoices.show', [$invoice, 'status' => 'success']))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('invoice.status', InvoiceStatus::Pending->value)
+            ->where('invoice.amount_paid', '0.00')
+            ->where('gatewayAttempts.0.status', 'pending'));
+});
+
+test('tenant can retry a failed online invoice payment', function () {
+    $user = User::factory()->create();
+    $tenant = Tenant::factory()->withUser($user)->create();
+    $lease = Lease::factory()->create(['primary_tenant_id' => $tenant->id]);
+    $invoice = Invoice::factory()->create([
+        'lease_id' => $lease->id,
+        'status' => InvoiceStatus::Pending,
+    ]);
+    PaymentAttempt::factory()->for($invoice)->failed()->create();
+    $gateway = Mockery::mock(PaymentGateway::class);
+    $gateway->shouldReceive('createPayment')
+        ->once()
+        ->andReturnUsing(fn (PaymentRequest $request) => new PaymentCreationResult(
+            providerReference: 'new-provider-reference',
+            status: GatewayPaymentStatus::Pending,
+            amount: $request->amount,
+            instructions: new CheckoutInstructions(url: 'https://example.test/retry'),
+        ));
+    bindTenantPortalGateway($gateway);
+
+    $this->actingAs($user)
+        ->post(route('portal.billing.invoices.pay', $invoice))
+        ->assertRedirect('https://example.test/retry');
+
+    expect($invoice->paymentAttempts()->count())->toBe(2)
+        ->and($invoice->paymentAttempts()->latest('id')->first()->status)
+        ->toBe(GatewayPaymentStatus::Pending);
+});
+
+test('tenant cannot start online payment for another tenants invoice', function () {
+    $user = User::factory()->create();
+    Tenant::factory()->withUser($user)->create();
+    $invoice = Invoice::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('portal.billing.invoices.pay', $invoice))
+        ->assertNotFound();
+
+    expect($invoice->paymentAttempts()->count())->toBe(0);
+});
+
+test('tenant sees online payment unavailable without a gateway or resumable attempt', function () {
+    $user = User::factory()->create();
+    $tenant = Tenant::factory()->withUser($user)->create();
+    $lease = Lease::factory()->create(['primary_tenant_id' => $tenant->id]);
+    $invoice = Invoice::factory()->create([
+        'lease_id' => $lease->id,
+        'status' => InvoiceStatus::Pending,
+    ]);
+    bindTenantPortalGateway(null);
+
+    $this->actingAs($user)
+        ->get(route('portal.billing.invoices.show', $invoice))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('onlinePaymentAvailable', false));
+
+    $this->post(route('portal.billing.invoices.pay', $invoice))
+        ->assertInertiaFlash('toast', [
+            'type' => 'error',
+            'message' => 'Online payment is not available for this invoice.',
+        ]);
 });
 
 test('tenant sees only their billing data', function () {

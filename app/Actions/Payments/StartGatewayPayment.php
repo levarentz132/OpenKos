@@ -18,6 +18,7 @@ use App\Services\Payments\PaymentGatewayManager;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use OpenKOS\Core\Data\Payment\CheckoutInstructions;
 use OpenKOS\Core\Data\Payment\PaymentCreationResult;
 use OpenKOS\Core\Data\Payment\PaymentRequest;
 use OpenKOS\Core\Enums\PaymentStatus;
@@ -126,9 +127,19 @@ class StartGatewayPayment
         $attempt = $state['attempt'];
 
         if ($state['reused']) {
+            $instructions = $this->instructions->fromArray($attempt->checkout_instructions);
+
+            if (! $this->hasUsableInstructions($instructions)) {
+                $this->markFailed($attempt);
+
+                throw new PaymentGatewayCreationException(
+                    'Payment checkout instructions are unavailable.',
+                );
+            }
+
             return new StartGatewayPaymentResult(
                 attempt: $attempt,
-                instructions: $this->instructions->fromArray($attempt->checkout_instructions),
+                instructions: $instructions,
                 reused: true,
             );
         }
@@ -163,6 +174,14 @@ class StartGatewayPayment
 
             throw new PaymentGatewayCreationException(
                 'Payment gateway returned an amount or currency that does not match the invoice.',
+            );
+        }
+
+        if ($result->status === PaymentStatus::Pending && ! $this->hasUsableInstructions($result->instructions)) {
+            $this->markFailed($attempt);
+
+            throw new PaymentGatewayCreationException(
+                'Payment gateway returned no usable checkout instructions.',
             );
         }
 
@@ -253,5 +272,10 @@ class StartGatewayPayment
                 ]);
             }
         });
+    }
+
+    private function hasUsableInstructions(CheckoutInstructions $instructions): bool
+    {
+        return $instructions->url !== null || $instructions->entries !== [];
     }
 }

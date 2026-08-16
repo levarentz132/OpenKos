@@ -182,6 +182,25 @@ it('fails closed when the provider returns a different amount or currency', func
     expect($invoice->paymentAttempts()->sole()->status)->toBe(PaymentStatus::Failed);
 });
 
+it('fails closed when the provider returns no usable checkout instructions', function () {
+    $invoice = Invoice::factory()->create();
+    $gateway = Mockery::mock(PaymentGateway::class);
+    $gateway->shouldReceive('key')->andReturn('test-gateway');
+    $gateway->shouldReceive('createPayment')
+        ->once()
+        ->andReturnUsing(fn (PaymentRequest $request) => new PaymentCreationResult(
+            providerReference: 'provider-reference',
+            status: PaymentStatus::Pending,
+            amount: $request->amount,
+            instructions: new CheckoutInstructions,
+        ));
+
+    expect(fn () => startGatewayPaymentAction($gateway)->execute($invoice, User::factory()->owner()->create()))
+        ->toThrow(PaymentGatewayCreationException::class);
+
+    expect($invoice->paymentAttempts()->sole()->status)->toBe(PaymentStatus::Failed);
+});
+
 it('blocks a new checkout after a settled attempt', function () {
     $invoice = Invoice::factory()->create();
     PaymentAttempt::factory()->for($invoice)->settled()->create();

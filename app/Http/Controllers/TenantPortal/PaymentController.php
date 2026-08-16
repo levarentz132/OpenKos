@@ -3,16 +3,22 @@
 namespace App\Http\Controllers\TenantPortal;
 
 use App\Actions\Payments\RecordPayment;
+use App\Actions\Payments\StartGatewayPayment;
 use App\Data\Payment\RecordPaymentData;
 use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
 use App\Events\Payment\PaymentRecorded;
+use App\Exceptions\InvoiceNotPayableException;
+use App\Exceptions\PaymentGatewayCreationException;
+use App\Exceptions\PaymentGatewayUnavailableException;
 use App\Exceptions\PaymentOverflowException;
 use App\Http\Requests\Payment\StoreTenantPortalPaymentRequest;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\PaymentAttempt;
 use App\Models\Setting;
 use App\Services\Invoices\InvoicePdfArtifact;
+use App\Services\Payments\PaymentGatewayManager;
 use Illuminate\Contracts\View\View as ViewContract;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -20,7 +26,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use OpenKOS\Core\Enums\PaymentStatus as GatewayPaymentStatus;
 use OpenKOS\Core\Events\PaymentRecorded as PlatformPaymentRecorded;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PaymentController extends TenantPortalController
@@ -152,26 +160,83 @@ class PaymentController extends TenantPortalController
         ]);
     }
 
-    public function invoice(Request $request, Invoice $invoice, InvoicePdfArtifact $artifact): Response
-    {
+    public function invoice(
+        Request $request,
+        Invoice $invoice,
+        InvoicePdfArtifact $artifact,
+        PaymentGatewayManager $gateways,
+    ): Response {
         $this->ensureTenantOwnsInvoice($request, $invoice);
 
         $invoice->load(['lease.unit.property', 'lineItems', 'payments']);
+        $gatewayAttempts = $invoice->paymentAttempts()
+            ->latest('id')
+            ->get([
+                'id',
+                'invoice_id',
+                'amount',
+                'currency',
+                'status',
+                'expires_at',
+                'checkout_instructions',
+                'initiated_at',
+            ]);
+        $gatewayAttempts->each(function (PaymentAttempt $attempt): void {
+            $attempt->setAttribute(
+                'resumable',
+                $attempt->status === GatewayPaymentStatus::Pending
+                    && ($attempt->expires_at === null || $attempt->expires_at->isFuture())
+                    && $this->hasUsableInstructions($attempt->checkout_instructions),
+            );
+        });
         $invoice->append(['outstanding', 'display_status']);
         $invoicePdfStatus = $artifact->status($invoice);
         if ($invoicePdfStatus === 'pending') {
             $artifact->ensureQueued($invoice);
         }
 
+        $hasResumableAttempt = $gatewayAttempts->contains(
+            fn (PaymentAttempt $attempt): bool => $attempt->resumable,
+        );
+
         return Inertia::render('tenant-portal/payments/invoice', [
             'invoice' => $invoice,
             'invoicePdf' => ['status' => $invoicePdfStatus],
+            'gatewayAttempts' => $gatewayAttempts,
+            'onlinePaymentAvailable' => $hasResumableAttempt || $gateways->active() !== null,
             'lease' => [
                 'reference' => $invoice->lease->reference,
                 'unit_name' => $invoice->lease->unit?->name,
                 'property_name' => $invoice->lease->unit?->property?->name,
             ],
         ]);
+    }
+
+    public function pay(Request $request, Invoice $invoice, StartGatewayPayment $action): SymfonyResponse
+    {
+        $this->ensureTenantOwnsInvoice($request, $invoice);
+
+        try {
+            $result = $action->execute($invoice, $request->user());
+        } catch (InvoiceNotPayableException|PaymentGatewayUnavailableException) {
+            return $this->gatewayPaymentError(__('Online payment is not available for this invoice.'));
+        } catch (PaymentGatewayCreationException $exception) {
+            return $this->gatewayPaymentError(
+                $exception->ambiguous
+                    ? __('Checkout creation is still being confirmed. Refresh this invoice before trying again.')
+                    : __('Online payment could not be started. Please try again.'),
+            );
+        }
+
+        if ($result->instructions->url !== null) {
+            return Inertia::location($result->instructions->url);
+        }
+
+        if ($result->instructions->entries !== []) {
+            return to_route('portal.billing.invoices.show', $invoice);
+        }
+
+        return $this->gatewayPaymentError(__('Online payment instructions were not returned. Please try again.'));
     }
 
     public function download(Request $request, Invoice $invoice, InvoicePdfArtifact $artifact): StreamedResponse|RedirectResponse
@@ -268,5 +333,21 @@ class PaymentController extends TenantPortalController
         $tenant = $this->tenant($request);
 
         abort_unless($tenant->leases()->whereKey($invoice->lease_id)->exists(), 404);
+    }
+
+    private function gatewayPaymentError(string $message): RedirectResponse
+    {
+        Inertia::flash('toast', [
+            'type' => 'error',
+            'message' => $message,
+        ]);
+
+        return back();
+    }
+
+    private function hasUsableInstructions(?array $instructions): bool
+    {
+        return ($instructions['url'] ?? null) !== null
+            || ($instructions['entries'] ?? []) !== [];
     }
 }
