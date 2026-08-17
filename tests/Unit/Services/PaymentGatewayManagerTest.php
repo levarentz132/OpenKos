@@ -34,6 +34,15 @@ it('returns provider metadata without exposing secret values', function () {
         ->and($provider['secret_fields'])->toBe(['secret_key'])
         ->and($provider['configuration_schema']['environment']['presentation'])->toBe('segmented')
         ->and($provider['configuration_schema']['environment']['default'])->toBe('sandbox')
+        ->and($provider['configuration_schema']['webhook_setup']['instructions'])->toBe([
+            'Open the webhook settings.',
+            'Add the webhook URL shown below.',
+        ])
+        ->and($provider['configuration_schema']['webhook_setup']['link'])->toBe([
+            'label' => 'Open webhook settings',
+            'url' => 'https://example.test/webhooks',
+        ])
+        ->and($provider['configuration_schema']['webhook_setup']['url'])->toBe('/api/webhooks/test')
         ->and($provider['configuration_schema']['secret_key']['description'])->toBe('Keep this value secret.')
         ->and($provider['configuration_schema']['secret_key']['visible_when'])->toBe([
             'field' => 'environment',
@@ -135,6 +144,19 @@ class ManagerTestPaymentGateway implements PaymentGateway
                     ['value' => 'sandbox', 'label' => 'Sandbox'],
                     ['value' => 'production', 'label' => 'Production'],
                 ],
+            ],
+            'webhook_setup' => [
+                'label' => 'Webhook setup',
+                'type' => 'info',
+                'instructions' => [
+                    'Open the webhook settings.',
+                    'Add the webhook URL shown below.',
+                ],
+                'link' => [
+                    'label' => 'Open webhook settings',
+                    'url' => 'https://example.test/webhooks',
+                ],
+                'url' => '/api/webhooks/test',
             ],
             'secret_key' => [
                 'label' => 'Secret key',

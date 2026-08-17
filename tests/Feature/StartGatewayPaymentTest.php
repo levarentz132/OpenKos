@@ -10,6 +10,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\Payments\PaymentGatewayManager;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use OpenKOS\Core\Contracts\PaymentGateway;
 use OpenKOS\Core\Data\Payment\CheckoutInstruction;
 use OpenKOS\Core\Data\Payment\CheckoutInstructions;
@@ -153,6 +154,7 @@ it('expires stale pending attempts before creating a replacement', function () {
 
 it('keeps ambiguous provider failures pending for reconciliation', function () {
     $invoice = Invoice::factory()->create();
+    Log::spy();
     $gateway = Mockery::mock(PaymentGateway::class);
     $gateway->shouldReceive('key')->andReturn('test-gateway');
     $gateway->shouldReceive('createPayment')
@@ -166,6 +168,16 @@ it('keeps ambiguous provider failures pending for reconciliation', function () {
     expect($attempt->status)->toBe(PaymentStatus::Pending)
         ->and($attempt->metadata['provider_creation_state'])->toBe('uncertain')
         ->and($attempt->metadata['provider_creation_uncertain'])->toBeTrue();
+
+    Log::shouldHaveReceived('error')
+        ->once()
+        ->with('Payment gateway checkout creation failed.', Mockery::on(
+            fn (array $context): bool => $context['invoice_id'] === $invoice->id
+                && $context['attempt_id'] === $attempt->id
+                && $context['gateway_key'] === 'test-gateway'
+                && $context['exception'] instanceof RuntimeException
+                && $context['exception']->getMessage() === 'timeout from provider SDK',
+        ));
 });
 
 it('fails closed when the provider returns a different amount or currency', function () {

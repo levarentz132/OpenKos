@@ -18,6 +18,7 @@ use App\Services\Payments\PaymentGatewayManager;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use OpenKOS\Core\Data\Payment\CheckoutInstructions;
 use OpenKOS\Core\Data\Payment\PaymentCreationResult;
 use OpenKOS\Core\Data\Payment\PaymentRequest;
@@ -158,6 +159,12 @@ class StartGatewayPayment
             ));
         } catch (Throwable $exception) {
             $this->markCreationUncertain($attempt);
+            Log::error('Payment gateway checkout creation failed.', [
+                'invoice_id' => $invoice->id,
+                'attempt_id' => $attempt->id,
+                'gateway_key' => $attempt->gateway_key,
+                'exception' => $exception,
+            ]);
 
             throw new PaymentGatewayCreationException(
                 'Payment checkout creation could not be confirmed.',

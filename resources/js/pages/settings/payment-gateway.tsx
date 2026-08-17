@@ -60,6 +60,13 @@ export default function PaymentGateway({
         (gateway) => gateway.key === data.gateway,
     );
     const selectedConfig = data.configuration;
+    const selectedFieldState = selectedGateway
+        ? getVisibleGatewayFields(selectedGateway, selectedConfig)
+        : null;
+    const selectedInformationFields =
+        selectedFieldState?.visibleFields.filter(
+            ([, field]) => field.type === 'info',
+        ) ?? [];
 
     function selectGateway(key: string) {
         const configuration = configs[key] ?? {};
@@ -128,80 +135,118 @@ export default function PaymentGateway({
                 </Alert>
             ) : (
                 <form onSubmit={handleSubmit}>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Payment gateway</CardTitle>
-                            <CardDescription>
-                                Only one installed and fully configured gateway
-                                can be active at a time.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid max-w-md gap-2">
-                                <Label htmlFor="payment_gateway">
-                                    Active gateway
-                                </Label>
-                                <Select
-                                    value={data.gateway}
-                                    onValueChange={selectGateway}
-                                >
-                                    <SelectTrigger id="payment_gateway">
-                                        <SelectValue placeholder="Select a gateway" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value={NONE}>
-                                            No active gateway
-                                        </SelectItem>
-                                        {gateways.map((gateway) => (
-                                            <SelectItem
-                                                key={gateway.key}
-                                                value={gateway.key}
-                                                disabled={
-                                                    gateway.status ===
-                                                        'unavailable' &&
-                                                    gateway.key !== activeKey
-                                                }
-                                            >
-                                                {gateway.label}
-                                                {gateway.status !== 'configured'
-                                                    ? ` (${gateway.status})`
-                                                    : ''}
+                    <div
+                        className={
+                            selectedInformationFields.length > 0
+                                ? 'grid items-start gap-6 lg:grid-cols-2'
+                                : undefined
+                        }
+                    >
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Payment gateway</CardTitle>
+                                <CardDescription>
+                                    Only one installed and fully configured
+                                    gateway can be active at a time.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid max-w-md gap-2">
+                                    <Label htmlFor="payment_gateway">
+                                        Active gateway
+                                    </Label>
+                                    <Select
+                                        value={data.gateway}
+                                        onValueChange={selectGateway}
+                                    >
+                                        <SelectTrigger id="payment_gateway">
+                                            <SelectValue placeholder="Select a gateway" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value={NONE}>
+                                                No active gateway
                                             </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {errors.gateway && (
-                                    <p className="text-sm text-red-600">
-                                        {errors.gateway}
-                                    </p>
+                                            {gateways.map((gateway) => (
+                                                <SelectItem
+                                                    key={gateway.key}
+                                                    value={gateway.key}
+                                                    disabled={
+                                                        gateway.status ===
+                                                            'unavailable' &&
+                                                        gateway.key !==
+                                                            activeKey
+                                                    }
+                                                >
+                                                    {gateway.label}
+                                                    {gateway.status !==
+                                                    'configured'
+                                                        ? ` (${gateway.status})`
+                                                        : ''}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.gateway && (
+                                        <p className="text-sm text-red-600">
+                                            {errors.gateway}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {selectedGateway?.status === 'unavailable' && (
+                                    <Alert variant="destructive">
+                                        <AlertTitle>
+                                            {selectedGateway.label}
+                                        </AlertTitle>
+                                        <AlertDescription>
+                                            {selectedGateway.error}
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+
+                                {selectedGateway &&
+                                    selectedGateway.status !==
+                                        'unavailable' && (
+                                        <GatewayConfiguration
+                                            gateway={selectedGateway}
+                                            configuration={selectedConfig}
+                                            errors={errors}
+                                            onChange={setConfiguration}
+                                        />
+                                    )}
+                            </CardContent>
+                            <CardFooter>
+                                <Button disabled={processing}>Save</Button>
+                            </CardFooter>
+                        </Card>
+
+                        {selectedGateway && selectedFieldState && (
+                            <div className="space-y-4">
+                                {selectedInformationFields.map(
+                                    ([key, field]) => (
+                                        <GatewayField
+                                            key={key}
+                                            fieldKey={key}
+                                            field={field}
+                                            value={
+                                                selectedFieldState
+                                                    .resolvedConfiguration[
+                                                    key
+                                                ] ?? ''
+                                            }
+                                            hasSavedSecret={selectedGateway.secret_fields.includes(
+                                                key,
+                                            )}
+                                            error={
+                                                errors[`configuration.${key}`]
+                                            }
+                                            onChange={setConfiguration}
+                                        />
+                                    ),
                                 )}
                             </div>
-
-                            {selectedGateway?.status === 'unavailable' && (
-                                <Alert variant="destructive">
-                                    <AlertTitle>
-                                        {selectedGateway.label}
-                                    </AlertTitle>
-                                    <AlertDescription>
-                                        {selectedGateway.error}
-                                    </AlertDescription>
-                                </Alert>
-                            )}
-
-                            {selectedGateway &&
-                                selectedGateway.status !== 'unavailable' && (
-                                    <GatewayConfiguration
-                                        gateway={selectedGateway}
-                                        configuration={selectedConfig}
-                                        errors={errors}
-                                        onChange={setConfiguration}
-                                    />
-                                )}
-                        </CardContent>
-                        <CardFooter>
-                            <Button disabled={processing}>Save</Button>
-                        </CardFooter>
-                    </Card>
+                        )}
+                    </div>
                 </form>
             )}
         </div>
@@ -219,6 +264,43 @@ function GatewayConfiguration({
     errors: Record<string, string>;
     onChange: (key: string, value: string) => void;
 }) {
+    const { fields, resolvedConfiguration, visibleFields } =
+        getVisibleGatewayFields(gateway, configuration);
+    const configurationFields = visibleFields.filter(
+        ([, field]) => field.type !== 'info',
+    );
+
+    const renderField = ([key, field]: [string, PaymentGatewayField]) => (
+        <GatewayField
+            key={key}
+            fieldKey={key}
+            field={field}
+            value={resolvedConfiguration[key] ?? ''}
+            hasSavedSecret={gateway.secret_fields.includes(key)}
+            error={errors[`configuration.${key}`]}
+            onChange={onChange}
+        />
+    );
+
+    if (fields.length === 0) {
+        return (
+            <p className="text-sm text-muted-foreground">
+                This gateway does not require additional configuration.
+            </p>
+        );
+    }
+
+    return (
+        <div className="max-w-md space-y-4">
+            {configurationFields.map(renderField)}
+        </div>
+    );
+}
+
+function getVisibleGatewayFields(
+    gateway: PaymentGateway,
+    configuration: Record<string, string>,
+) {
     const fields = Object.entries(gateway.configuration_schema);
     const resolvedConfiguration = Object.fromEntries(
         fields.map(([key, field]) => [
@@ -236,29 +318,7 @@ function GatewayConfiguration({
         );
     });
 
-    if (fields.length === 0) {
-        return (
-            <p className="text-sm text-muted-foreground">
-                This gateway does not require additional configuration.
-            </p>
-        );
-    }
-
-    return (
-        <div className="space-y-4">
-            {visibleFields.map(([key, field]) => (
-                <GatewayField
-                    key={key}
-                    fieldKey={key}
-                    field={field}
-                    value={resolvedConfiguration[key] ?? ''}
-                    hasSavedSecret={gateway.secret_fields.includes(key)}
-                    error={errors[`configuration.${key}`]}
-                    onChange={onChange}
-                />
-            ))}
-        </div>
-    );
+    return { fields, resolvedConfiguration, visibleFields };
 }
 
 function GatewayField({
@@ -276,6 +336,58 @@ function GatewayField({
     error?: string;
     onChange: (key: string, value: string) => void;
 }) {
+    if (field.type === 'info') {
+        const resolvedUrl = field.url
+            ? typeof window === 'undefined'
+                ? field.url
+                : new URL(field.url, window.location.origin).toString()
+            : null;
+
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">{field.label}</CardTitle>
+                    {field.description && (
+                        <CardDescription>{field.description}</CardDescription>
+                    )}
+                </CardHeader>
+                {(field.instructions?.length || resolvedUrl || field.link) && (
+                    <CardContent className="space-y-4">
+                        {field.instructions?.length ? (
+                            <ol className="list-decimal space-y-2 pl-5 text-sm">
+                                {field.instructions.map(
+                                    (instruction, index) => (
+                                        <li key={index}>{instruction}</li>
+                                    ),
+                                )}
+                            </ol>
+                        ) : null}
+                        {resolvedUrl && (
+                            <div className="space-y-1">
+                                <p className="text-sm font-medium">
+                                    Webhook URL
+                                </p>
+                                <code className="block rounded-md border bg-muted px-3 py-2 text-xs break-all">
+                                    {resolvedUrl}
+                                </code>
+                            </div>
+                        )}
+                        {field.link && (
+                            <a
+                                href={field.link.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sm font-medium text-primary underline underline-offset-4"
+                            >
+                                {field.link.label}
+                            </a>
+                        )}
+                    </CardContent>
+                )}
+            </Card>
+        );
+    }
+
     const label = (
         <>
             {field.label}
@@ -284,7 +396,7 @@ function GatewayField({
     );
 
     return (
-        <div className="grid max-w-md gap-2">
+        <div className="grid gap-2">
             <Label
                 htmlFor={
                     field.presentation === 'segmented'
