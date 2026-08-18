@@ -139,7 +139,7 @@ export default function PaymentGateway({
                         {activePaymentAttemptCount === 1
                             ? 'attempt is'
                             : 'attempts are'}{' '}
-                        using the current gateway. Wait until{' '}
+                        in progress. Wait until{' '}
                         {activePaymentAttemptCount === 1 ? 'it completes' : 'they complete'}{' '}
                         or expire before switching or deactivating the gateway.
                     </AlertDescription>
