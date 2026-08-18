@@ -230,6 +230,8 @@ class StartGatewayPayment
         try {
             $this->persistResult($attempt, $result);
         } catch (Throwable $exception) {
+            $this->markCreationUncertain($attempt, $result->providerReference);
+
             throw new PaymentGatewayCreationException(
                 'Payment checkout response could not be saved.',
                 ambiguous: true,
@@ -291,18 +293,24 @@ class StartGatewayPayment
         });
     }
 
-    private function markCreationUncertain(PaymentAttempt $attempt): void
+    private function markCreationUncertain(PaymentAttempt $attempt, ?string $providerReference = null): void
     {
-        DB::transaction(function () use ($attempt): void {
+        DB::transaction(function () use ($attempt, $providerReference): void {
             $locked = PaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
 
             if ($locked->status === PaymentStatus::Pending) {
-                $locked->update([
+                $updates = [
                     'metadata' => array_merge($locked->metadata ?? [], [
                         'provider_creation_state' => 'uncertain',
                         'provider_creation_uncertain' => true,
                     ]),
-                ]);
+                ];
+
+                if ($providerReference !== null && $locked->provider_reference === null) {
+                    $updates['provider_reference'] = $providerReference;
+                }
+
+                $locked->update($updates);
             }
         });
     }
