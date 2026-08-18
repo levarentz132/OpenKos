@@ -90,7 +90,16 @@ class ApplyGatewayPaymentResult
                 );
             }
 
-            if ($attempt->status !== PaymentStatus::Pending) {
+            $canRecoverTerminalAttempt = $source === 'webhook'
+                && $result->status === PaymentStatus::Settled
+                && $attempt->payment_id === null
+                && in_array($attempt->status, [
+                    PaymentStatus::Failed,
+                    PaymentStatus::Expired,
+                    PaymentStatus::Canceled,
+                ], true);
+
+            if ($attempt->status !== PaymentStatus::Pending && ! $canRecoverTerminalAttempt) {
                 return $this->applyTerminalCallback($gatewayKey, $attempt, $result, $source);
             }
 
@@ -132,7 +141,9 @@ class ApplyGatewayPaymentResult
                 );
             }
 
-            $this->statuses->validate($attempt->status, PaymentStatus::Settled);
+            if ($attempt->status === PaymentStatus::Pending) {
+                $this->statuses->validate($attempt->status, PaymentStatus::Settled);
+            }
 
             $payment = $invoice->payments()->create([
                 'amount' => $attempt->amount,

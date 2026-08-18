@@ -203,13 +203,13 @@ it('applies failed callbacks without affecting invoice accounting', function () 
         ->and($invoice->fresh()->amount_paid)->toBe('0.00');
 });
 
-it('reports conflicting terminal callbacks as anomalies without mutation', function () {
-    Log::spy();
+it('applies a late settlement after a failed local attempt', function () {
     $invoice = Invoice::factory()->create(['total' => 1_500_000]);
     $attempt = PaymentAttempt::factory()->for($invoice)->failed()->create([
         'gateway_key' => 'test/gateway',
         'provider_reference' => 'provider-1',
         'reference' => 'attempt-1',
+        'amount' => 1_500_000,
     ]);
     bindWebhookGateway(gatewayWebhookResult(
         PaymentStatus::Settled,
@@ -218,13 +218,36 @@ it('reports conflicting terminal callbacks as anomalies without mutation', funct
     ));
 
     $this->postJson('/api/webhooks/payment/test/gateway', [])
-        ->assertStatus(202)
-        ->assertJson(['status' => 'anomaly']);
+        ->assertOk()
+        ->assertJson(['status' => 'processed']);
 
-    expect($attempt->fresh()->status)->toBe(PaymentStatus::Failed)
-        ->and(Payment::query()->count())->toBe(0);
+    expect($attempt->fresh()->status)->toBe(PaymentStatus::Settled)
+        ->and($attempt->fresh()->payment_id)->not->toBeNull()
+        ->and(Payment::query()->count())->toBe(1);
+});
 
-    Log::shouldHaveReceived('warning')->once();
+it('applies a late settlement after local expiry', function () {
+    $invoice = Invoice::factory()->create(['total' => 1_500_000]);
+    $attempt = PaymentAttempt::factory()->for($invoice)->expired()->create([
+        'gateway_key' => 'test/gateway',
+        'provider_reference' => 'provider-1',
+        'reference' => 'attempt-1',
+        'amount' => 1_500_000,
+    ]);
+    bindWebhookGateway(gatewayWebhookResult(
+        PaymentStatus::Settled,
+        reference: $attempt->reference,
+        amount: new Money(1_500_000, 'IDR'),
+    ));
+
+    $this->postJson('/api/webhooks/payment/test/gateway', [])
+        ->assertOk()
+        ->assertJson(['status' => 'processed']);
+
+    expect($attempt->fresh()->status)->toBe(PaymentStatus::Settled)
+        ->and($attempt->fresh()->payment_id)->not->toBeNull()
+        ->and(Payment::query()->count())->toBe(1)
+        ->and($invoice->fresh()->status)->toBe(InvoiceStatus::Paid);
 });
 
 it('fails closed for a settled attempt without a linked payment', function () {
