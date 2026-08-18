@@ -102,7 +102,8 @@
             "@php artisan migrate --graceful --ansi"
         ],
         "pre-package-uninstall": [
-            "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
+            "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall",
+            "App\\Composer\\PaymentGatewayRemovalGuard::beforePackageUninstall"
         ]
     },
     "extra": {

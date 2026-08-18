@@ -10,6 +10,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\Payments\PaymentGatewayManager;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use OpenKOS\Core\Contracts\PaymentGateway;
 use OpenKOS\Core\Data\Payment\CheckoutInstruction;
 use OpenKOS\Core\Data\Payment\CheckoutInstructions;
@@ -153,6 +154,7 @@ it('expires stale pending attempts before creating a replacement', function () {
 
 it('keeps ambiguous provider failures pending for reconciliation', function () {
     $invoice = Invoice::factory()->create();
+    Log::spy();
     $gateway = Mockery::mock(PaymentGateway::class);
     $gateway->shouldReceive('key')->andReturn('test-gateway');
     $gateway->shouldReceive('createPayment')
@@ -166,6 +168,16 @@ it('keeps ambiguous provider failures pending for reconciliation', function () {
     expect($attempt->status)->toBe(PaymentStatus::Pending)
         ->and($attempt->metadata['provider_creation_state'])->toBe('uncertain')
         ->and($attempt->metadata['provider_creation_uncertain'])->toBeTrue();
+
+    Log::shouldHaveReceived('error')
+        ->once()
+        ->with('Payment gateway checkout creation failed.', Mockery::on(
+            fn (array $context): bool => $context['invoice_id'] === $invoice->id
+                && $context['attempt_id'] === $attempt->id
+                && $context['gateway_key'] === 'test-gateway'
+                && $context['exception'] instanceof RuntimeException
+                && $context['exception']->getMessage() === 'timeout from provider SDK',
+        ));
 });
 
 it('fails closed when the provider returns a different amount or currency', function () {
@@ -175,6 +187,25 @@ it('fails closed when the provider returns a different amount or currency', func
     $gateway->shouldReceive('createPayment')
         ->once()
         ->andReturnUsing(fn (PaymentRequest $request) => paymentGatewayResult($request, new Money(1, 'USD')));
+
+    expect(fn () => startGatewayPaymentAction($gateway)->execute($invoice, User::factory()->owner()->create()))
+        ->toThrow(PaymentGatewayCreationException::class);
+
+    expect($invoice->paymentAttempts()->sole()->status)->toBe(PaymentStatus::Failed);
+});
+
+it('fails closed when the provider returns no usable checkout instructions', function () {
+    $invoice = Invoice::factory()->create();
+    $gateway = Mockery::mock(PaymentGateway::class);
+    $gateway->shouldReceive('key')->andReturn('test-gateway');
+    $gateway->shouldReceive('createPayment')
+        ->once()
+        ->andReturnUsing(fn (PaymentRequest $request) => new PaymentCreationResult(
+            providerReference: 'provider-reference',
+            status: PaymentStatus::Pending,
+            amount: $request->amount,
+            instructions: new CheckoutInstructions,
+        ));
 
     expect(fn () => startGatewayPaymentAction($gateway)->execute($invoice, User::factory()->owner()->create()))
         ->toThrow(PaymentGatewayCreationException::class);

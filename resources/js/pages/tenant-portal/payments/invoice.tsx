@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { ChevronLeft, Download, Printer } from 'lucide-react';
 import { useState } from 'react';
 import SubmitPortalPaymentSheet from '@/components/features/payments/submit-portal-payment-sheet';
@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button';
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants/billing';
 import { formatDate, formatPeriod, formatPrice } from '@/lib/formatters';
 import { index } from '@/routes/portal/billing';
-import { download, print } from '@/routes/portal/billing/invoices';
-import type { Invoice, Payment } from '@/types';
+import { download, pay, print } from '@/routes/portal/billing/invoices';
+import type { GatewayPaymentAttempt, Invoice, Payment } from '@/types';
 
 type InvoiceLease = {
     reference: string | null;
@@ -21,15 +21,23 @@ export default function InvoiceDetail({
     invoice,
     lease,
     invoicePdf,
+    gatewayAttempts,
+    onlinePaymentAvailable,
 }: {
     invoice: Invoice;
     lease: InvoiceLease;
     invoicePdf: {
         status: 'disabled' | 'pending' | 'available';
     };
+    gatewayAttempts: GatewayPaymentAttempt[];
+    onlinePaymentAvailable: boolean;
 }) {
     const [paymentOpen, setPaymentOpen] = useState(false);
+    const [gatewayProcessing, setGatewayProcessing] = useState(false);
     const isPayable = ['pending', 'partial'].includes(invoice.status);
+    const resumableGatewayAttempt = gatewayAttempts.find(
+        (attempt) => attempt.resumable,
+    );
     const payments = invoice.payments ?? [];
     const latestPayment = [...payments].sort(
         (a, b) =>
@@ -37,7 +45,11 @@ export default function InvoiceDetail({
                 new Date(b.payment_date).getTime() || a.id - b.id,
     )[payments.length - 1];
     const invoiceStatus = invoice.display_status ?? invoice.status;
-    const primaryContext = getPrimaryContext(invoiceStatus, latestPayment);
+    const primaryContext = getPrimaryContext(
+        invoiceStatus,
+        latestPayment,
+        gatewayAttempts[0],
+    );
 
     return (
         <div className="workspace-enter flex h-full flex-1 flex-col gap-6 overflow-x-auto rounded-xl p-4">
@@ -113,6 +125,28 @@ export default function InvoiceDetail({
                                 </p>
                             )}
                         </section>
+
+                        {gatewayAttempts.length > 0 && (
+                            <section className="rounded-lg border">
+                                <div className="border-b px-4 py-3">
+                                    <h2 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                                        Online payment attempts
+                                    </h2>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Payment status is updated after provider
+                                        confirmation.
+                                    </p>
+                                </div>
+                                <div className="divide-y">
+                                    {gatewayAttempts.map((attempt) => (
+                                        <GatewayAttemptRow
+                                            key={attempt.id}
+                                            attempt={attempt}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
 
                         {payments.length > 0 && (
                             <section className="rounded-lg border">
@@ -209,12 +243,36 @@ export default function InvoiceDetail({
                             </div>
                         </div>
                         <div className="mt-6 grid gap-2">
+                            {isPayable && onlinePaymentAvailable && (
+                                <Button
+                                    className="w-full"
+                                    disabled={gatewayProcessing}
+                                    onClick={() => {
+                                        setGatewayProcessing(true);
+                                        router.post(
+                                            pay.url(invoice),
+                                            {},
+                                            {
+                                                onFinish: () =>
+                                                    setGatewayProcessing(false),
+                                            },
+                                        );
+                                    }}
+                                >
+                                    {gatewayProcessing
+                                        ? 'Opening checkout...'
+                                        : resumableGatewayAttempt
+                                          ? 'Continue online payment'
+                                          : 'Pay online'}
+                                </Button>
+                            )}
                             {isPayable && (
                                 <Button
                                     className="w-full"
+                                    variant="outline"
                                     onClick={() => setPaymentOpen(true)}
                                 >
-                                    Pay invoice
+                                    Submit manual payment
                                 </Button>
                             )}
                             {invoicePdf.status === 'available' ? (
@@ -281,7 +339,35 @@ type PrimaryContext = {
 function getPrimaryContext(
     invoiceStatus: string,
     latestPayment?: Payment,
+    latestGatewayAttempt?: GatewayPaymentAttempt,
 ): PrimaryContext | null {
+    if (latestGatewayAttempt?.status === 'pending') {
+        return {
+            title: 'Online payment in progress',
+            description:
+                'Complete the checkout or return here later. The invoice will update after the provider confirms payment.',
+            variant: 'warning',
+        };
+    }
+
+    if (latestGatewayAttempt?.status === 'failed') {
+        return {
+            title: 'Online payment failed',
+            description:
+                'Start a new online payment or submit a manual payment to keep this invoice on track.',
+            variant: 'destructive',
+        };
+    }
+
+    if (latestGatewayAttempt?.status === 'expired') {
+        return {
+            title: 'Online payment expired',
+            description:
+                'Start a new online payment or submit a manual payment to keep this invoice on track.',
+            variant: 'warning',
+        };
+    }
+
     if (latestPayment?.status === 'pending') {
         return {
             title: 'Payment Under Review',
@@ -327,6 +413,65 @@ function getPrimaryContext(
     }
 
     return null;
+}
+
+function GatewayAttemptRow({ attempt }: { attempt: GatewayPaymentAttempt }) {
+    const isResumable =
+        attempt.resumable &&
+        hasUsableInstructions(attempt.checkout_instructions);
+
+    return (
+        <div className="space-y-3 px-4 py-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p className="font-medium">
+                        Started {formatDate(attempt.initiated_at)}
+                    </p>
+                    {attempt.status === 'pending' && attempt.expires_at && (
+                        <p className="text-xs text-muted-foreground">
+                            Expires {formatDate(attempt.expires_at)}
+                        </p>
+                    )}
+                </div>
+                <StatusBadge domain="gateway_attempt" value={attempt.status} />
+            </div>
+
+            {attempt.checkout_instructions && (
+                <div className="space-y-2 text-xs">
+                    {attempt.checkout_instructions.entries.map((entry) => (
+                        <div
+                            key={`${entry.key}-${entry.value}`}
+                            className="flex flex-wrap justify-between gap-3"
+                        >
+                            <span className="text-muted-foreground">
+                                {entry.label ?? entry.key}
+                            </span>
+                            <span className="font-medium break-all">
+                                {entry.value}
+                            </span>
+                        </div>
+                    ))}
+                    {isResumable && attempt.checkout_instructions.url && (
+                        <Button asChild size="sm" variant="outline">
+                            <a
+                                href={attempt.checkout_instructions.url}
+                                rel="noreferrer"
+                                target="_blank"
+                            >
+                                Continue checkout
+                            </a>
+                        </Button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function hasUsableInstructions(
+    instructions: GatewayPaymentAttempt['checkout_instructions'],
+): boolean {
+    return Boolean(instructions?.url || instructions?.entries.length);
 }
 
 function StatusDetail({

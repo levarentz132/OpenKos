@@ -42,7 +42,20 @@ export type PaymentGatewayField = {
     type?: string;
     required?: boolean;
     placeholder?: string;
+    description?: string;
+    instructions?: string[];
+    link?: {
+        label: string;
+        url: string;
+    };
+    url?: string;
     options?: Array<{ value: string; label: string }>;
+    presentation?: string;
+    default?: string | number | boolean;
+    visible_when?: {
+        field: string;
+        value: string;
+    };
     secret?: boolean;
 };
 
@@ -61,4 +74,5 @@ export type PaymentGatewaySettingsProps = {
     gateways: PaymentGateway[];
     active_key: string | null;
     active_status: 'none' | 'active' | 'incomplete' | 'unavailable';
+    active_payment_attempt_count: number;
 };

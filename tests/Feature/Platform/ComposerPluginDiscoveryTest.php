@@ -47,6 +47,7 @@ class ComposerDiscoverySecondFixturePlugin extends Plugin
 function withComposerDiscoveryFixtures(array $packages, Closure $callback): mixed
 {
     $original = require base_path('vendor/composer/installed.php');
+    $originalDisabledPackages = config('platform.discovery.disabled_packages', []);
     $versions = [];
     $directories = [];
 
@@ -88,6 +89,7 @@ function withComposerDiscoveryFixtures(array $packages, Closure $callback): mixe
         return $callback();
     } finally {
         InstalledVersions::reload($original);
+        config(['platform.discovery.disabled_packages' => $originalDisabledPackages]);
 
         foreach ($directories as $directory) {
             unlink($directory.'/composer.json');

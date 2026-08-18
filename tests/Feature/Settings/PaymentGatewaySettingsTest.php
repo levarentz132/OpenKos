@@ -1,10 +1,13 @@
 <?php
 
+use App\Models\Invoice;
+use App\Models\PaymentAttempt;
 use App\Models\Setting;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Payments\PaymentGatewayManager;
 use Database\Seeders\RoleAndPermissionSeeder;
+use Illuminate\Support\Collection;
 use OpenKOS\Core\Contracts\PaymentGateway;
 use OpenKOS\Core\Data\Payment\CheckoutInstructions;
 use OpenKOS\Core\Data\Payment\PaymentCreationResult;
@@ -37,9 +40,13 @@ it('renders registered gateways and redacts only secret values', function () {
             ->component('settings/payment-gateway')
             ->where('active_key', 'test/billing')
             ->where('active_status', 'active')
-            ->where('gateways.0.configuration.environment', 'sandbox')
-            ->missing('gateways.0.configuration.secret_key')
-            ->where('gateways.0.secret_fields.0', 'secret_key'));
+            ->where('gateways', function (Collection $gateways): bool {
+                $gateway = $gateways->firstWhere('key', 'test/billing');
+
+                return ($gateway['configuration']['environment'] ?? null) === 'sandbox'
+                    && ! array_key_exists('secret_key', $gateway['configuration'] ?? [])
+                    && ($gateway['secret_fields'][0] ?? null) === 'secret_key';
+            }));
 });
 
 it('encrypts configuration and activates a complete gateway', function () {
@@ -62,6 +69,54 @@ it('encrypts configuration and activates a complete gateway', function () {
         ->and($stored->value)->not->toContain('top-secret')
         ->and(Setting::get(PaymentGatewayManager::ACTIVE_KEY))->toBe('test/billing')
         ->and(Setting::get(PaymentGatewayManager::CONFIG_KEY)['test/billing']['secret_key'])->toBe('top-secret');
+});
+
+it('reports active pending payment attempts', function () {
+    $owner = User::factory()->owner()->create();
+    PaymentAttempt::factory()->for(Invoice::factory())->create([
+        'expires_at' => now()->addHour(),
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('settings.payment-gateway.edit'))
+        ->assertInertia(fn ($page) => $page
+            ->where('active_payment_attempt_count', 1));
+});
+
+it('blocks switching or deactivating a gateway while an attempt is active', function () {
+    $owner = User::factory()->owner()->create();
+    Setting::set(PaymentGatewayManager::CONFIG_KEY, [
+        'test/billing' => [
+            'environment' => 'sandbox',
+            'secret_key' => 'top-secret',
+        ],
+    ], 'encrypted:array');
+    Setting::set(PaymentGatewayManager::ACTIVE_KEY, 'test/billing');
+    PaymentAttempt::factory()->for(Invoice::factory())->create([
+        'expires_at' => now()->addHour(),
+    ]);
+
+    $this->from(route('settings.payment-gateway.edit'))
+        ->actingAs($owner)
+        ->patch(route('settings.payment-gateway.update'), [
+            'gateway' => null,
+            'configuration' => [],
+        ])
+        ->assertSessionHasErrors('gateway');
+
+    expect(Setting::get(PaymentGatewayManager::ACTIVE_KEY))->toBe('test/billing');
+});
+
+it('does not count expired pending attempts as active', function () {
+    $owner = User::factory()->owner()->create();
+    PaymentAttempt::factory()->for(Invoice::factory())->create([
+        'expires_at' => now()->subMinute(),
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('settings.payment-gateway.edit'))
+        ->assertInertia(fn ($page) => $page
+            ->where('active_payment_attempt_count', 0));
 });
 
 it('rejects activating an incomplete gateway', function () {

@@ -18,6 +18,8 @@ use App\Services\Payments\PaymentGatewayManager;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
+use OpenKOS\Core\Data\Payment\CheckoutInstructions;
 use OpenKOS\Core\Data\Payment\PaymentCreationResult;
 use OpenKOS\Core\Data\Payment\PaymentRequest;
 use OpenKOS\Core\Enums\PaymentStatus;
@@ -36,6 +38,16 @@ class StartGatewayPayment
     {
         Gate::forUser($actor)->authorize('pay', $invoice);
 
+        return $this->start($invoice);
+    }
+
+    public function executeViaSignedLink(Invoice $invoice): StartGatewayPaymentResult
+    {
+        return $this->start($invoice);
+    }
+
+    private function start(Invoice $invoice): StartGatewayPaymentResult
+    {
         $currency = strtoupper((string) (Setting::get('currency') ?? 'IDR'));
         $state = DB::transaction(function () use ($invoice, $currency) {
             $locked = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
@@ -126,9 +138,19 @@ class StartGatewayPayment
         $attempt = $state['attempt'];
 
         if ($state['reused']) {
+            $instructions = $this->instructions->fromArray($attempt->checkout_instructions);
+
+            if (! $this->hasUsableInstructions($instructions)) {
+                $this->markFailed($attempt);
+
+                throw new PaymentGatewayCreationException(
+                    'Payment checkout instructions are unavailable.',
+                );
+            }
+
             return new StartGatewayPaymentResult(
                 attempt: $attempt,
-                instructions: $this->instructions->fromArray($attempt->checkout_instructions),
+                instructions: $instructions,
                 reused: true,
             );
         }
@@ -147,6 +169,12 @@ class StartGatewayPayment
             ));
         } catch (Throwable $exception) {
             $this->markCreationUncertain($attempt);
+            Log::error('Payment gateway checkout creation failed.', [
+                'invoice_id' => $invoice->id,
+                'attempt_id' => $attempt->id,
+                'gateway_key' => $attempt->gateway_key,
+                'exception' => $exception,
+            ]);
 
             throw new PaymentGatewayCreationException(
                 'Payment checkout creation could not be confirmed.',
@@ -163,6 +191,14 @@ class StartGatewayPayment
 
             throw new PaymentGatewayCreationException(
                 'Payment gateway returned an amount or currency that does not match the invoice.',
+            );
+        }
+
+        if ($result->status === PaymentStatus::Pending && ! $this->hasUsableInstructions($result->instructions)) {
+            $this->markFailed($attempt);
+
+            throw new PaymentGatewayCreationException(
+                'Payment gateway returned no usable checkout instructions.',
             );
         }
 
@@ -253,5 +289,10 @@ class StartGatewayPayment
                 ]);
             }
         });
+    }
+
+    private function hasUsableInstructions(CheckoutInstructions $instructions): bool
+    {
+        return $instructions->url !== null || $instructions->entries !== [];
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Events\Settings\SettingsUpdated;
 use App\Http\Controllers\Controller;
+use App\Models\PaymentAttempt;
 use App\Services\Payments\PaymentGatewayManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use OpenKOS\Core\Enums\PaymentStatus;
 use OpenKOS\Platform\Settings\SettingsManager;
 
 class PaymentGatewayController extends Controller
@@ -35,6 +37,7 @@ class PaymentGatewayController extends Controller
                 $activeGateway['status'] !== 'configured' => $activeGateway['status'],
                 default => 'active',
             },
+            'active_payment_attempt_count' => $this->activePaymentAttemptCount(),
         ]);
     }
 
@@ -47,6 +50,17 @@ class PaymentGatewayController extends Controller
 
         $gatewayKey = $validated['gateway'] ?? null;
         $configuration = $validated['configuration'] ?? [];
+        $activePaymentAttemptCount = $this->activePaymentAttemptCount();
+
+        if ($activePaymentAttemptCount > 0 && $gatewayKey !== $this->gateways->activeKey()) {
+            throw ValidationException::withMessages([
+                'gateway' => trans_choice(
+                    ':count active payment attempt is still in progress. Wait until it completes or expires before changing the active gateway.|:count active payment attempts are still in progress. Wait until they complete or expire before changing the active gateway.',
+                    $activePaymentAttemptCount,
+                    ['count' => $activePaymentAttemptCount],
+                ),
+            ]);
+        }
 
         if ($gatewayKey === null || $gatewayKey === '') {
             $this->settings->set(PaymentGatewayManager::ACTIVE_KEY, null, $request->user());
@@ -183,6 +197,18 @@ class PaymentGatewayController extends Controller
                 'api_key',
                 'encrypted',
             ], true));
+    }
+
+    private function activePaymentAttemptCount(): int
+    {
+        return PaymentAttempt::query()
+            ->where('status', PaymentStatus::Pending->value)
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            })
+            ->count();
     }
 
     /** @param array<int, string>|null $keys */
