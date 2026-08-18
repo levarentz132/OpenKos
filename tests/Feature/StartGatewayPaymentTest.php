@@ -5,6 +5,7 @@ use App\Exceptions\InvoiceNotPayableException;
 use App\Exceptions\PaymentGatewayCreationException;
 use App\Models\Invoice;
 use App\Models\Lease;
+use App\Models\Payment;
 use App\Models\PaymentAttempt;
 use App\Models\Setting;
 use App\Models\User;
@@ -267,6 +268,29 @@ it('fails closed when the provider returns no usable checkout instructions', fun
         ->toThrow(PaymentGatewayCreationException::class);
 
     expect($invoice->paymentAttempts()->sole()->status)->toBe(PaymentStatus::Failed);
+});
+
+it('keeps terminal provider creation responses pending for confirmation', function () {
+    $invoice = Invoice::factory()->create();
+    $gateway = Mockery::mock(PaymentGateway::class);
+    $gateway->shouldReceive('key')->andReturn('test-gateway');
+    $gateway->shouldReceive('createPayment')
+        ->once()
+        ->andReturnUsing(fn (PaymentRequest $request) => new PaymentCreationResult(
+            providerReference: 'provider-reference',
+            status: PaymentStatus::Settled,
+            amount: $request->amount,
+            instructions: new CheckoutInstructions,
+        ));
+
+    expect(fn () => startGatewayPaymentAction($gateway)->execute($invoice, User::factory()->owner()->create()))
+        ->toThrow(PaymentGatewayCreationException::class);
+
+    $attempt = $invoice->paymentAttempts()->sole();
+    expect($attempt->status)->toBe(PaymentStatus::Pending)
+        ->and($attempt->provider_reference)->toBe('provider-reference')
+        ->and($attempt->metadata['provider_creation_state'])->toBe('uncertain')
+        ->and(Payment::query()->count())->toBe(0);
 });
 
 it('blocks a new checkout after a settled attempt', function () {

@@ -219,7 +219,16 @@ class StartGatewayPayment
             );
         }
 
-        if ($result->status === PaymentStatus::Pending && ! $this->hasUsableInstructions($result->instructions)) {
+        if ($result->status !== PaymentStatus::Pending) {
+            $this->markCreationUncertain($attempt, $result->providerReference);
+
+            throw new PaymentGatewayCreationException(
+                'Payment gateway returned a terminal checkout status that requires confirmation.',
+                ambiguous: true,
+            );
+        }
+
+        if (! $this->hasUsableInstructions($result->instructions)) {
             $this->markFailed($attempt);
 
             throw new PaymentGatewayCreationException(
@@ -271,22 +280,6 @@ class StartGatewayPayment
                     $result->metadata,
                 ),
             ];
-
-            if ($result->status !== PaymentStatus::Pending) {
-                $this->statuses->validate($locked->status, $result->status);
-                $updates['status'] = $result->status;
-                $timestampColumn = match ($result->status) {
-                    PaymentStatus::Pending => null,
-                    PaymentStatus::Settled => 'settled_at',
-                    PaymentStatus::Failed => 'failed_at',
-                    PaymentStatus::Expired => 'expired_at',
-                    PaymentStatus::Canceled => 'canceled_at',
-                };
-
-                if ($timestampColumn !== null) {
-                    $updates[$timestampColumn] = now();
-                }
-            }
 
             $locked->update($updates);
             $attempt->refresh();
