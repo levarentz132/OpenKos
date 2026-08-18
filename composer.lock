@@ -3321,12 +3321,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/senatroxx/openkos-platform.git",
-                "reference": "2dc5e57cc202a9cb85d88123a8083a9ec041c747"
+                "reference": "3669d1d825c3c22b462088602b9a5ef2c15b42f0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/senatroxx/openkos-platform/zipball/2dc5e57cc202a9cb85d88123a8083a9ec041c747",
-                "reference": "2dc5e57cc202a9cb85d88123a8083a9ec041c747",
+                "url": "https://api.github.com/repos/senatroxx/openkos-platform/zipball/3669d1d825c3c22b462088602b9a5ef2c15b42f0",
+                "reference": "3669d1d825c3c22b462088602b9a5ef2c15b42f0",
                 "shasum": ""
             },
             "require": {
@@ -3366,7 +3366,7 @@
                 "issues": "https://github.com/senatroxx/openkos-platform/issues",
                 "source": "https://github.com/senatroxx/openkos-platform/tree/v0.2.2"
             },
-            "time": "2026-08-18T10:11:16+00:00"
+            "time": "2026-08-18T11:04:43+00:00"
         },
         {
             "name": "paragonie/constant_time_encoding",
