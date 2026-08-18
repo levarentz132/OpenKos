@@ -91,6 +91,18 @@ class PaymentAttempt extends Model
         return $this->providerCreationState() === 'in_progress';
     }
 
+    public function hasOrphanedProviderCreation(CarbonInterface $staleBefore): bool
+    {
+        return $this->provider_reference === null
+            && in_array($this->providerCreationState(), ['in_progress', 'uncertain'], true)
+            && $this->updated_at?->lte($staleBefore) === true;
+    }
+
+    public function hasSupersededProviderCreation(): bool
+    {
+        return $this->providerCreationState() === 'superseded';
+    }
+
     public function scopeReconciliationCandidate(
         Builder $query,
         CarbonInterface $staleBefore,

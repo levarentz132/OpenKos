@@ -134,6 +134,29 @@ it('does not reuse an attempt while provider creation is unresolved', function (
         ->toThrow(PaymentGatewayCreationException::class);
 });
 
+it('supersedes stale provider creation attempts without references', function (string $creationState) {
+    $invoice = Invoice::factory()->create();
+    $orphaned = PaymentAttempt::factory()->for($invoice)->create([
+        'provider_reference' => null,
+        'expires_at' => null,
+        'checkout_instructions' => null,
+        'metadata' => ['provider_creation_state' => $creationState],
+        'updated_at' => now()->subMinutes(6),
+    ]);
+    $gateway = Mockery::mock(PaymentGateway::class);
+    $gateway->shouldReceive('key')->andReturn('test-gateway');
+    $gateway->shouldReceive('createPayment')
+        ->once()
+        ->andReturnUsing(fn (PaymentRequest $request) => paymentGatewayResult($request));
+
+    $result = startGatewayPaymentAction($gateway)->execute($invoice, User::factory()->owner()->create());
+
+    expect($result->reused)->toBeFalse()
+        ->and($orphaned->fresh()->status)->toBe(PaymentStatus::Pending)
+        ->and($orphaned->fresh()->metadata['provider_creation_state'])->toBe('superseded')
+        ->and($invoice->paymentAttempts()->count())->toBe(2);
+})->with(['in_progress', 'uncertain']);
+
 it('expires stale pending attempts before creating a replacement', function () {
     $invoice = Invoice::factory()->create();
     $stale = PaymentAttempt::factory()->for($invoice)->create([

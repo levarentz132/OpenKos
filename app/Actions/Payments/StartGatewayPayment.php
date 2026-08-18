@@ -81,6 +81,7 @@ class StartGatewayPayment
                 ->lockForUpdate()
                 ->latest('id')
                 ->get();
+            $staleBefore = now()->subMinutes(5);
 
             foreach ($pending as $attempt) {
                 if ($attempt->expires_at?->isPast()
@@ -93,6 +94,20 @@ class StartGatewayPayment
                         'expired_at' => now(),
                     ]);
 
+                    continue;
+                }
+
+                if ($attempt->hasOrphanedProviderCreation($staleBefore)) {
+                    $attempt->update([
+                        'metadata' => array_merge($attempt->metadata ?? [], [
+                            'provider_creation_state' => 'superseded',
+                        ]),
+                    ]);
+
+                    continue;
+                }
+
+                if ($attempt->hasSupersededProviderCreation()) {
                     continue;
                 }
 
