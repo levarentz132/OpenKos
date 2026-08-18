@@ -11,6 +11,7 @@ use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\PropertyDocumentsController;
 use App\Http\Controllers\PropertyLeasesController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SignedPaymentController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\TenantDocumentController;
 use App\Http\Controllers\TenantInvitationController;
@@ -33,6 +34,14 @@ Route::prefix('tenants/invitations')->name('tenants.invitations.')->middleware('
     Route::get('{token}', [TenantInvitationController::class, 'acceptInvitation'])->name('accept');
     Route::post('accept', [TenantInvitationController::class, 'completeInvitation'])->name('complete');
 });
+
+Route::prefix('pay/invoices/{token}')
+    ->where(['token' => '[A-Za-z0-9_-]+'])
+    ->middleware('throttle:30,1')
+    ->group(function () {
+        Route::get('/', [SignedPaymentController::class, 'show'])->name('payments.signed.show');
+        Route::post('/', [SignedPaymentController::class, 'pay'])->name('payments.signed.pay');
+    });
 
 Route::middleware(['auth', 'verified'])->prefix('portal')->name('portal.')->group(function () {
     Route::redirect('/', '/portal/dashboard');

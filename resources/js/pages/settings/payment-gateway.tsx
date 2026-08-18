@@ -1,4 +1,5 @@
 import { useForm } from '@inertiajs/react';
+import { Info } from 'lucide-react';
 import { useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,9 @@ export default function PaymentGateway({
     gateways,
     active_key: activeKey,
     active_status: activeStatus,
+    active_payment_attempt_count: activePaymentAttemptCount,
 }: PaymentGatewaySettingsProps) {
+    const hasActivePaymentAttempts = activePaymentAttemptCount > 0;
     const initialKey = gateways.some((gateway) => gateway.key === activeKey)
         ? activeKey!
         : NONE;
@@ -125,6 +128,24 @@ export default function PaymentGateway({
                 </Alert>
             )}
 
+            {hasActivePaymentAttempts && (
+                <Alert>
+                    <Info />
+                    <AlertTitle>
+                        Gateway changes are temporarily unavailable
+                    </AlertTitle>
+                    <AlertDescription>
+                        {activePaymentAttemptCount} active online payment{' '}
+                        {activePaymentAttemptCount === 1
+                            ? 'attempt is'
+                            : 'attempts are'}{' '}
+                        using the current gateway. Wait until{' '}
+                        {activePaymentAttemptCount === 1 ? 'it completes' : 'they complete'}{' '}
+                        or expire before switching or deactivating the gateway.
+                    </AlertDescription>
+                </Alert>
+            )}
+
             {gateways.length === 0 ? (
                 <Alert>
                     <AlertTitle>No payment gateways installed</AlertTitle>
@@ -159,7 +180,10 @@ export default function PaymentGateway({
                                         value={data.gateway}
                                         onValueChange={selectGateway}
                                     >
-                                        <SelectTrigger id="payment_gateway">
+                                        <SelectTrigger
+                                            id="payment_gateway"
+                                            disabled={hasActivePaymentAttempts}
+                                        >
                                             <SelectValue placeholder="Select a gateway" />
                                         </SelectTrigger>
                                         <SelectContent>

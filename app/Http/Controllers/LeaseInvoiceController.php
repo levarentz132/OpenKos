@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Invoice;
 use App\Models\Lease;
 use App\Models\Setting;
 use App\Services\Invoices\InvoicePdfArtifact;
+use App\Services\Payments\SignedInvoicePaymentLink;
 use App\Tables\Column;
 use App\Tables\Filter;
 use App\Tables\Table;
@@ -14,6 +16,7 @@ use Illuminate\Contracts\View\View as ViewContract;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -55,12 +58,17 @@ class LeaseInvoiceController extends Controller
         ]);
     }
 
-    public function show(Lease $lease, Invoice $invoice, InvoicePdfArtifact $artifact): Response
-    {
+    public function show(
+        Lease $lease,
+        Invoice $invoice,
+        InvoicePdfArtifact $artifact,
+        SignedInvoicePaymentLink $paymentLinks,
+    ): Response {
         abort_if($invoice->lease_id !== $lease->id, 404);
 
         $this->authorize('view', $lease);
 
+        $invoice->loadMissing('lease.unit');
         $invoice->load(['lineItems', 'payments.confirmedBy:id,name', 'payments.proofs']);
         $invoice->append(['outstanding', 'display_status']);
         $invoicePdfStatus = $artifact->status($invoice);
@@ -68,10 +76,16 @@ class LeaseInvoiceController extends Controller
             $artifact->ensureQueued($invoice);
         }
 
+        $paymentLink = in_array($invoice->status, [InvoiceStatus::Pending, InvoiceStatus::Partial], true)
+            && Gate::allows('pay', $invoice)
+            ? $paymentLinks->url($invoice)
+            : null;
+
         return Inertia::render('leases/invoice-detail', [
             'lease' => $lease->only('id', 'reference', 'status'),
             'invoice' => $invoice,
             'invoicePdf' => ['status' => $invoicePdfStatus],
+            'paymentLink' => $paymentLink,
         ]);
     }
 

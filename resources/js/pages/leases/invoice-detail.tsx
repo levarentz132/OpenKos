@@ -1,10 +1,11 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ChevronLeft, Download, Printer } from 'lucide-react';
+import { Check, ChevronLeft, Copy, Download, Printer } from 'lucide-react';
 import { useState } from 'react';
 import { PaymentDetailSheet } from '@/components/features';
 import { DocumentPreview } from '@/components/shared';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants/billing';
 import { formatDate, formatPeriod, formatPrice } from '@/lib/formatters';
 import invoiceRoutes from '@/routes/leases/workspace/invoices';
@@ -15,14 +16,17 @@ export default function InvoiceDetail({
     lease,
     invoice,
     invoicePdf,
+    paymentLink,
 }: {
     lease: WorkspaceLease;
     invoice: Invoice;
     invoicePdf: {
         status: 'disabled' | 'pending' | 'available';
     };
+    paymentLink: string | null;
 }) {
     const { auth } = usePage<{ auth: { permissions: string[] } }>().props;
+    const [copiedText, copy] = useClipboard();
     const [verifyingId, setVerifyingId] = useState<number | null>(null);
     const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(
         null,
@@ -101,6 +105,22 @@ export default function InvoiceDetail({
                                 domain="invoice"
                                 value={invoice.display_status ?? invoice.status}
                             />
+                            {paymentLink && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => void copy(paymentLink)}
+                                >
+                                    {copiedText === paymentLink ? (
+                                        <Check className="size-4" />
+                                    ) : (
+                                        <Copy className="size-4" />
+                                    )}
+                                    {copiedText === paymentLink
+                                        ? 'Copied'
+                                        : 'Copy payment link'}
+                                </Button>
+                            )}
                             {invoicePdf.status === 'available' ? (
                                 <Button asChild size="sm" variant="outline">
                                     <a

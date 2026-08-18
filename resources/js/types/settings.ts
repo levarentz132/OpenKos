@@ -74,4 +74,5 @@ export type PaymentGatewaySettingsProps = {
     gateways: PaymentGateway[];
     active_key: string | null;
     active_status: 'none' | 'active' | 'incomplete' | 'unavailable';
+    active_payment_attempt_count: number;
 };

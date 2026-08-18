@@ -38,6 +38,16 @@ class StartGatewayPayment
     {
         Gate::forUser($actor)->authorize('pay', $invoice);
 
+        return $this->start($invoice);
+    }
+
+    public function executeViaSignedLink(Invoice $invoice): StartGatewayPaymentResult
+    {
+        return $this->start($invoice);
+    }
+
+    private function start(Invoice $invoice): StartGatewayPaymentResult
+    {
         $currency = strtoupper((string) (Setting::get('currency') ?? 'IDR'));
         $state = DB::transaction(function () use ($invoice, $currency) {
             $locked = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
