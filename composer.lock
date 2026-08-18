@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "cc6a927ee5bb11bc082c1fea63b739ea",
+    "content-hash": "cc14fd20e308f5a78e8af127fa465cdc",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -3314,54 +3314,6 @@
                 }
             ],
             "time": "2026-02-16T23:10:27+00:00"
-        },
-        {
-            "name": "openkos/payment-xendit",
-            "version": "v0.1.3",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/senatroxx/openkos-payment-xendit.git",
-                "reference": "593f0629f6a8c153e1aa8ce469d69a3defe986e2"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/senatroxx/openkos-payment-xendit/zipball/593f0629f6a8c153e1aa8ce469d69a3defe986e2",
-                "reference": "593f0629f6a8c153e1aa8ce469d69a3defe986e2",
-                "shasum": ""
-            },
-            "require": {
-                "illuminate/http": "^13.0",
-                "illuminate/support": "^13.0",
-                "openkos/platform": "^0.2",
-                "php": "^8.3"
-            },
-            "require-dev": {
-                "laravel/pint": "^1.29",
-                "orchestra/testbench": "^11.1",
-                "pestphp/pest": "^4.7",
-                "pestphp/pest-plugin-laravel": "^4.1"
-            },
-            "type": "library",
-            "extra": {
-                "openkos": {
-                    "plugin": "OpenKOS\\PaymentXendit\\XenditPlugin"
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "OpenKOS\\PaymentXendit\\": "src/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "Apache-2.0"
-            ],
-            "description": "Xendit Payment Session gateway for OpenKOS.",
-            "support": {
-                "issues": "https://github.com/senatroxx/openkos-payment-xendit/issues",
-                "source": "https://github.com/senatroxx/openkos-payment-xendit/tree/v0.1.3"
-            },
-            "time": "2026-08-16T15:50:32+00:00"
         },
         {
             "name": "openkos/platform",
