@@ -12,10 +12,12 @@ use App\Services\Payments\PaymentGatewayManager;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use OpenKOS\Core\Contracts\PaymentGateway;
+use OpenKOS\Core\Contracts\PaymentGatewayStatusLookup;
 use OpenKOS\Core\Data\Payment\CheckoutInstruction;
 use OpenKOS\Core\Data\Payment\CheckoutInstructions;
 use OpenKOS\Core\Data\Payment\Money;
 use OpenKOS\Core\Data\Payment\PaymentCreationResult;
+use OpenKOS\Core\Data\Payment\PaymentProviderResult;
 use OpenKOS\Core\Data\Payment\PaymentRequest;
 use OpenKOS\Core\Enums\PaymentStatus;
 use Spatie\Permission\Models\Permission as SpatiePermission;
@@ -152,6 +154,38 @@ it('expires stale pending attempts before creating a replacement', function () {
         ->and($invoice->paymentAttempts()->count())->toBe(2);
 });
 
+it('rechecks stale provider sessions before expiring them', function () {
+    $invoice = Invoice::factory()->create();
+    $attempt = PaymentAttempt::factory()->for($invoice)->create([
+        'provider_reference' => 'existing-provider-reference',
+        'expires_at' => now()->subMinute(),
+        'checkout_instructions' => [
+            'url' => 'https://example.test/existing',
+            'entries' => [],
+        ],
+    ]);
+    $gateway = Mockery::mock(PaymentGateway::class, PaymentGatewayStatusLookup::class);
+    $gateway->shouldReceive('lookupPaymentStatus')
+        ->once()
+        ->andReturn(new PaymentProviderResult(
+            providerReference: $attempt->provider_reference,
+            status: PaymentStatus::Pending,
+            reference: $attempt->reference,
+            amount: new Money((int) $attempt->amount, $attempt->currency),
+        ));
+    $manager = Mockery::mock(PaymentGatewayManager::class);
+    $manager->shouldReceive('find')->with('test-gateway')->zeroOrMoreTimes()->andReturn($gateway);
+    $manager->shouldReceive('supportsStatusLookup')->with('test-gateway')->once()->andReturnTrue();
+    $manager->shouldNotReceive('active');
+    app()->instance(PaymentGatewayManager::class, $manager);
+
+    $result = app(StartGatewayPayment::class)->execute($invoice, User::factory()->owner()->create());
+
+    expect($result->reused)->toBeTrue()
+        ->and($result->attempt->id)->toBe($attempt->id)
+        ->and($attempt->fresh()->status)->toBe(PaymentStatus::Pending);
+});
+
 it('keeps ambiguous provider failures pending for reconciliation', function () {
     $invoice = Invoice::factory()->create();
     Log::spy();
@@ -175,8 +209,7 @@ it('keeps ambiguous provider failures pending for reconciliation', function () {
             fn (array $context): bool => $context['invoice_id'] === $invoice->id
                 && $context['attempt_id'] === $attempt->id
                 && $context['gateway_key'] === 'test-gateway'
-                && $context['exception'] instanceof RuntimeException
-                && $context['exception']->getMessage() === 'timeout from provider SDK',
+                && $context['exception_class'] === RuntimeException::class,
         ));
 });
 

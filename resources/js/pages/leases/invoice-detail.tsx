@@ -1,6 +1,14 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Check, ChevronLeft, Copy, Download, Printer } from 'lucide-react';
+import {
+    Check,
+    ChevronLeft,
+    Copy,
+    Download,
+    Printer,
+    RefreshCw,
+} from 'lucide-react';
 import { useState } from 'react';
+import { recheck as recheckPaymentAttempt } from '@/actions/App/Http/Controllers/PaymentAttemptController';
 import { PaymentDetailSheet } from '@/components/features';
 import { DocumentPreview } from '@/components/shared';
 import { StatusBadge } from '@/components/shared/status-badge';
@@ -10,13 +18,20 @@ import { PAYMENT_METHOD_LABELS } from '@/lib/constants/billing';
 import { formatDate, formatPeriod, formatPrice } from '@/lib/formatters';
 import invoiceRoutes from '@/routes/leases/workspace/invoices';
 import paymentRoutes from '@/routes/payments';
-import type { Invoice, Payment, PaymentProof, WorkspaceLease } from '@/types';
+import type {
+    GatewayPaymentAttempt,
+    Invoice,
+    Payment,
+    PaymentProof,
+    WorkspaceLease,
+} from '@/types';
 
 export default function InvoiceDetail({
     lease,
     invoice,
     invoicePdf,
     paymentLink,
+    gatewayAttempts,
 }: {
     lease: WorkspaceLease;
     invoice: Invoice;
@@ -24,10 +39,14 @@ export default function InvoiceDetail({
         status: 'disabled' | 'pending' | 'available';
     };
     paymentLink: string | null;
+    gatewayAttempts: GatewayPaymentAttempt[];
 }) {
     const { auth } = usePage<{ auth: { permissions: string[] } }>().props;
     const [copiedText, copy] = useClipboard();
     const [verifyingId, setVerifyingId] = useState<number | null>(null);
+    const [recheckingAttemptId, setRecheckingAttemptId] = useState<
+        number | null
+    >(null);
     const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(
         null,
     );
@@ -72,6 +91,18 @@ export default function InvoiceDetail({
                 preserveState: true,
                 preserveScroll: true,
                 onFinish: () => setVerifyingId(null),
+            },
+        );
+    }
+
+    function handleRecheck(attempt: GatewayPaymentAttempt) {
+        setRecheckingAttemptId(attempt.id);
+        router.post(
+            recheckPaymentAttempt.url([lease, invoice, attempt]),
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setRecheckingAttemptId(null),
             },
         );
     }
@@ -274,6 +305,106 @@ export default function InvoiceDetail({
                     ) : (
                         <p className="px-4 py-6 text-sm text-muted-foreground">
                             No payment activity yet.
+                        </p>
+                    )}
+                </section>
+
+                {/* Gateway attempts */}
+                <section className="rounded-lg border">
+                    <div className="border-b px-4 py-3">
+                        <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                            Gateway attempts
+                        </h3>
+                    </div>
+                    {gatewayAttempts.length > 0 ? (
+                        <div className="divide-y">
+                            {gatewayAttempts.map((attempt) => (
+                                <div
+                                    key={attempt.id}
+                                    className="space-y-3 px-4 py-4 text-sm"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="font-medium">
+                                                {attempt.gateway ??
+                                                    'Payment gateway'}
+                                            </p>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                {formatPrice(attempt.amount)}{' '}
+                                                {attempt.currency}
+                                            </p>
+                                        </div>
+                                        <StatusBadge
+                                            domain="gateway_attempt"
+                                            value={attempt.status}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                                        <p>
+                                            OpenKOS reference:{' '}
+                                            <span className="font-mono text-foreground">
+                                                {attempt.reference ?? '—'}
+                                            </span>
+                                        </p>
+                                        <p>
+                                            Provider reference:{' '}
+                                            <span className="font-mono text-foreground">
+                                                {attempt.provider_reference ??
+                                                    '—'}
+                                            </span>
+                                        </p>
+                                        <p>
+                                            Created:{' '}
+                                            {formatDate(
+                                                attempt.created_at ??
+                                                    attempt.initiated_at,
+                                            )}
+                                        </p>
+                                        <p>
+                                            Updated:{' '}
+                                            {attempt.updated_at
+                                                ? formatDate(attempt.updated_at)
+                                                : '—'}
+                                        </p>
+                                        {attempt.expires_at && (
+                                            <p>
+                                                Expires:{' '}
+                                                {formatDate(attempt.expires_at)}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {attempt.failure_message && (
+                                        <p className="text-xs text-destructive">
+                                            {attempt.failure_message}
+                                        </p>
+                                    )}
+
+                                    {attempt.recheckable && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={
+                                                recheckingAttemptId ===
+                                                attempt.id
+                                            }
+                                            onClick={() =>
+                                                handleRecheck(attempt)
+                                            }
+                                        >
+                                            <RefreshCw className="size-4" />
+                                            {recheckingAttemptId === attempt.id
+                                                ? 'Checking…'
+                                                : 'Recheck status'}
+                                        </Button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="px-4 py-6 text-sm text-muted-foreground">
+                            No gateway attempts yet.
                         </p>
                     )}
                 </section>

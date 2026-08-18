@@ -6,6 +6,7 @@ use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Invoice;
 use App\Models\Lease;
+use App\Models\PaymentAttempt;
 use App\Models\Setting;
 use App\Services\Invoices\InvoicePdfArtifact;
 use App\Services\Payments\SignedInvoicePaymentLink;
@@ -20,6 +21,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use OpenKOS\Core\Enums\PaymentStatus as GatewayPaymentStatus;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeaseInvoiceController extends Controller
@@ -70,6 +72,41 @@ class LeaseInvoiceController extends Controller
 
         $invoice->loadMissing('lease.unit');
         $invoice->load(['lineItems', 'payments.confirmedBy:id,name', 'payments.proofs']);
+        $gatewayAttempts = $invoice->paymentAttempts()
+            ->latest('id')
+            ->get([
+                'id',
+                'invoice_id',
+                'gateway_key',
+                'reference',
+                'provider_reference',
+                'amount',
+                'currency',
+                'status',
+                'expires_at',
+                'initiated_at',
+                'created_at',
+                'updated_at',
+            ])
+            ->map(fn (PaymentAttempt $attempt): array => [
+                'id' => $attempt->id,
+                'invoice_id' => $attempt->invoice_id,
+                'gateway' => $attempt->gateway_key,
+                'reference' => $attempt->reference,
+                'provider_reference' => $attempt->provider_reference,
+                'amount' => $attempt->amount,
+                'currency' => $attempt->currency,
+                'status' => $attempt->status->value,
+                'expires_at' => $attempt->expires_at,
+                'initiated_at' => $attempt->initiated_at,
+                'created_at' => $attempt->created_at,
+                'updated_at' => $attempt->updated_at,
+                'failure_code' => $this->failureCode($attempt),
+                'failure_message' => $this->failureMessage($attempt),
+                'recheckable' => $attempt->status === GatewayPaymentStatus::Pending
+                    && $attempt->provider_reference !== null,
+            ])
+            ->values();
         $invoice->append(['outstanding', 'display_status']);
         $invoicePdfStatus = $artifact->status($invoice);
         if ($invoicePdfStatus === 'pending') {
@@ -86,7 +123,28 @@ class LeaseInvoiceController extends Controller
             'invoice' => $invoice,
             'invoicePdf' => ['status' => $invoicePdfStatus],
             'paymentLink' => $paymentLink,
+            'gatewayAttempts' => $gatewayAttempts,
         ]);
+    }
+
+    private function failureCode(PaymentAttempt $attempt): ?string
+    {
+        return match ($attempt->status) {
+            GatewayPaymentStatus::Failed => 'provider_failed',
+            GatewayPaymentStatus::Expired => 'checkout_expired',
+            GatewayPaymentStatus::Canceled => 'checkout_canceled',
+            default => null,
+        };
+    }
+
+    private function failureMessage(PaymentAttempt $attempt): ?string
+    {
+        return match ($attempt->status) {
+            GatewayPaymentStatus::Failed => __('The payment provider reported a failure.'),
+            GatewayPaymentStatus::Expired => __('The checkout session expired before payment was completed.'),
+            GatewayPaymentStatus::Canceled => __('The checkout session was canceled.'),
+            default => null,
+        };
     }
 
     public function print(Lease $lease, Invoice $invoice): ViewContract

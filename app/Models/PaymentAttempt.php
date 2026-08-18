@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Concerns\Auditable;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -70,6 +72,38 @@ class PaymentAttempt extends Model
     public function payment(): BelongsTo
     {
         return $this->belongsTo(Payment::class);
+    }
+
+    public function providerCreationState(): ?string
+    {
+        $state = ($this->metadata ?? [])['provider_creation_state'] ?? null;
+
+        return is_string($state) ? $state : null;
+    }
+
+    public function hasUncertainProviderCreation(): bool
+    {
+        return $this->providerCreationState() === 'uncertain';
+    }
+
+    public function hasInProgressProviderCreation(): bool
+    {
+        return $this->providerCreationState() === 'in_progress';
+    }
+
+    public function scopeReconciliationCandidate(
+        Builder $query,
+        CarbonInterface $staleBefore,
+        CarbonInterface $now,
+    ): Builder {
+        return $query
+            ->where('status', PaymentStatus::Pending->value)
+            ->where(function (Builder $query) use ($staleBefore, $now): void {
+                $query
+                    ->where('updated_at', '<=', $staleBefore)
+                    ->orWhere('expires_at', '<=', $now)
+                    ->orWhereJsonContains('metadata->provider_creation_state', 'uncertain');
+            });
     }
 
     public function setCurrencyAttribute(string $currency): void

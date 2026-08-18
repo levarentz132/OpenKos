@@ -6,6 +6,7 @@ use App\Http\Controllers\LeaseController;
 use App\Http\Controllers\LeaseInvoiceController;
 use App\Http\Controllers\LeaseRentScheduleController;
 use App\Http\Controllers\MaintenanceTicketController;
+use App\Http\Controllers\PaymentAttemptController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\PropertyDocumentsController;
@@ -156,6 +157,10 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
             Route::get('documents', [LeaseController::class, 'documents'])->name('workspace.documents')->middleware('permission:leases.view');
             Route::get('invoices', [LeaseInvoiceController::class, 'index'])->name('workspace.invoices')->middleware('permission:leases.view');
             Route::get('invoices/{invoice}', [LeaseInvoiceController::class, 'show'])->name('workspace.invoices.show')->middleware('permission:leases.view');
+            Route::post('invoices/{invoice}/payment-attempts/{paymentAttempt}/recheck', [PaymentAttemptController::class, 'recheck'])
+                ->name('workspace.invoices.payment-attempts.recheck')
+                ->scopeBindings()
+                ->middleware('permission:payments.verify');
             Route::get('invoices/{invoice}/print', [LeaseInvoiceController::class, 'print'])->name('workspace.invoices.print')->middleware('permission:leases.view');
             Route::get('invoices/{invoice}/download', [LeaseInvoiceController::class, 'download'])->name('workspace.invoices.download')->middleware('permission:leases.view');
             Route::get('rent-schedule', LeaseRentScheduleController::class)->name('rent-schedule')->middleware('permission:leases.view');

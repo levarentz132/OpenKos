@@ -32,6 +32,7 @@ class StartGatewayPayment
         private MoneyConverter $money,
         private CheckoutInstructionsMapper $instructions,
         private PaymentAttemptStatusValidator $statuses,
+        private ReconcilePaymentAttempt $reconcile,
     ) {}
 
     public function execute(Invoice $invoice, User $actor): StartGatewayPaymentResult
@@ -48,6 +49,7 @@ class StartGatewayPayment
 
     private function start(Invoice $invoice): StartGatewayPaymentResult
     {
+        $this->reconcileStaleAttempt($invoice);
         $currency = strtoupper((string) (Setting::get('currency') ?? 'IDR'));
         $state = DB::transaction(function () use ($invoice, $currency) {
             $locked = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
@@ -81,7 +83,10 @@ class StartGatewayPayment
                 ->get();
 
             foreach ($pending as $attempt) {
-                if ($attempt->expires_at?->isPast()) {
+                if ($attempt->expires_at?->isPast()
+                    && ($attempt->provider_reference === null
+                        || ! $this->gateways->supportsStatusLookup($attempt->gateway_key))
+                ) {
                     $this->statuses->validate($attempt->status, PaymentStatus::Expired);
                     $attempt->update([
                         'status' => PaymentStatus::Expired,
@@ -91,9 +96,7 @@ class StartGatewayPayment
                     continue;
                 }
 
-                $creationState = ($attempt->metadata ?? [])['provider_creation_state'] ?? null;
-
-                if (in_array($creationState, ['in_progress', 'uncertain'], true)) {
+                if ($attempt->hasInProgressProviderCreation() || $attempt->hasUncertainProviderCreation()) {
                     throw new PaymentGatewayCreationException(
                         'Payment checkout creation is still being confirmed.',
                         ambiguous: true,
@@ -157,6 +160,13 @@ class StartGatewayPayment
 
         $gateway = $state['gateway'];
 
+        Log::info('Payment attempt initiated.', [
+            'invoice_id' => $invoice->id,
+            'attempt_id' => $attempt->id,
+            'attempt_reference' => $attempt->reference,
+            'gateway_key' => $attempt->gateway_key,
+        ]);
+
         try {
             $result = $gateway->createPayment(new PaymentRequest(
                 reference: $attempt->reference,
@@ -173,7 +183,7 @@ class StartGatewayPayment
                 'invoice_id' => $invoice->id,
                 'attempt_id' => $attempt->id,
                 'gateway_key' => $attempt->gateway_key,
-                'exception' => $exception,
+                'exception_class' => $exception::class,
             ]);
 
             throw new PaymentGatewayCreationException(
@@ -211,6 +221,15 @@ class StartGatewayPayment
                 previous: $exception,
             );
         }
+
+        Log::info('Payment gateway checkout created.', [
+            'invoice_id' => $invoice->id,
+            'attempt_id' => $attempt->id,
+            'attempt_reference' => $attempt->reference,
+            'gateway_key' => $attempt->gateway_key,
+            'provider_reference' => $result->providerReference,
+            'provider_status' => $result->status->value,
+        ]);
 
         return new StartGatewayPaymentResult(
             attempt: $attempt->fresh(),
@@ -294,5 +313,19 @@ class StartGatewayPayment
     private function hasUsableInstructions(CheckoutInstructions $instructions): bool
     {
         return $instructions->url !== null || $instructions->entries !== [];
+    }
+
+    private function reconcileStaleAttempt(Invoice $invoice): void
+    {
+        $now = now();
+        $attempt = $invoice->paymentAttempts()
+            ->whereNotNull('provider_reference')
+            ->reconciliationCandidate($now->copy()->subMinutes(5), $now)
+            ->latest('id')
+            ->first();
+
+        if ($attempt !== null) {
+            $this->reconcile->execute($attempt);
+        }
     }
 }

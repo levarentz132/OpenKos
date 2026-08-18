@@ -4,6 +4,7 @@ namespace App\Services\Payments;
 
 use Illuminate\Contracts\Container\Container;
 use OpenKOS\Core\Contracts\PaymentGateway;
+use OpenKOS\Core\Contracts\PaymentGatewayStatusLookup;
 use OpenKOS\Platform\Payment\PaymentRegistry;
 use OpenKOS\Platform\Settings\SettingsManager;
 
@@ -122,6 +123,11 @@ class PaymentGatewayManager
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    public function supportsStatusLookup(string $key): bool
+    {
+        return $this->find($key) instanceof PaymentGatewayStatusLookup;
     }
 
     public function activeKey(): ?string
