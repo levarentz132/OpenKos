@@ -243,6 +243,9 @@ export type PaymentAllocation = {
 export type GatewayPaymentAttempt = {
     id: number;
     invoice_id: number;
+    gateway?: string;
+    reference?: string;
+    provider_reference?: string | null;
     amount: string;
     currency: string;
     status: 'pending' | 'settled' | 'failed' | 'expired' | 'canceled';
@@ -257,6 +260,11 @@ export type GatewayPaymentAttempt = {
         }>;
     } | null;
     initiated_at: string;
+    created_at?: string;
+    updated_at?: string;
+    failure_code?: string | null;
+    failure_message?: string | null;
+    recheckable?: boolean;
 };
 
 export type Invoice = {

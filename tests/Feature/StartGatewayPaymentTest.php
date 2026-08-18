@@ -5,6 +5,7 @@ use App\Exceptions\InvoiceNotPayableException;
 use App\Exceptions\PaymentGatewayCreationException;
 use App\Models\Invoice;
 use App\Models\Lease;
+use App\Models\Payment;
 use App\Models\PaymentAttempt;
 use App\Models\Setting;
 use App\Models\User;
@@ -12,10 +13,12 @@ use App\Services\Payments\PaymentGatewayManager;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use OpenKOS\Core\Contracts\PaymentGateway;
+use OpenKOS\Core\Contracts\PaymentGatewayStatusLookup;
 use OpenKOS\Core\Data\Payment\CheckoutInstruction;
 use OpenKOS\Core\Data\Payment\CheckoutInstructions;
 use OpenKOS\Core\Data\Payment\Money;
 use OpenKOS\Core\Data\Payment\PaymentCreationResult;
+use OpenKOS\Core\Data\Payment\PaymentProviderResult;
 use OpenKOS\Core\Data\Payment\PaymentRequest;
 use OpenKOS\Core\Enums\PaymentStatus;
 use Spatie\Permission\Models\Permission as SpatiePermission;
@@ -132,6 +135,29 @@ it('does not reuse an attempt while provider creation is unresolved', function (
         ->toThrow(PaymentGatewayCreationException::class);
 });
 
+it('supersedes stale provider creation attempts without references', function (string $creationState) {
+    $invoice = Invoice::factory()->create();
+    $orphaned = PaymentAttempt::factory()->for($invoice)->create([
+        'provider_reference' => null,
+        'expires_at' => null,
+        'checkout_instructions' => null,
+        'metadata' => ['provider_creation_state' => $creationState],
+        'updated_at' => now()->subMinutes(6),
+    ]);
+    $gateway = Mockery::mock(PaymentGateway::class);
+    $gateway->shouldReceive('key')->andReturn('test-gateway');
+    $gateway->shouldReceive('createPayment')
+        ->once()
+        ->andReturnUsing(fn (PaymentRequest $request) => paymentGatewayResult($request));
+
+    $result = startGatewayPaymentAction($gateway)->execute($invoice, User::factory()->owner()->create());
+
+    expect($result->reused)->toBeFalse()
+        ->and($orphaned->fresh()->status)->toBe(PaymentStatus::Pending)
+        ->and($orphaned->fresh()->metadata['provider_creation_state'])->toBe('superseded')
+        ->and($invoice->paymentAttempts()->count())->toBe(2);
+})->with(['in_progress', 'uncertain']);
+
 it('expires stale pending attempts before creating a replacement', function () {
     $invoice = Invoice::factory()->create();
     $stale = PaymentAttempt::factory()->for($invoice)->create([
@@ -150,6 +176,38 @@ it('expires stale pending attempts before creating a replacement', function () {
     expect($stale->fresh()->status)->toBe(PaymentStatus::Expired)
         ->and($result->attempt->id)->not->toBe($stale->id)
         ->and($invoice->paymentAttempts()->count())->toBe(2);
+});
+
+it('rechecks stale provider sessions before expiring them', function () {
+    $invoice = Invoice::factory()->create();
+    $attempt = PaymentAttempt::factory()->for($invoice)->create([
+        'provider_reference' => 'existing-provider-reference',
+        'expires_at' => now()->subMinute(),
+        'checkout_instructions' => [
+            'url' => 'https://example.test/existing',
+            'entries' => [],
+        ],
+    ]);
+    $gateway = Mockery::mock(PaymentGateway::class, PaymentGatewayStatusLookup::class);
+    $gateway->shouldReceive('lookupPaymentStatus')
+        ->once()
+        ->andReturn(new PaymentProviderResult(
+            providerReference: $attempt->provider_reference,
+            status: PaymentStatus::Pending,
+            reference: $attempt->reference,
+            amount: new Money((int) $attempt->amount, $attempt->currency),
+        ));
+    $manager = Mockery::mock(PaymentGatewayManager::class);
+    $manager->shouldReceive('find')->with('test-gateway')->zeroOrMoreTimes()->andReturn($gateway);
+    $manager->shouldReceive('supportsStatusLookup')->with('test-gateway')->once()->andReturnTrue();
+    $manager->shouldNotReceive('active');
+    app()->instance(PaymentGatewayManager::class, $manager);
+
+    $result = app(StartGatewayPayment::class)->execute($invoice, User::factory()->owner()->create());
+
+    expect($result->reused)->toBeTrue()
+        ->and($result->attempt->id)->toBe($attempt->id)
+        ->and($attempt->fresh()->status)->toBe(PaymentStatus::Pending);
 });
 
 it('keeps ambiguous provider failures pending for reconciliation', function () {
@@ -175,8 +233,7 @@ it('keeps ambiguous provider failures pending for reconciliation', function () {
             fn (array $context): bool => $context['invoice_id'] === $invoice->id
                 && $context['attempt_id'] === $attempt->id
                 && $context['gateway_key'] === 'test-gateway'
-                && $context['exception'] instanceof RuntimeException
-                && $context['exception']->getMessage() === 'timeout from provider SDK',
+                && $context['exception_class'] === RuntimeException::class,
         ));
 });
 
@@ -211,6 +268,29 @@ it('fails closed when the provider returns no usable checkout instructions', fun
         ->toThrow(PaymentGatewayCreationException::class);
 
     expect($invoice->paymentAttempts()->sole()->status)->toBe(PaymentStatus::Failed);
+});
+
+it('keeps terminal provider creation responses pending for confirmation', function () {
+    $invoice = Invoice::factory()->create();
+    $gateway = Mockery::mock(PaymentGateway::class);
+    $gateway->shouldReceive('key')->andReturn('test-gateway');
+    $gateway->shouldReceive('createPayment')
+        ->once()
+        ->andReturnUsing(fn (PaymentRequest $request) => new PaymentCreationResult(
+            providerReference: 'provider-reference',
+            status: PaymentStatus::Settled,
+            amount: $request->amount,
+            instructions: new CheckoutInstructions,
+        ));
+
+    expect(fn () => startGatewayPaymentAction($gateway)->execute($invoice, User::factory()->owner()->create()))
+        ->toThrow(PaymentGatewayCreationException::class);
+
+    $attempt = $invoice->paymentAttempts()->sole();
+    expect($attempt->status)->toBe(PaymentStatus::Pending)
+        ->and($attempt->provider_reference)->toBe('provider-reference')
+        ->and($attempt->metadata['provider_creation_state'])->toBe('uncertain')
+        ->and(Payment::query()->count())->toBe(0);
 });
 
 it('blocks a new checkout after a settled attempt', function () {

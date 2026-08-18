@@ -44,6 +44,14 @@ class PaymentWebhookController extends Controller
 
         $processed = $apply->execute($gateway, $result);
 
+        Log::info('Payment webhook processed.', [
+            'gateway' => $gateway,
+            'provider_reference' => $result->providerReference,
+            'openkos_reference' => $result->reference,
+            'event_reference' => $result->eventReference,
+            'result' => $processed->status,
+        ]);
+
         $status = in_array($processed->status, [
             ApplyGatewayPaymentResultData::PROCESSED,
             ApplyGatewayPaymentResultData::DUPLICATE,

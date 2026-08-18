@@ -255,6 +255,8 @@ Gateway payment attempts use the provider-independent `OpenKOS\Core\Enums\Paymen
 Gateway payment creation outcomes that cannot be proven are intentionally ambiguous: OPE-131 keeps the local attempt pending and marks creation as uncertain when a provider request may have reached the provider. OPE-136 must reconcile that state before any provider retry is introduced.
 Provider callbacks enter through `POST /api/webhooks/payment/{gateway}`. The route resolves the gateway by its registered key, which must match `PaymentGateway::key()`, delegates verification and normalization to the provider package, and applies the normalized result through one idempotent transaction. Invalid verification returns `401`; authenticated malformed payloads are acknowledged with `202` and logged without exposing payload data. A matching duplicate terminal callback is acknowledged without mutation; conflicting terminal states and accounting conflicts are logged as anomalies for OPE-136 without changing financial state. The `gateway` payment method is reserved for system-created canonical payments and is not accepted by manual payment forms.
 
+Providers may optionally implement status lookup through `PaymentGatewayStatusLookup`. The scheduled `payments:reconcile` command and the staff invoice recheck action use that capability for stale pending attempts, then pass the normalized provider result through the same settlement action used by webhooks. Providers without lookup support remain compatible; their pending attempts retain the existing local expiry behavior.
+
 ### Maintenance Ticket Lifecycle
 
 ```
