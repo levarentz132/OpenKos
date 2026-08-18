@@ -14,7 +14,7 @@ Schedule::command('invoices:generate')
 
 Schedule::command('payments:reconcile')
     ->everyFiveMinutes()
-    ->withoutOverlapping(10);
+    ->withoutOverlapping(15);
 
 Schedule::command('rent:send-reminders')
     ->dailyAt('08:00')
