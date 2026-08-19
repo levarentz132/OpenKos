@@ -1,7 +1,7 @@
 # Maintenance Unit Blocking
 
 > **Status:** Implemented
-> **Issue:** [OPE-35](https://linear.app/openkos/issue/OPE-35)
+> **Issue:** OPE-35
 
 ## Overview
 

@@ -14,7 +14,7 @@ The realistic alternatives:
 - **Tenant as a role.** Assign tenants a `tenant` role on the `users` table; treat them as a specialisation of User. Authentication is trivially solved, but the Tenant domain is now coupled to the auth/RBAC model: every change to role semantics ripples into tenant behaviour, and the Users page must either admit tenants or grow filters to exclude them.
 - **Duplicate identity columns.** Keep `tenants.email` as the contact field and add a separate `users.email` for auth. Two identities per tenant, no enforced link, no single source of truth for "where do we send mail."
 
-Both approaches were rejected during [OPE-17](https://linear.app/openkos/issue/OPE-17): they leak auth concerns into the Tenant domain or invite drift between two email columns with no way to reconcile them.
+Both approaches were rejected during OPE-17: they leak auth concerns into the Tenant domain or invite drift between two email columns with no way to reconcile them.
 
 ## Decision
 

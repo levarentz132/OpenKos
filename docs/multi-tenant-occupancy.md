@@ -1,7 +1,7 @@
 # Multi-Tenant Unit Occupancy
 
 > **Status:** Implemented
-> **Issue:** [OPE-18](https://linear.app/openkos/issue/OPE-18)
+> **Issue:** OPE-18
 
 ## Context
 
