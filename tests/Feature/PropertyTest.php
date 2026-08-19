@@ -8,6 +8,7 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\RegionAndCitySeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
+use Illuminate\Support\Facades\DB;
 
 uses()->beforeEach(function () {
     $this->seed([RoleAndPermissionSeeder::class, RegionAndCitySeeder::class]);
@@ -54,7 +55,9 @@ describe('authorization', function () {
 describe('CRUD', function () {
     it('lists properties on the index page', function () {
         $user = User::factory()->owner()->create();
-        Property::factory()->count(3)->create();
+        Property::factory()->create(['name' => 'Alpha Residence']);
+        Property::factory()->create(['name' => 'Beta Residence']);
+        $villa = Property::factory()->create(['name' => 'Villa Bali', 'type' => 'villa']);
 
         $this->actingAs($user)
             ->get(route('properties.index'))
@@ -62,7 +65,42 @@ describe('CRUD', function () {
             ->assertInertia(fn ($page) => $page
                 ->component('properties/index')
                 ->has('properties.data', 3)
+                ->where('properties.data.2.type_label', 'Villa')
+                ->where('properties.data.2.city.id', $villa->city_id)
+                ->where('properties.data.2.region.id', $villa->region_id)
             );
+    });
+
+    it('does not automatically load property relations for light queries', function () {
+        Property::factory()->create();
+
+        DB::connection()->enableQueryLog();
+        DB::connection()->flushQueryLog();
+
+        $property = Property::query()->get(['id', 'name'])->first();
+
+        expect($property)->not->toBeNull()
+            ->and($property->relationLoaded('region'))->toBeFalse()
+            ->and($property->relationLoaded('city'))->toBeFalse()
+            ->and($property->relationLoaded('propertyType'))->toBeFalse()
+            ->and(DB::connection()->getQueryLog())->toHaveCount(1);
+    });
+
+    it('keeps scalar property queries relation-free', function () {
+        Property::factory()->create();
+
+        DB::connection()->enableQueryLog();
+
+        foreach ([
+            fn () => Property::query()->pluck('id'),
+            fn () => Property::query()->count(),
+            fn () => Property::query()->exists(),
+        ] as $query) {
+            DB::connection()->flushQueryLog();
+            $query();
+
+            expect(DB::connection()->getQueryLog())->toHaveCount(1);
+        }
     });
 
     it('creates a property', function () {
@@ -137,10 +175,21 @@ describe('type', function () {
             'type' => 'villa',
         ]);
 
-        $property = Property::first();
+        $property = Property::with('propertyType')->first();
 
         expect($property->type)->toBe('villa')
             ->and($property->type_label)->toBe('Villa');
+    });
+
+    it('falls back to the raw type without lazy loading propertyType', function () {
+        $property = Property::factory()->create(['type' => 'villa']);
+
+        DB::connection()->enableQueryLog();
+        DB::connection()->flushQueryLog();
+
+        expect($property->type_label)->toBe('villa')
+            ->and($property->relationLoaded('propertyType'))->toBeFalse()
+            ->and(DB::connection()->getQueryLog())->toHaveCount(0);
     });
 
     it('updates the type', function () {
@@ -202,6 +251,9 @@ describe('workspace tabs', function () {
             ->assertInertia(fn ($page) => $page
                 ->component('properties/leases')
                 ->where('property.id', $property->id)
+                ->where('property.type_label', 'Boarding House')
+                ->where('property.city.id', $property->city_id)
+                ->where('property.region.id', $property->region_id)
                 ->has('property.units_count')
                 ->has('property.occupied_units_count')
                 ->has('property.tenants_count'));

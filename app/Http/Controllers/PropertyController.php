@@ -74,6 +74,7 @@ class PropertyController extends Controller
                 'users',
                 fn (Builder $q) => $q->whereKey($request->user()->id),
             ))
+            ->with(['city', 'region', 'propertyType'])
             ->withCount('units')
             ->withOccupiedUnitsCount()
             ->withTenantsCount();

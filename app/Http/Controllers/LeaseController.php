@@ -147,6 +147,7 @@ class LeaseController extends Controller
     {
         $this->authorize('viewAny', [Lease::class, $property]);
 
+        $property->load('city');
         $unit->load('property.city');
 
         $leases = $unit->leases()
