@@ -143,11 +143,11 @@ class PaymentController extends Controller
                     'verified_at' => now(),
                 ]);
 
-                Invoice::whereIn('id', $affectedInvoiceIds)
+                $affectedInvoices = Invoice::whereIn('id', $affectedInvoiceIds)
                     ->lockForUpdate()
-                    ->get()
-                    ->each
-                    ->recalculateStatus();
+                    ->get();
+
+                Invoice::recalculateStatuses($affectedInvoices);
             }
         });
 

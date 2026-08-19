@@ -7,6 +7,7 @@ use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -116,13 +117,36 @@ class Invoice extends Model
         $query->payable()->whereDate('due_date', '<', now());
     }
 
-    public function recalculateStatus(): void
+    /**
+     * Recalculate a collection of already-locked invoices from confirmed payments.
+     *
+     * @param  Collection<int, self>  $invoices
+     */
+    public static function recalculateStatuses(Collection $invoices): void
+    {
+        if ($invoices->isEmpty()) {
+            return;
+        }
+
+        $confirmedTotals = Payment::query()
+            ->whereIn('invoice_id', $invoices->modelKeys())
+            ->where('status', PaymentStatus::Confirmed->value)
+            ->selectRaw('invoice_id, SUM(amount) as total')
+            ->groupBy('invoice_id')
+            ->pluck('total', 'invoice_id');
+
+        foreach ($invoices as $invoice) {
+            $invoice->recalculateStatus((float) ($confirmedTotals[$invoice->getKey()] ?? 0));
+        }
+    }
+
+    public function recalculateStatus(?float $confirmedPaymentTotal = null): void
     {
         if (in_array($this->status, [InvoiceStatus::Cancelled, InvoiceStatus::Void], true)) {
             return;
         }
 
-        $paid = (float) $this->payments()
+        $paid = $confirmedPaymentTotal ?? (float) $this->payments()
             ->where('status', PaymentStatus::Confirmed->value)
             ->sum('amount');
 
