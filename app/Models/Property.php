@@ -35,8 +35,6 @@ class Property extends Model
 
     protected array $auditableMask = ['phone'];
 
-    protected $with = ['region', 'city', 'propertyType'];
-
     protected $appends = ['type_label'];
 
     protected function casts(): array
@@ -57,12 +55,13 @@ class Property extends Model
     }
 
     /**
-     * Human-readable type name, falling back to the raw slug if the type row
-     * is missing (e.g. deleted).
+     * Human-readable type name when the relation is explicitly loaded.
      */
     protected function typeLabel(): Attribute
     {
-        return Attribute::get(fn () => $this->propertyType?->label ?? $this->type);
+        return Attribute::get(fn () => $this->relationLoaded('propertyType')
+            ? $this->propertyType?->label ?? $this->type
+            : $this->type);
     }
 
     protected static function booted(): void
@@ -110,7 +109,7 @@ class Property extends Model
      */
     public function scopeWithWorkspaceStats(Builder $query): void
     {
-        $query->with(['city', 'region'])
+        $query->with(['city', 'region', 'propertyType'])
             ->withCount('units')
             ->withOccupiedUnitsCount()
             ->withTenantsCount();
