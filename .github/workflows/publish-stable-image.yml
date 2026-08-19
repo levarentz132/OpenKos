@@ -39,7 +39,7 @@ jobs:
             type=semver,pattern={{version}},value=${{ github.ref_name }}
             type=semver,pattern={{major}}.{{minor}},value=${{ github.ref_name }}
             type=semver,pattern={{major}},value=${{ github.ref_name }}
-          flavor: latest=auto
+          flavor: latest=true
 
       - name: Build and push image
         uses: docker/build-push-action@v7
