@@ -5,10 +5,14 @@ use App\Actions\Leases\MoveOutLease;
 use App\Data\Lease\MoveOutLeaseData;
 use App\Enums\InvoiceStatus;
 use App\Events\Invoice\InvoiceGenerated;
+use App\Models\AuditLog;
+use App\Models\Invoice;
+use App\Models\InvoiceLineItem;
 use App\Models\Lease;
 use App\Models\Property;
 use App\Models\Tenant;
 use App\Models\Unit;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Event;
 
 function createActiveLease(array $overrides = []): Lease
@@ -50,6 +54,9 @@ it('generates pending invoices with line items for each due period', function ()
     expect($invoice->lineItems)->toHaveCount(1)
         ->and($invoice->lineItems->first()->type)->toBe('rent')
         ->and((float) $invoice->lineItems->first()->amount)->toBe(1_500_000.00);
+
+    expect($lease->invoices()->pluck('reference')->unique())->toHaveCount($count)
+        ->and(InvoiceLineItem::query()->whereIn('invoice_id', $lease->invoices()->pluck('id'))->count())->toBe($count);
 });
 
 it('is idempotent across runs', function () {
@@ -61,6 +68,64 @@ it('is idempotent across runs', function () {
 
     expect($second)->toBe(0)
         ->and($lease->invoices()->count())->toBe($first);
+});
+
+it('only creates and dispatches invoices for missing periods', function () {
+    $lease = createActiveLease();
+    $period = $lease->schedule()->first();
+
+    $lease->invoices()->create([
+        'period_start' => $period->period_start,
+        'period_end' => $period->period_end,
+        'due_date' => $period->due_date,
+        'status' => InvoiceStatus::Pending,
+        'total' => $period->amount,
+    ]);
+
+    Event::fake([InvoiceGenerated::class]);
+
+    $count = app(GenerateInvoices::class)->execute($lease);
+
+    expect($lease->invoices()->count())->toBe($count + 1)
+        ->and($lease->invoices()->whereDate('period_start', $period->period_start)->count())->toBe(1);
+
+    Event::assertDispatchedTimes(InvoiceGenerated::class, $count);
+});
+
+it('preserves invoice creation audits for bulk-generated invoices', function () {
+    $lease = createActiveLease();
+
+    $count = app(GenerateInvoices::class)->execute($lease);
+
+    expect(AuditLog::query()
+        ->where('auditable_type', Invoice::class)
+        ->where('operation', 'create')
+        ->count())->toBe($count);
+});
+
+it('does not swallow unrelated invoice reference uniqueness errors', function () {
+    $firstLease = createActiveLease();
+    $secondLease = createActiveLease();
+    $targetLease = createActiveLease();
+    $year = now()->format('Y');
+
+    foreach ([[$firstLease, '000001'], [$secondLease, '0002']] as [$lease, $sequence]) {
+        $period = $lease->schedule()->first();
+
+        $lease->invoices()->create([
+            'reference' => 'INV'.$year.$sequence,
+            'period_start' => $period->period_start,
+            'period_end' => $period->period_end,
+            'due_date' => $period->due_date,
+            'status' => InvoiceStatus::Pending,
+            'total' => $period->amount,
+        ]);
+    }
+
+    expect(fn () => app(GenerateInvoices::class)->execute($targetLease))
+        ->toThrow(QueryException::class);
+
+    expect($targetLease->invoices()->count())->toBe(0);
 });
 
 it('respects the two month horizon', function () {

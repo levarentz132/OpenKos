@@ -33,24 +33,42 @@ class Invoice extends Model
 
         static::creating(function (Invoice $invoice) {
             if ($invoice->reference === null) {
-                // ponytail: orderByRaw sorts by length then value so variable-
-                // width suffixes (e.g. 9999 → 10000) order correctly.
-                // lockForUpdate serializes existing-row reads; the unique
-                // constraint on `reference` guards the initial-gap race.
-                $prefix = Setting::get('invoice_id_prefix') ?? 'INV';
-                $year = now()->format('Y');
-                $pattern = $prefix.$year.'%';
-
-                $max = static::where('reference', 'like', $pattern)
-                    ->orderByRaw('LENGTH(reference) DESC, reference DESC')
-                    ->lockForUpdate()
-                    ->value('reference');
-
-                $seq = $max ? (int) substr($max, strlen($prefix.$year)) + 1 : 1;
-
-                $invoice->reference = $prefix.$year.str_pad((string) $seq, max(4, strlen((string) $seq)), '0', STR_PAD_LEFT);
+                $invoice->reference = static::nextReferences(1)[0];
             }
         });
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function nextReferences(int $count): array
+    {
+        if ($count < 1) {
+            return [];
+        }
+
+        $prefix = Setting::get('invoice_id_prefix') ?? 'INV';
+        $year = now()->format('Y');
+        $pattern = $prefix.$year.'%';
+
+        // ponytail: one locked max lookup allocates a batch; retry the batch
+        // when another database connection wins the initial empty-table race.
+        $max = static::query()
+            ->where('reference', 'like', $pattern)
+            ->orderByRaw('LENGTH(reference) DESC, reference DESC')
+            ->lockForUpdate()
+            ->value('reference');
+
+        $startingSequence = $max ? (int) substr($max, strlen($prefix.$year)) + 1 : 1;
+
+        return collect(range($startingSequence, $startingSequence + $count - 1))
+            ->map(fn (int $sequence): string => $prefix.$year.str_pad(
+                (string) $sequence,
+                max(4, strlen((string) $sequence)),
+                '0',
+                STR_PAD_LEFT,
+            ))
+            ->all();
     }
 
     protected function casts(): array
