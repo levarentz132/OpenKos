@@ -14,6 +14,8 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\RegionAndCitySeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 
 uses()->beforeEach(function () {
@@ -365,10 +367,20 @@ describe('invoice settlement', function () {
             'amount_paid' => 500_000,
         ]);
 
+        $aggregateQueries = 0;
+        DB::listen(function (QueryExecuted $query) use (&$aggregateQueries): void {
+            $sql = strtolower($query->sql);
+
+            if (str_contains($sql, 'sum(') && str_contains($sql, 'payments')) {
+                $aggregateQueries++;
+            }
+        });
+
         $this->actingAs($user)
             ->post(route('payments.verify', $payment), ['action' => 'reject']);
 
-        expect($payment->fresh()->status)->toBe(PaymentStatus::Cancelled)
+        expect($aggregateQueries)->toBe(1)
+            ->and($payment->fresh()->status)->toBe(PaymentStatus::Cancelled)
             ->and($payment->fresh()->confirmed_by)->toBeNull()
             ->and((int) $payment->allocations()->count())->toBe(0)
             ->and($olderInvoice->fresh()->status)->toBe(InvoiceStatus::Pending)

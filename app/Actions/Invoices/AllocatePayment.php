@@ -45,9 +45,9 @@ class AllocatePayment
                 ->lockForUpdate()
                 ->get();
 
-            foreach ($invoices as $invoice) {
-                $invoice->recalculateStatus();
+            Invoice::recalculateStatuses($invoices);
 
+            foreach ($invoices as $invoice) {
                 if ($invoice->status === InvoiceStatus::Paid
                     && ($priorStatuses[$invoice->id] ?? null) !== InvoiceStatus::Paid->value
                 ) {
