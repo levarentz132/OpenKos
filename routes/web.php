@@ -154,6 +154,7 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
     Route::prefix('leases')->name('leases.')->group(function () {
         Route::get('/', [LeaseController::class, 'globalIndex'])->name('index')->middleware('permission:leases.view');
         Route::post('invoices/calculate-late-fees', [LeaseInvoiceController::class, 'calculateLateFees'])->name('invoices.calculate-late-fees')->middleware('permission:leases.view');
+        Route::post('bulk-delete', [LeaseController::class, 'bulkDestroy'])->name('bulk-delete')->middleware('permission:leases.delete');
 
         Route::prefix('{lease}')->whereNumber('lease')->group(function () {
             Route::get('/', [LeaseController::class, 'show'])->name('show')->middleware('permission:leases.view');

@@ -139,53 +139,24 @@ export default function LeaseEditSheet({
                                 Rent & Terms
                             </h3>
 
-                            <div className="flex items-start gap-4">
-                                <div className="min-w-0 flex-1">
-                                    <Label htmlFor="rent_amount">
-                                        Rent Amount (IDR)
-                                    </Label>
-                                    <Input
-                                        id="rent_amount"
-                                        type="number"
-                                        min={0}
-                                        value={data.rent_amount}
-                                        onChange={(e) =>
-                                            setData(
-                                                'rent_amount',
-                                                e.target.value,
-                                            )
-                                        }
-                                        placeholder="Rent amount"
-                                    />
-                                    <InputError message={errors.rent_amount} />
-                                </div>
-
-                                <div className="shrink-0">
-                                    <Label htmlFor="rent_due_day">
-                                        Rent Due Every Month
-                                    </Label>
-                                    <Select
-                                        value={data.rent_due_day}
-                                        onValueChange={(v) =>
-                                            setData('rent_due_day', v)
-                                        }
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {DUE_DAY_OPTIONS.map((opt) => (
-                                                <SelectItem
-                                                    key={opt.value}
-                                                    value={opt.value}
-                                                >
-                                                    {opt.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <InputError message={errors.rent_due_day} />
-                                </div>
+                            <div>
+                                <Label htmlFor="rent_amount">
+                                    Rent Amount (IDR)
+                                </Label>
+                                <Input
+                                    id="rent_amount"
+                                    type="number"
+                                    min={0}
+                                    value={data.rent_amount}
+                                    onChange={(e) =>
+                                        setData(
+                                            'rent_amount',
+                                            e.target.value,
+                                        )
+                                    }
+                                    placeholder="Rent amount"
+                                />
+                                <InputError message={errors.rent_amount} />
                             </div>
                         </section>
 

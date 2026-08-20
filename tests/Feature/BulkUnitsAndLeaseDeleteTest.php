@@ -61,4 +61,25 @@ describe('Bulk Units & Delete Lease', function () {
         expect(Invoice::where('id', $invoice->id)->exists())->toBeFalse();
         expect($unit->fresh()->status->value)->toBe('available');
     });
+
+    it('deletes multiple selected leases in bulk', function () {
+        $user = User::factory()->owner()->create();
+        $property = Property::factory()->create();
+        $unitA = Unit::factory()->create(['property_id' => $property->id, 'status' => 'occupied']);
+        $unitB = Unit::factory()->create(['property_id' => $property->id, 'status' => 'occupied']);
+        $tenant = Tenant::factory()->create();
+
+        $leaseA = Lease::factory()->create(['unit_id' => $unitA->id, 'primary_tenant_id' => $tenant->id, 'status' => 'active']);
+        $leaseB = Lease::factory()->create(['unit_id' => $unitB->id, 'primary_tenant_id' => $tenant->id, 'status' => 'active']);
+
+        $response = $this->actingAs($user)->post(route('leases.bulk-delete'), [
+            'ids' => [$leaseA->id, $leaseB->id],
+        ]);
+
+        $response->assertRedirect();
+
+        expect(Lease::whereIn('id', [$leaseA->id, $leaseB->id])->count())->toBe(0);
+        expect($unitA->fresh()->status->value)->toBe('available');
+        expect($unitB->fresh()->status->value)->toBe('available');
+    });
 });

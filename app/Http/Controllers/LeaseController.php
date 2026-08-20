@@ -348,7 +348,12 @@ class LeaseController extends Controller
     {
         $this->authorize('update', $lease);
 
-        $lease->update($request->validated());
+        $data = $request->validated();
+        if (isset($data['start_date']) && ! isset($data['rent_due_day'])) {
+            $data['rent_due_day'] = (int) \Carbon\Carbon::parse($data['start_date'])->format('j');
+        }
+
+        $lease->update($data);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Lease updated successfully.')]);
 
@@ -573,6 +578,46 @@ class LeaseController extends Controller
         });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Lease deleted successfully.')]);
+
+        return back();
+    }
+
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:leases,id'],
+        ]);
+
+        $leases = Lease::whereIn('id', $validated['ids'])->get();
+
+        foreach ($leases as $lease) {
+            $this->authorize('delete', $lease);
+        }
+
+        DB::transaction(function () use ($leases) {
+            foreach ($leases as $lease) {
+                $unit = $lease->unit;
+
+                foreach ($lease->invoices as $invoice) {
+                    $invoice->lineItems()->delete();
+                    $invoice->payments()->delete();
+                    $invoice->delete();
+                }
+
+                $lease->tenants()->detach();
+                $lease->forceDelete();
+
+                if ($unit) {
+                    $hasActiveLeases = $unit->leases()->where('status', LeaseStatus::Active->value)->exists();
+                    if (! $hasActiveLeases && $unit->status === UnitStatus::Occupied) {
+                        $unit->update(['status' => UnitStatus::Available]);
+                    }
+                }
+            }
+        });
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __(':count lease(s) deleted successfully.', ['count' => count($leases)])]);
 
         return back();
     }

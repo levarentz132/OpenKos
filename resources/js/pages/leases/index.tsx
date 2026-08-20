@@ -87,6 +87,39 @@ export default function Index({
     const [calculatingFees, setCalculatingFees] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [leaseToDelete, setLeaseToDelete] = useState<Lease | null>(null);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+
+    function handleSelectAll(checked: boolean) {
+        if (checked) {
+            setSelectedIds(data.data.map((l) => l.id));
+        } else {
+            setSelectedIds([]);
+        }
+    }
+
+    function handleSelectRow(id: string | number, checked: boolean) {
+        const numId = Number(id);
+        if (checked) {
+            setSelectedIds((prev) => [...prev, numId]);
+        } else {
+            setSelectedIds((prev) => prev.filter((i) => i !== numId));
+        }
+    }
+
+    function handleBulkDelete() {
+        if (selectedIds.length === 0) return;
+        router.post(
+            '/leases/bulk-delete',
+            { ids: selectedIds },
+            {
+                onSuccess: () => {
+                    setSelectedIds([]);
+                    setBulkDeleteDialogOpen(false);
+                },
+            },
+        );
+    }
 
     function handleDeleteLease() {
         if (!leaseToDelete) return;
@@ -406,6 +439,32 @@ export default function Index({
                     </div>
                 )}
 
+                {selectedIds.length > 0 && (
+                    <div className="flex items-center justify-between rounded-lg border bg-muted/60 px-4 py-2.5 shadow-xs">
+                        <span className="text-sm font-medium text-foreground">
+                            {selectedIds.length} lease{selectedIds.length > 1 ? 's' : ''} selected
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedIds([])}
+                            >
+                                Clear Selection
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => setBulkDeleteDialogOpen(true)}
+                                className="gap-2"
+                            >
+                                <Trash2 className="size-4" />
+                                Delete Selected ({selectedIds.length})
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
                 <FilterBar
                     filters={tableMeta.filters}
                     activeFilters={table.activeFilters}
@@ -436,6 +495,10 @@ export default function Index({
                     empty={{
                         message: 'No leases found.',
                     }}
+                    selectable
+                    selectedIds={selectedIds}
+                    onSelectAll={handleSelectAll}
+                    onSelectRow={handleSelectRow}
                 />
             </div>
 
@@ -510,6 +573,30 @@ export default function Index({
                         </Button>
                         <Button variant="destructive" onClick={handleDeleteLease}>
                             Delete Lease
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Selected Leases</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to permanently delete{' '}
+                            <span className="font-semibold">{selectedIds.length}</span> selected lease{selectedIds.length > 1 ? 's' : ''}?
+                            This action will remove all associated invoices and payment records.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setBulkDeleteDialogOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={handleBulkDelete}>
+                            Delete {selectedIds.length} Lease{selectedIds.length > 1 ? 's' : ''}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

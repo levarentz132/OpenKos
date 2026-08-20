@@ -365,32 +365,7 @@ export default function AssignUnitSheet({
                                     </p>
                                 ))}
 
-                            <div className="mt-4 grid gap-2">
-                                <Label htmlFor="rent_due_day">
-                                    Rent Due Every Month
-                                </Label>
-                                <Select
-                                    value={data.rent_due_day}
-                                    onValueChange={(v) =>
-                                        setData('rent_due_day', v)
-                                    }
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select due day" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {DUE_DAY_OPTIONS.map((opt) => (
-                                            <SelectItem
-                                                key={opt.value}
-                                                value={opt.value}
-                                            >
-                                                {opt.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={errors.rent_due_day} />
-                            </div>
+
 
                             {hasRates && (
                                 <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm">
