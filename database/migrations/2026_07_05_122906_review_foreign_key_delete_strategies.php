@@ -69,6 +69,7 @@ return new class extends Migration
         // maintenance_tickets.unit_id — CASCADE → SET NULL
         Schema::table('maintenance_tickets', function (Blueprint $table) {
             $table->dropForeign(['unit_id']);
+            $table->foreignId('unit_id')->nullable()->change();
             $table->foreign('unit_id')->references('id')->on('units')->nullOnDelete();
         });
 

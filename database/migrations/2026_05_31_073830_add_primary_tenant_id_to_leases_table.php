@@ -27,8 +27,8 @@ return new class extends Migration
         )');
 
         Schema::table('leases', function (Blueprint $table) {
-            $table->dropIndex(['tenant_id', 'status']);
             $table->dropForeign(['tenant_id']);
+            $table->dropIndex(['tenant_id', 'status']);
             $table->dropColumn('tenant_id');
         });
     }
