@@ -1,5 +1,5 @@
 import { useForm, usePage } from '@inertiajs/react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { InputError } from '@/components/shared';
 import { Button } from '@/components/ui/button';
@@ -51,7 +51,18 @@ export default function AssignTenantSheet({
     }>().props;
     const [hasDeposit, setHasDeposit] = useState(false);
     const [overridePrice, setOverridePrice] = useState(false);
+    const [tenantSearch, setTenantSearch] = useState('');
     const dueDayInitialized = useRef(false);
+
+    const filteredTenants = useMemo(() => {
+        if (!tenantSearch.trim()) return tenants ?? [];
+        const query = tenantSearch.toLowerCase();
+        return (tenants ?? []).filter(
+            (t) =>
+                t.name.toLowerCase().includes(query) ||
+                (t.phone && t.phone.toLowerCase().includes(query)),
+        );
+    }, [tenants, tenantSearch]);
 
     const defaultRate = unit?.active_rates?.[0] ?? null;
 
@@ -192,47 +203,63 @@ export default function AssignTenantSheet({
                                         `(select up to ${capacity})`}
                                 </Label>
 
-                                <div className="max-h-48 overflow-y-auto rounded-md border">
-                                    {(tenants ?? []).map((t) => {
-                                        const isSelected =
-                                            data.tenant_ids.includes(t.id);
-                                        const atCapacity =
-                                            !isSelected &&
-                                            data.tenant_ids.length >= capacity;
+                                <div className="relative">
+                                    <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search by name or phone..."
+                                        value={tenantSearch}
+                                        onChange={(e) => setTenantSearch(e.target.value)}
+                                        className="pl-9 text-xs"
+                                    />
+                                </div>
 
-                                        return (
-                                            <label
-                                                key={t.id}
-                                                className={`flex cursor-pointer items-center gap-3 border-b px-3 py-2 text-sm last:border-0 hover:bg-muted/50 ${
-                                                    isSelected
-                                                        ? 'bg-blue-50 dark:bg-blue-950'
-                                                        : ''
-                                                } ${
-                                                    atCapacity
-                                                        ? 'cursor-not-allowed opacity-50'
-                                                        : ''
-                                                }`}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isSelected}
-                                                    onChange={() =>
-                                                        toggleTenant(t.id)
-                                                    }
-                                                    disabled={atCapacity}
-                                                    className="size-4"
-                                                />
-                                                <span className="font-medium">
-                                                    {t.name}
-                                                </span>
-                                                {t.phone && (
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {t.phone}
+                                <div className="max-h-48 overflow-y-auto rounded-md border">
+                                    {filteredTenants.length === 0 ? (
+                                        <p className="p-3 text-center text-xs text-muted-foreground">
+                                            No tenants found matching "{tenantSearch}"
+                                        </p>
+                                    ) : (
+                                        filteredTenants.map((t) => {
+                                            const isSelected =
+                                                data.tenant_ids.includes(t.id);
+                                            const atCapacity =
+                                                !isSelected &&
+                                                data.tenant_ids.length >= capacity;
+
+                                            return (
+                                                <label
+                                                    key={t.id}
+                                                    className={`flex cursor-pointer items-center gap-3 border-b px-3 py-2 text-sm last:border-0 hover:bg-muted/50 ${
+                                                        isSelected
+                                                            ? 'bg-blue-50 dark:bg-blue-950'
+                                                            : ''
+                                                    } ${
+                                                        atCapacity
+                                                            ? 'cursor-not-allowed opacity-50'
+                                                            : ''
+                                                    }`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        onChange={() =>
+                                                            toggleTenant(t.id)
+                                                        }
+                                                        disabled={atCapacity}
+                                                        className="size-4"
+                                                    />
+                                                    <span className="font-medium">
+                                                        {t.name}
                                                     </span>
-                                                )}
-                                            </label>
-                                        );
-                                    })}
+                                                    {t.phone && (
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {t.phone}
+                                                        </span>
+                                                    )}
+                                                </label>
+                                            );
+                                        })
+                                    )}
                                 </div>
 
                                 <p className="text-xs text-muted-foreground">
