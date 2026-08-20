@@ -100,6 +100,7 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
                     Route::get('/', [UnitController::class, 'index'])->name('index')->middleware('permission:units.view');
                     Route::post('/', [UnitController::class, 'store'])->name('store')->middleware('permission:units.create');
                     Route::post('bulk', [UnitController::class, 'bulkStore'])->name('bulk-store')->middleware('permission:units.create');
+                    Route::put('bulk', [UnitController::class, 'bulkUpdate'])->name('bulk-update')->middleware('permission:units.update');
 
                     Route::prefix('{unit}')->group(function () {
                         Route::get('/', [UnitController::class, 'show'])->name('show')->middleware('permission:units.view');

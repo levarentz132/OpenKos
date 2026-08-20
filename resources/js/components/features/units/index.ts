@@ -1,4 +1,5 @@
 export { default as AssignTenantSheet } from './assign-tenant-sheet';
+export { default as BulkEditUnitSheet } from './bulk-edit-unit-sheet';
 export { default as BulkUnitSheet } from './bulk-unit-sheet';
 export { default as UnitDetailSheet } from './unit-detail-sheet';
 export { default as UnitFormSheet } from './unit-form-sheet';

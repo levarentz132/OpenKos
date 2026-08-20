@@ -82,4 +82,29 @@ describe('Bulk Units & Delete Lease', function () {
         expect($unitA->fresh()->status->value)->toBe('available');
         expect($unitB->fresh()->status->value)->toBe('available');
     });
+
+    it('updates multiple units in bulk for a property', function () {
+        $user = User::factory()->owner()->create();
+        $property = Property::factory()->create();
+        $unitA = Unit::factory()->create(['property_id' => $property->id, 'floor' => '1', 'capacity' => 1]);
+        $unitB = Unit::factory()->create(['property_id' => $property->id, 'floor' => '1', 'capacity' => 1]);
+
+        $response = $this->actingAs($user)->put(route('properties.units.bulk-update', $property), [
+            'unit_ids' => [$unitA->id, $unitB->id],
+            'fields' => ['floor', 'capacity', 'monthly_rate'],
+            'floor' => '2',
+            'capacity' => 3,
+            'monthly_rate' => 2500000,
+        ]);
+
+        $response->assertRedirect();
+
+        expect($unitA->fresh()->floor)->toBe('2');
+        expect($unitA->fresh()->capacity)->toBe(3);
+        expect($unitA->rates()->where('billing_unit', 'month')->value('amount'))->toBe('2500000.00');
+
+        expect($unitB->fresh()->floor)->toBe('2');
+        expect($unitB->fresh()->capacity)->toBe(3);
+        expect($unitB->rates()->where('billing_unit', 'month')->value('amount'))->toBe('2500000.00');
+    });
 });

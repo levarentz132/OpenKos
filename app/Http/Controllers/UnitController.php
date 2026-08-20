@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\LeaseStatus;
 use App\Enums\MaintenanceStatus;
+use App\Enums\UnitStatus;
 use App\Http\Requests\Unit\StoreUnitRequest;
 use App\Http\Requests\Unit\UpdateUnitRequest;
 use App\Models\Lease;
@@ -19,6 +20,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Enum;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -316,6 +319,81 @@ class UnitController extends Controller
         });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __(':count units created successfully.', ['count' => $count])]);
+
+        return back();
+    }
+
+    public function bulkUpdate(Request $request, Property $property): RedirectResponse
+    {
+        $this->authorize('update', [Unit::class, $property]);
+
+        $validated = $request->validate([
+            'unit_ids' => ['required', 'array', 'min:1'],
+            'unit_ids.*' => ['required', 'integer', Rule::exists('units', 'id')->where('property_id', $property->id)],
+            'fields' => ['required', 'array', 'min:1'],
+            'fields.*' => ['required', 'string', Rule::in(['floor', 'capacity', 'status', 'monthly_rate', 'size_sqm', 'description', 'notes'])],
+            'floor' => ['nullable', 'string', 'max:50'],
+            'capacity' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'status' => ['nullable', new Enum(UnitStatus::class)],
+            'size_sqm' => ['nullable', 'numeric', 'min:0'],
+            'monthly_rate' => ['nullable', 'numeric', 'min:0'],
+            'description' => ['nullable', 'string', 'max:65535'],
+            'notes' => ['nullable', 'string', 'max:65535'],
+        ]);
+
+        $unitIds = $validated['unit_ids'];
+        $fields = $validated['fields'];
+
+        $updateData = [];
+        if (in_array('floor', $fields, true) && array_key_exists('floor', $validated)) {
+            $updateData['floor'] = $validated['floor'];
+        }
+        if (in_array('capacity', $fields, true) && array_key_exists('capacity', $validated)) {
+            $updateData['capacity'] = $validated['capacity'] !== null ? (int) $validated['capacity'] : null;
+        }
+        if (in_array('status', $fields, true) && array_key_exists('status', $validated)) {
+            $updateData['status'] = $validated['status'];
+        }
+        if (in_array('size_sqm', $fields, true) && array_key_exists('size_sqm', $validated)) {
+            $updateData['size_sqm'] = $validated['size_sqm'];
+        }
+        if (in_array('description', $fields, true) && array_key_exists('description', $validated)) {
+            $updateData['description'] = $validated['description'];
+        }
+        if (in_array('notes', $fields, true) && array_key_exists('notes', $validated)) {
+            $updateData['notes'] = $validated['notes'];
+        }
+
+        $monthlyRate = (in_array('monthly_rate', $fields, true) && isset($validated['monthly_rate']) && $validated['monthly_rate'] !== '')
+            ? (float) $validated['monthly_rate']
+            : null;
+
+        DB::transaction(function () use ($property, $unitIds, $updateData, $fields, $monthlyRate) {
+            $units = $property->units()->whereIn('id', $unitIds)->get();
+
+            foreach ($units as $unit) {
+                if (! empty($updateData)) {
+                    $unit->update($updateData);
+                }
+
+                if ($monthlyRate !== null) {
+                    $activeRate = $unit->rates()->where('billing_unit', 'month')->where('is_active', true)->first();
+                    if ($activeRate) {
+                        $activeRate->update(['amount' => $monthlyRate]);
+                    } else {
+                        $unit->rates()->create([
+                            'billing_interval' => 1,
+                            'billing_unit' => 'month',
+                            'amount' => $monthlyRate,
+                            'is_active' => true,
+                        ]);
+                    }
+                }
+            }
+        });
+
+        $count = count($unitIds);
+        Inertia::flash('toast', ['type' => 'success', 'message' => __(':count units updated successfully.', ['count' => $count])]);
 
         return back();
     }

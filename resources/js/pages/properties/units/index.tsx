@@ -16,6 +16,7 @@ import { FilterBar } from '@/components/data-table/filter-bar';
 import { SearchInput } from '@/components/data-table/search-input';
 import {
     AssignTenantSheet,
+    BulkEditUnitSheet,
     BulkUnitSheet,
     MoveOutSheet,
     MoveUnitSheet,
@@ -86,7 +87,26 @@ export default function Index({
 }: PageProps) {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [bulkSheetOpen, setBulkSheetOpen] = useState(false);
+    const [bulkEditSheetOpen, setBulkEditSheetOpen] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
+
+    function handleSelectAll(checked: boolean) {
+        if (checked) {
+            setSelectedIds(data.data.map((u) => u.id));
+        } else {
+            setSelectedIds([]);
+        }
+    }
+
+    function handleSelectRow(id: string | number, checked: boolean) {
+        const numId = Number(id);
+        if (checked) {
+            setSelectedIds((prev) => [...prev, numId]);
+        } else {
+            setSelectedIds((prev) => prev.filter((i) => i !== numId));
+        }
+    }
 
     const [detailOpen, setDetailOpen] = useState(false);
     const [viewingUnit, setViewingUnit] = useState<Unit | null>(null);
@@ -450,6 +470,21 @@ export default function Index({
 
             <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-end gap-2">
+                    {selectedIds.length > 0 && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedIds([])}
+                            className="text-xs"
+                        >
+                            Clear ({selectedIds.length})
+                        </Button>
+                    )}
+                    <Button variant="outline" onClick={() => setBulkEditSheetOpen(true)}>
+                        {selectedIds.length > 0
+                            ? `Bulk Edit (${selectedIds.length})`
+                            : 'Bulk Edit Units'}
+                    </Button>
                     <Button variant="outline" onClick={() => setBulkSheetOpen(true)}>
                         Bulk Create Units
                     </Button>
@@ -483,6 +518,10 @@ export default function Index({
                     onPageChange={table.goToPage}
                     onPerPageChange={table.setPerPage}
                     noun="units"
+                    selectable
+                    selectedIds={selectedIds}
+                    onSelectAll={handleSelectAll}
+                    onSelectRow={handleSelectRow}
                     empty={{
                         message: 'No units yet.',
                         createLabel: 'Create your first unit',
@@ -567,6 +606,15 @@ export default function Index({
                 property={property}
                 open={bulkSheetOpen}
                 onOpenChange={setBulkSheetOpen}
+            />
+
+            <BulkEditUnitSheet
+                property={property}
+                units={data.data}
+                selectedIds={selectedIds}
+                open={bulkEditSheetOpen}
+                onOpenChange={setBulkEditSheetOpen}
+                onSuccess={() => setSelectedIds([])}
             />
         </PropertyLayout>
     );
