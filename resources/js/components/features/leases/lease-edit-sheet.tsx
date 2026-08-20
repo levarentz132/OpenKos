@@ -34,11 +34,12 @@ export default function LeaseEditSheet({
     const { data, setData, submit, processing, errors } = useForm({
         rent_amount: lease?.rent_amount ?? '',
         rent_due_day: lease ? String(lease.rent_due_day) : '1',
+        deposit_amount: lease?.deposit_amount ?? '0',
+        deposit_paid_at: lease?.deposit_paid_at?.split('T')[0] ?? '',
+        deposit_refund_amount: lease?.deposit_refund_amount ?? '0',
         deposit_refunded_at: lease?.deposit_refunded_at?.split('T')[0] ?? '',
         notes: lease?.notes ?? '',
     });
-
-    const noDeposit = Number.parseFloat(lease?.deposit_amount ?? '0') === 0;
 
     if (!lease || !lease.unit || !lease.unit.property) {
         return null;
@@ -191,53 +192,96 @@ export default function LeaseEditSheet({
 
                         <section>
                             <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                                Deposit
+                                Deposit & Refunds
                             </h3>
-                            <div className="space-y-2 rounded-lg border bg-muted/30 p-4">
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-muted-foreground">
-                                        Amount
-                                    </span>
-                                    <span className="font-medium tabular-nums">
-                                        {formatPrice(lease.deposit_amount)}
-                                    </span>
-                                </div>
-                                {lease.deposit_paid_at && (
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="text-muted-foreground">
-                                            Paid at
-                                        </span>
-                                        <span className="tabular-nums">
-                                            {formatDate(lease.deposit_paid_at)}
-                                        </span>
+                            <div className="grid gap-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label htmlFor="deposit_amount">
+                                            Deposit Amount (IDR)
+                                        </Label>
+                                        <Input
+                                            id="deposit_amount"
+                                            type="number"
+                                            min={0}
+                                            value={data.deposit_amount}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'deposit_amount',
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="Deposit amount"
+                                        />
+                                        <InputError
+                                            message={errors.deposit_amount}
+                                        />
                                     </div>
-                                )}
-                            </div>
 
-                            <div className="mt-4 grid gap-2">
-                                <Label htmlFor="deposit_refunded_at">
-                                    Deposit Refunded At
-                                </Label>
-                                <Input
-                                    id="deposit_refunded_at"
-                                    type="date"
-                                    value={data.deposit_refunded_at}
-                                    onChange={(e) =>
-                                        setData(
-                                            'deposit_refunded_at',
-                                            e.target.value,
-                                        )
-                                    }
-                                    disabled={noDeposit}
-                                />
-                                {noDeposit && (
-                                    <p className="text-xs text-muted-foreground">
-                                        No deposit was collected for this lease.
-                                    </p>
-                                )}
-                                <InputError
-                                    message={errors.deposit_refunded_at}
-                                />
+                                    <div>
+                                        <Label htmlFor="deposit_paid_at">
+                                            Deposit Paid Date
+                                        </Label>
+                                        <Input
+                                            id="deposit_paid_at"
+                                            type="date"
+                                            value={data.deposit_paid_at}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'deposit_paid_at',
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                        <InputError
+                                            message={errors.deposit_paid_at}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label htmlFor="deposit_refund_amount">
+                                            Refund Amount (IDR)
+                                        </Label>
+                                        <Input
+                                            id="deposit_refund_amount"
+                                            type="number"
+                                            min={0}
+                                            value={data.deposit_refund_amount}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'deposit_refund_amount',
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="Refund amount"
+                                        />
+                                        <InputError
+                                            message={errors.deposit_refund_amount}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="deposit_refunded_at">
+                                            Deposit Refunded Date
+                                        </Label>
+                                        <Input
+                                            id="deposit_refunded_at"
+                                            type="date"
+                                            value={data.deposit_refunded_at}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'deposit_refunded_at',
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                        <InputError
+                                            message={errors.deposit_refunded_at}
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </section>
 

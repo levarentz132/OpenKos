@@ -64,6 +64,7 @@ type PageProps = {
         collected_this_month: number;
         overdue_amount: number;
         pending_payment_verification: number;
+        total_deposits_held?: number;
     };
 };
 
@@ -256,6 +257,31 @@ export default function Index({
                     : '—',
         },
         {
+            key: 'deposit_amount',
+            label: 'Deposit',
+            sortable: true,
+            className: 'tabular-nums',
+            render: (lease) => {
+                const depositAmt = Number(lease.deposit_amount || 0);
+                if (depositAmt === 0) return '—';
+                const refundAmt = Number(lease.deposit_refund_amount || 0);
+                return (
+                    <div>
+                        <p className="font-medium">{formatPrice(lease.deposit_amount)}</p>
+                        {refundAmt > 0 ? (
+                            <p className="text-[11px] text-muted-foreground">
+                                Refunded {formatPrice(lease.deposit_refund_amount)}
+                            </p>
+                        ) : (
+                            <p className="text-[11px] text-green-600 font-medium">
+                                Held
+                            </p>
+                        )}
+                    </div>
+                );
+            },
+        },
+        {
             key: 'payment_status',
             label: 'Payment',
             render: (lease) =>
@@ -364,7 +390,7 @@ export default function Index({
                 </div>
 
                 {stats && (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 lg:gap-4">
                         <Card>
                             <CardContent className="flex items-center gap-4 px-6">
                                 <Building2 className="size-10 shrink-0 text-blue-600" />
@@ -389,6 +415,22 @@ export default function Index({
                                     <p className="truncate text-2xl font-bold tabular-nums">
                                         {formatPrice(
                                             String(stats.collected_this_month),
+                                        )}
+                                    </p>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardContent className="flex items-center gap-4 px-6">
+                                <Banknote className="size-10 shrink-0 text-emerald-600" />
+                                <div className="min-w-0">
+                                    <p className="text-sm text-muted-foreground">
+                                        Deposits Stored With Us
+                                    </p>
+                                    <p className="truncate text-2xl font-bold tabular-nums text-emerald-600">
+                                        {formatPrice(
+                                            String(stats.total_deposits_held ?? 0),
                                         )}
                                     </p>
                                 </div>

@@ -286,6 +286,12 @@ class LeaseController extends Controller
                 : $q->whereHas('users', fn (Builder $q) => $q->whereKey($request->user()->id)))
             ->count();
 
+        $totalDepositsHeld = (float) Lease::query()
+            ->where('status', LeaseStatus::Active->value)
+            ->whereNotNull('deposit_paid_at')
+            ->when($accessibleQuery)
+            ->sum(DB::raw('CASE WHEN deposit_amount - COALESCE(deposit_refund_amount, 0) > 0 THEN deposit_amount - COALESCE(deposit_refund_amount, 0) ELSE 0 END'));
+
         return Inertia::render('leases/index', [
             ...$result,
             'availableUnits' => $availableUnits,
@@ -294,6 +300,7 @@ class LeaseController extends Controller
                 'collected_this_month' => $collectedThisMonth,
                 'overdue_amount' => $overdueAmount,
                 'pending_payment_verification' => $pendingPaymentVerification,
+                'total_deposits_held' => $totalDepositsHeld,
             ],
         ]);
     }
