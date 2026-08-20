@@ -348,11 +348,9 @@ class LeaseController extends Controller
     {
         $this->authorize('update', $lease);
 
-        abort(403, 'Lease editing is temporarily disabled.');
-
         $lease->update($request->validated());
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('Lease updated.')]);
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Lease updated successfully.')]);
 
         return back();
     }
@@ -544,6 +542,37 @@ class LeaseController extends Controller
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Tenant moved to new unit.')]);
+
+        return back();
+    }
+
+    public function forceDeleteLease(Request $request, ?Property $property = null, ?Unit $unit = null, ?Lease $lease = null): RedirectResponse
+    {
+        $targetLease = $lease ?? Lease::findOrFail($request->route('lease'));
+
+        $this->authorize('delete', $targetLease);
+
+        DB::transaction(function () use ($targetLease) {
+            $targetUnit = $targetLease->unit;
+
+            foreach ($targetLease->invoices as $invoice) {
+                $invoice->lineItems()->delete();
+                $invoice->payments()->delete();
+                $invoice->delete();
+            }
+
+            $targetLease->tenants()->detach();
+            $targetLease->forceDelete();
+
+            if ($targetUnit) {
+                $hasActiveLeases = $targetUnit->leases()->where('status', LeaseStatus::Active->value)->exists();
+                if (! $hasActiveLeases && $targetUnit->status === UnitStatus::Occupied) {
+                    $targetUnit->update(['status' => UnitStatus::Available]);
+                }
+            }
+        });
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Lease deleted successfully.')]);
 
         return back();
     }

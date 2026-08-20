@@ -73,10 +73,10 @@ class CreateLease
                 'is_custom_price' => $isCustomPrice,
                 'unit_rate_id' => $data->unitRateId,
                 'deposit_amount' => $data->depositAmount ?? 0,
-                'deposit_paid_at' => $data->depositPaidAt,
+                'deposit_paid_at' => $data->depositPaidAt ?? (($data->depositAmount ?? 0) > 0 ? now() : null),
                 'deposit_refund_amount' => $data->depositRefundAmount,
                 'deposit_refunded_at' => $data->depositRefundedAt,
-                'rent_due_day' => $data->rentDueDay ?? 1,
+                'rent_due_day' => $data->rentDueDay ?? ($data->startDate ? (int) \Carbon\Carbon::parse($data->startDate)->format('j') : 1),
                 'status' => LeaseStatus::Active,
                 'notes' => $data->notes,
             ]);

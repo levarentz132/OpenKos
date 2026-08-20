@@ -4,6 +4,7 @@ import {
     ArrowUpRight,
     Banknote,
     Bell,
+    Calculator,
     CalendarClock,
     Check,
     ChevronDown,
@@ -412,6 +413,21 @@ export default function CollectionQueue({
         },
     ];
 
+    const [calculatingFees, setCalculatingFees] = useState(false);
+
+    function handleCalculateLateFees() {
+        setCalculatingFees(true);
+        router.post(
+            '/leases/invoices/calculate-late-fees',
+            {},
+            {
+                preserveState: true,
+                preserveScroll: true,
+                onFinish: () => setCalculatingFees(false),
+            },
+        );
+    }
+
     const onRowClick = (entry: NeedsAttentionInvoice) => {
         openInvoiceDetail(entry);
     };
@@ -432,6 +448,16 @@ export default function CollectionQueue({
                     <h1 className="text-lg font-semibold tracking-tight">
                         Collection Queue
                     </h1>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={calculatingFees}
+                        onClick={handleCalculateLateFees}
+                        className="gap-2"
+                    >
+                        <Calculator className="h-4 w-4" />
+                        {calculatingFees ? 'Calculating...' : 'Calculate Late Fees'}
+                    </Button>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <MetricCard

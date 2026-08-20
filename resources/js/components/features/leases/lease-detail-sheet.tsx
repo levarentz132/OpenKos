@@ -32,12 +32,16 @@ export default function LeaseDetailSheet({
     onOpenChange,
     onMoveOut,
     onMoveUnit,
+    onEdit,
+    onDelete,
 }: {
     lease?: Lease | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onMoveOut?: () => void;
     onMoveUnit?: () => void;
+    onEdit?: () => void;
+    onDelete?: () => void;
 }) {
     const { auth } = usePage<{ auth: { permissions: string[] } }>().props;
     const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
@@ -666,6 +670,16 @@ export default function LeaseDetailSheet({
                                     }
                                 >
                                     Send Reminder
+                                </Button>
+                            )}
+                            {onEdit && (
+                                <Button variant="outline" onClick={onEdit}>
+                                    Edit Lease
+                                </Button>
+                            )}
+                            {onDelete && (
+                                <Button variant="destructive" onClick={onDelete}>
+                                    Delete Lease
                                 </Button>
                             )}
                             <Button

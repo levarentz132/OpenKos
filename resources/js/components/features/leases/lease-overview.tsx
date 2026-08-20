@@ -259,6 +259,15 @@ export default function LeaseOverview({ lease }: { lease: Lease }) {
                                     </span>
                                 </div>
                             )}
+                            <div className="flex items-center justify-between text-sm font-medium border-t pt-2 mt-2">
+                                <span className="text-muted-foreground">Active Deposit Balance</span>
+                                <span className="tabular-nums font-semibold text-green-600">
+                                    {formatPrice(
+                                        lease.deposit_balance ??
+                                        String(Math.max(0, Number(lease.deposit_amount || 0) - Number(lease.deposit_refund_amount || 0)))
+                                    )}
+                                </span>
+                            </div>
                         </div>
                     </CollapsibleContent>
                 </div>

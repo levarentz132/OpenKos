@@ -6,25 +6,25 @@ export const MOVE_OUT_REASONS = [
     { value: 'other', label: 'Other' },
 ];
 
-export const DUE_DAY_OPTIONS = [
-    { value: '1', label: '1st' },
-    { value: '5', label: '5th' },
-    { value: '10', label: '10th' },
-    { value: '15', label: '15th' },
-    { value: '20', label: '20th' },
-    { value: '25', label: '25th' },
-    { value: '31', label: 'Last day of month' },
-];
+export const DUE_DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => {
+    const day = i + 1;
+    const suffix =
+        day === 1 || day === 21 || day === 31
+            ? 'st'
+            : day === 2 || day === 22
+              ? 'nd'
+              : day === 3 || day === 23
+                ? 'rd'
+                : 'th';
+    return {
+        value: String(day),
+        label: day === 31 ? '31st (Last day of month)' : `${day}${suffix}`,
+    };
+});
 
-export const DUE_DAY_LABELS: Record<number, string> = {
-    1: '1st',
-    5: '5th',
-    10: '10th',
-    15: '15th',
-    20: '20th',
-    25: '25th',
-    31: 'Last day of month',
-};
+export const DUE_DAY_LABELS: Record<number, string> = Object.fromEntries(
+    DUE_DAY_OPTIONS.map((opt) => [parseInt(opt.value, 10), opt.label]),
+);
 
 export const DEPOSIT_HANDLING_OPTIONS = [
     { value: 'carry_forward', label: 'Carry forward to new lease' },

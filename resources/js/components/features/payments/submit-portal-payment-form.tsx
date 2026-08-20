@@ -28,17 +28,25 @@ export default function SubmitPortalPaymentForm({
     onSuccess?: () => void;
     onCancel?: () => void;
 }) {
-    const payableAmount = invoice.payable_amount ?? invoice.outstanding ?? '0';
+    const payableAmount = String(invoice.payable_amount ?? invoice.outstanding ?? '0');
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [fileName, setFileName] = useState<string | null>(null);
+    const [amount, setAmount] = useState<string>(payableAmount);
+    const [paymentMethod, setPaymentMethod] = useState<string>('transfer');
     const formRef = useRef<HTMLFormElement>(null);
 
     function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
         const formData = new FormData(event.currentTarget);
-        formData.append('invoice_id', String(invoice.id));
+        formData.set('invoice_id', String(invoice.id));
+        if (paymentMethod) {
+            formData.set('payment_method', paymentMethod);
+        }
+        if (amount) {
+            formData.set('amount', amount);
+        }
 
         setProcessing(true);
         setErrors({});
@@ -91,7 +99,8 @@ export default function SubmitPortalPaymentForm({
                         max={payableAmount}
                         step="1"
                         inputMode="numeric"
-                        defaultValue={payableAmount}
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
                         aria-describedby="amount-help"
                         required
                     />
@@ -107,7 +116,11 @@ export default function SubmitPortalPaymentForm({
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                         <Label htmlFor="payment_method">Payment Method</Label>
-                        <Select name="payment_method" defaultValue="transfer">
+                        <Select
+                            name="payment_method"
+                            value={paymentMethod}
+                            onValueChange={setPaymentMethod}
+                        >
                             <SelectTrigger
                                 id="payment_method"
                                 className="w-full"

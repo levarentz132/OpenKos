@@ -197,11 +197,13 @@ describe('CRUD', function () {
             'rent_amount' => 1_000_000,
         ]);
 
-        $this->actingAs($user)
+        $response = $this->actingAs($user)
             ->put(route('properties.units.leases.update', [$property, $unit, $lease]), [
                 'rent_amount' => 2_000_000,
-            ])
-            ->assertForbidden();
+            ]);
+
+        $response->assertRedirect();
+        expect((float) $lease->fresh()->rent_amount)->toBe(2000000.0);
     });
 });
 

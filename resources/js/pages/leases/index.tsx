@@ -4,11 +4,14 @@ import {
     Eye,
     LogOut,
     EllipsisVertical,
+    Pencil,
     RefreshCw,
     Building2,
     Banknote,
     AlertTriangle,
     Clock3,
+    Calculator,
+    Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
 import { DataTable } from '@/components/data-table';
@@ -17,7 +20,7 @@ import { FilterBar } from '@/components/data-table/filter-bar';
 import { SearchInput } from '@/components/data-table/search-input';
 import {
     LeaseDetailSheet,
-    // LeaseEditSheet,
+    LeaseEditSheet,
     MoveOutSheet,
     RenewLeaseSheet,
 } from '@/components/features';
@@ -25,6 +28,14 @@ import { Heading } from '@/components/shared';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -70,9 +81,35 @@ export default function Index({
 }: PageProps) {
     const [detailLease, setDetailLease] = useState<Lease | null>(null);
     const [detailOpen, setDetailOpen] = useState(false);
-    // const [editOpen, setEditOpen] = useState(false);
+    const [editOpen, setEditOpen] = useState(false);
     const [moveOutOpen, setMoveOutOpen] = useState(false);
     const [renewOpen, setRenewOpen] = useState(false);
+    const [calculatingFees, setCalculatingFees] = useState(false);
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [leaseToDelete, setLeaseToDelete] = useState<Lease | null>(null);
+
+    function handleDeleteLease() {
+        if (!leaseToDelete) return;
+        router.delete(`/leases/${leaseToDelete.id}/delete`, {
+            onSuccess: () => {
+                setDeleteOpen(false);
+                setLeaseToDelete(null);
+            },
+        });
+    }
+
+    function handleCalculateLateFees() {
+        setCalculatingFees(true);
+        router.post(
+            '/leases/invoices/calculate-late-fees',
+            {},
+            {
+                preserveState: true,
+                preserveScroll: true,
+                onFinish: () => setCalculatingFees(false),
+            },
+        );
+    }
 
     const table = useTable({
         routeFn: () => leases.index(),
@@ -230,7 +267,7 @@ export default function Index({
                             <Eye className="size-4" />
                             View
                         </DropdownMenuItem>
-                        {/* <DropdownMenuItem
+                        <DropdownMenuItem
                             onClick={() => {
                                 setDetailLease(lease);
                                 setDetailOpen(false);
@@ -239,7 +276,7 @@ export default function Index({
                         >
                             <Pencil className="size-4" />
                             Edit
-                        </DropdownMenuItem> */}
+                        </DropdownMenuItem>
                         {lease.status === 'active' && (
                             <>
                                 <DropdownMenuItem
@@ -265,6 +302,16 @@ export default function Index({
                                 </DropdownMenuItem>
                             </>
                         )}
+                        <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => {
+                                setLeaseToDelete(lease);
+                                setDeleteOpen(true);
+                            }}
+                        >
+                            <Trash2 className="size-4" />
+                            Delete Lease
+                        </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             ),
@@ -316,18 +363,30 @@ export default function Index({
                         </Card>
 
                         <Card>
-                            <CardContent className="flex items-center gap-4 px-6">
-                                <AlertTriangle className="size-10 shrink-0 text-red-600" />
-                                <div className="min-w-0">
-                                    <p className="text-sm text-muted-foreground">
-                                        Overdue
-                                    </p>
-                                    <p className="truncate text-2xl font-bold tabular-nums">
-                                        {formatPrice(
-                                            String(stats.overdue_amount),
-                                        )}
-                                    </p>
+                            <CardContent className="flex items-center justify-between gap-4 px-6">
+                                <div className="flex items-center gap-4 min-w-0">
+                                    <AlertTriangle className="size-10 shrink-0 text-red-600" />
+                                    <div className="min-w-0">
+                                        <p className="text-sm text-muted-foreground">
+                                            Overdue
+                                        </p>
+                                        <p className="truncate text-2xl font-bold tabular-nums">
+                                            {formatPrice(
+                                                String(stats.overdue_amount),
+                                            )}
+                                        </p>
+                                    </div>
                                 </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={calculatingFees}
+                                    onClick={handleCalculateLateFees}
+                                    className="gap-2 shrink-0"
+                                >
+                                    <Calculator className="h-4 w-4 text-red-600" />
+                                    {calculatingFees ? 'Calculating...' : 'Calculate Fees'}
+                                </Button>
                             </CardContent>
                         </Card>
 
@@ -384,6 +443,15 @@ export default function Index({
                 lease={detailLease}
                 open={detailOpen}
                 onOpenChange={setDetailOpen}
+                onEdit={() => {
+                    setDetailOpen(false);
+                    setEditOpen(true);
+                }}
+                onDelete={() => {
+                    setLeaseToDelete(detailLease);
+                    setDetailOpen(false);
+                    setDeleteOpen(true);
+                }}
                 onMoveOut={
                     detailLease?.status === 'active'
                         ? openMoveOutFromDetail
@@ -413,6 +481,39 @@ export default function Index({
                 open={renewOpen}
                 onOpenChange={setRenewOpen}
             />
+
+            <LeaseEditSheet
+                key={detailLease?.id ?? 'edit'}
+                lease={detailLease}
+                open={editOpen}
+                onOpenChange={setEditOpen}
+            />
+
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Lease</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to permanently delete lease{' '}
+                            <span className="font-mono font-medium">
+                                {leaseToDelete?.reference ?? `#${leaseToDelete?.id}`}
+                            </span>
+                            ? This will remove all associated invoices and payments.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={handleDeleteLease}>
+                            Delete Lease
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

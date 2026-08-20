@@ -1,4 +1,6 @@
-import { useForm } from '@inertiajs/react';
+import { router, useForm } from '@inertiajs/react';
+import { Calculator } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -55,6 +57,10 @@ export default function Reminders({
         reminder_overdue_intervals: number[];
         reminder_message_templates: Record<string, string | null>;
         reminder_channels: string[];
+        late_fee_enabled?: boolean;
+        late_fee_type?: string;
+        late_fee_amount?: number;
+        late_fee_grace_days?: number;
     };
     defaultTemplates: Record<string, string>;
     previewInvoiceContext: string;
@@ -80,13 +86,33 @@ export default function Reminders({
             due_today: settings.reminder_message_templates.due_today ?? '',
             overdue: settings.reminder_message_templates.overdue ?? '',
         },
+        late_fee_enabled: settings.late_fee_enabled ?? false,
+        late_fee_type: settings.late_fee_type ?? 'flat',
+        late_fee_amount: String(settings.late_fee_amount ?? 50000),
+        late_fee_grace_days: String(settings.late_fee_grace_days ?? 3),
     });
+
+    const [calculatingFees, setCalculatingFees] = useState(false);
+
+    function handleCalculateFees() {
+        setCalculatingFees(true);
+        router.post(
+            '/leases/invoices/calculate-late-fees',
+            {},
+            {
+                preserveState: true,
+                preserveScroll: true,
+                onFinish: () => setCalculatingFees(false),
+            },
+        );
+    }
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         transform((d) => ({
             ...d,
             reminder_enabled: d.reminder_enabled ? '1' : '0',
+            late_fee_enabled: d.late_fee_enabled ? '1' : '0',
         }));
         submit(updateReminders(), {
             onSuccess: () => setDefaults(),
@@ -321,6 +347,80 @@ export default function Reminders({
                                     </div>
                                 )}
                             </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <div className="space-y-1">
+                                    <CardTitle>Automated Late Fees</CardTitle>
+                                    <CardDescription>
+                                        Automatically apply a penalty line item to overdue invoices once past grace period.
+                                    </CardDescription>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    {data.late_fee_enabled && (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={calculatingFees}
+                                            onClick={handleCalculateFees}
+                                            className="gap-2"
+                                        >
+                                            <Calculator className="h-4 w-4" />
+                                            {calculatingFees ? 'Calculating...' : 'Calculate Fees Now'}
+                                        </Button>
+                                    )}
+                                    <Switch
+                                        checked={data.late_fee_enabled}
+                                        onCheckedChange={(checked) =>
+                                            setData('late_fee_enabled', checked)
+                                        }
+                                    />
+                                </div>
+                            </CardHeader>
+                            {data.late_fee_enabled && (
+                                <CardContent className="space-y-4 pt-4">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="late_fee_type">Fee Type</Label>
+                                        <select
+                                            id="late_fee_type"
+                                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                            value={data.late_fee_type}
+                                            onChange={(e) => setData('late_fee_type', e.target.value)}
+                                        >
+                                            <option value="flat">One-time Flat Fee (Fixed Amount)</option>
+                                            <option value="daily_flat">Daily Flat Fee (Per Overdue Day)</option>
+                                            <option value="percentage">Percentage Fee (% of Rent)</option>
+                                        </select>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="late_fee_amount">
+                                                {data.late_fee_type === 'percentage' ? 'Percentage (%)' : 'Amount'}
+                                            </Label>
+                                            <Input
+                                                id="late_fee_amount"
+                                                type="number"
+                                                min={0}
+                                                value={data.late_fee_amount}
+                                                onChange={(e) => setData('late_fee_amount', e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="late_fee_grace_days">Grace Period (Days)</Label>
+                                            <Input
+                                                id="late_fee_grace_days"
+                                                type="number"
+                                                min={0}
+                                                max={90}
+                                                value={data.late_fee_grace_days}
+                                                onChange={(e) => setData('late_fee_grace_days', e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            )}
                         </Card>
                     </div>
 

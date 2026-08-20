@@ -150,6 +150,14 @@ class Lease extends Model
         };
     }
 
+    public function getDepositBalanceAttribute(): string
+    {
+        $paid = $this->deposit_paid_at !== null ? (float) $this->deposit_amount : 0.0;
+        $refunded = (float) ($this->deposit_refund_amount ?? 0);
+
+        return number_format(max(0, $paid - $refunded), 2, '.', '');
+    }
+
     public function getBillingLabelAttribute(): string
     {
         $interval = $this->billing_interval ?? 1;

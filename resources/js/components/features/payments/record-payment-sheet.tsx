@@ -37,6 +37,8 @@ function RecordPaymentForm({
     const [fileName, setFileName] = useState<string | null>(null);
     const [invoices, setInvoices] = useState<RentScheduleEntry[] | null>(null);
     const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>('');
+    const [paymentMethod, setPaymentMethod] = useState<string>('cash');
+    const [amount, setAmount] = useState<string>('');
     const [fetchError, setFetchError] = useState(false);
     const formRef = useRef<HTMLFormElement>(null);
 
@@ -70,10 +72,27 @@ function RecordPaymentForm({
         (entry) => String(entry.id) === selectedInvoiceId,
     );
 
+    useEffect(() => {
+        if (selectedInvoice) {
+            setAmount(String(selectedInvoice.outstanding));
+        } else if (lease?.rent_amount) {
+            setAmount(String(lease.rent_amount));
+        }
+    }, [selectedInvoice, lease?.rent_amount]);
+
     function handleSubmit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
 
         const formData = new FormData(e.currentTarget);
+        if (selectedInvoiceId) {
+            formData.set('invoice_id', selectedInvoiceId);
+        }
+        if (paymentMethod) {
+            formData.set('payment_method', paymentMethod);
+        }
+        if (amount) {
+            formData.set('amount', amount);
+        }
 
         setProcessing(true);
         setErrors({});
@@ -161,12 +180,8 @@ function RecordPaymentForm({
                                 name="amount"
                                 type="number"
                                 min={1}
-                                key={selectedInvoiceId}
-                                defaultValue={
-                                    selectedInvoice?.outstanding ??
-                                    lease?.rent_amount ??
-                                    ''
-                                }
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
                                 required
                             />
                             <InputError message={errors.amount} />
@@ -179,7 +194,8 @@ function RecordPaymentForm({
                                 </Label>
                                 <Select
                                     name="payment_method"
-                                    defaultValue="cash"
+                                    value={paymentMethod}
+                                    onValueChange={setPaymentMethod}
                                 >
                                     <SelectTrigger
                                         id="payment_method"

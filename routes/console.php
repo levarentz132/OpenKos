@@ -12,6 +12,10 @@ Schedule::command('invoices:generate')
     ->dailyAt('01:00')
     ->withoutOverlapping(60);
 
+Schedule::command('invoices:apply-late-fees')
+    ->dailyAt('01:30')
+    ->withoutOverlapping(60);
+
 Schedule::command('payments:reconcile')
     ->everyFiveMinutes()
     ->withoutOverlapping(15);

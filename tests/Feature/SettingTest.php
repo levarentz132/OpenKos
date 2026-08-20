@@ -56,4 +56,21 @@ describe('Setting', function () {
         expect($all['locale'])->toBe('id');
         expect($all['timezone'])->toBe('Asia/Jakarta');
     });
+
+    it('persists late fee settings', function () {
+        Setting::set('late_fee_enabled', true);
+        Setting::set('late_fee_type', 'daily_flat');
+        Setting::set('late_fee_amount', 25000);
+        Setting::set('late_fee_grace_days', 4);
+
+        expect(Setting::get('late_fee_enabled'))->toBeTrue();
+        expect(Setting::get('late_fee_type'))->toBe('daily_flat');
+        expect(Setting::get('late_fee_amount'))->toBe(25000);
+        expect(Setting::get('late_fee_grace_days'))->toBe(4);
+
+        // Verify database table record
+        $dbRecord = \App\Models\Setting::where('key', 'late_fee_amount')->first();
+        expect($dbRecord)->not->toBeNull();
+        expect((int) $dbRecord->value)->toBe(25000);
+    });
 });

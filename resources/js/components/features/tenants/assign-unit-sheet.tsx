@@ -136,7 +136,10 @@ export default function AssignUnitSheet({
         e.preventDefault();
         transform((d) => {
             if (hasDeposit) {
-                return d;
+                return {
+                    ...d,
+                    deposit_paid_at: d.deposit_paid_at || d.start_date || todayISO(),
+                };
             }
 
             const payload: Record<string, unknown> = { ...d };
@@ -211,27 +214,16 @@ export default function AssignUnitSheet({
     }
 
     function handleStartDateChange(e: React.ChangeEvent<HTMLInputElement>) {
-        setData('start_date', e.target.value);
-
-        if (dueDayInitialized.current) {
-            return;
-        }
-
-        const day = e.target.value
-            ? parseInt(e.target.value.split('-')[2], 10)
-            : NaN;
-
-        if (!isNaN(day) && day >= 1 && day <= 31) {
-            const match = DUE_DAY_OPTIONS.find(
-                (o) => parseInt(o.value, 10) === day,
-            );
-
-            if (match) {
-                setData('rent_due_day', match.value);
-            }
-        }
-
-        dueDayInitialized.current = true;
+        const val = e.target.value;
+        setData((prev) => {
+            const day = val ? parseInt(val.split('-')[2], 10) : NaN;
+            const rent_due_day = (!isNaN(day) && day >= 1 && day <= 31) ? String(day) : prev.rent_due_day;
+            return {
+                ...prev,
+                start_date: val,
+                rent_due_day,
+            };
+        });
     }
 
     return (

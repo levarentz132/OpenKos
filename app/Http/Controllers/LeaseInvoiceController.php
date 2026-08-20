@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Invoices\ApplyLateFees;
 use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Invoice;
@@ -198,5 +199,16 @@ class LeaseInvoiceController extends Controller
             "invoice-{$reference}.pdf",
             ['Content-Type' => 'application/pdf'],
         );
+    }
+
+    public function calculateLateFees(ApplyLateFees $action): RedirectResponse
+    {
+        $count = $action->execute();
+
+        if ($count > 0) {
+            return back()->with('success', __(':count late fee(s) calculated and applied to overdue invoices.', ['count' => $count]));
+        }
+
+        return back()->with('info', __('No eligible overdue invoices found for late fees.'));
     }
 }

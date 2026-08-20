@@ -143,6 +143,7 @@ export type LeaseInfo = {
     monthly_equivalent: string;
     billing_label: string;
     deposit_amount: string;
+    deposit_balance?: string;
     deposit_paid_at: string | null;
     deposit_refund_amount: string | null;
     deposit_refunded_at: string | null;
@@ -168,6 +169,7 @@ export type Lease = {
     monthly_equivalent: string;
     billing_label: string;
     deposit_amount: string;
+    deposit_balance?: string;
     deposit_paid_at: string | null;
     deposit_refund_amount: string | null;
     deposit_refunded_at: string | null;

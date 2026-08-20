@@ -271,4 +271,52 @@ class UnitController extends Controller
             'unit' => $unit->only('id', 'slug', 'name', 'floor'),
         ]);
     }
+
+    public function bulkStore(Request $request, Property $property): RedirectResponse
+    {
+        $this->authorize('create', [Unit::class, $property]);
+
+        $validated = $request->validate([
+            'prefix' => ['required', 'string', 'max:50'],
+            'start_number' => ['required', 'integer', 'min:1'],
+            'count' => ['required', 'integer', 'min:1', 'max:100'],
+            'floor' => ['nullable', 'string', 'max:50'],
+            'capacity' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'monthly_rate' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $prefix = trim($validated['prefix']);
+        $start = (int) $validated['start_number'];
+        $count = (int) $validated['count'];
+        $floor = $validated['floor'] ?? '1';
+        $capacity = (int) ($validated['capacity'] ?? 1);
+        $monthlyRate = isset($validated['monthly_rate']) && $validated['monthly_rate'] !== '' ? (float) $validated['monthly_rate'] : null;
+
+        DB::transaction(function () use ($property, $prefix, $start, $count, $floor, $capacity, $monthlyRate) {
+            for ($i = 0; $i < $count; $i++) {
+                $number = $start + $i;
+                $unitName = $prefix !== '' ? "{$prefix} {$number}" : (string) $number;
+
+                $unit = $property->units()->create([
+                    'name' => $unitName,
+                    'floor' => $floor,
+                    'capacity' => $capacity,
+                    'status' => \App\Enums\UnitStatus::Available,
+                ]);
+
+                if ($monthlyRate !== null && $monthlyRate > 0) {
+                    $unit->rates()->create([
+                        'billing_interval' => 1,
+                        'billing_unit' => 'month',
+                        'amount' => $monthlyRate,
+                        'is_active' => true,
+                    ]);
+                }
+            }
+        });
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __(':count units created successfully.', ['count' => $count])]);
+
+        return back();
+    }
 }

@@ -16,6 +16,7 @@ import { FilterBar } from '@/components/data-table/filter-bar';
 import { SearchInput } from '@/components/data-table/search-input';
 import {
     AssignTenantSheet,
+    BulkUnitSheet,
     MoveOutSheet,
     MoveUnitSheet,
     UnitDetailSheet,
@@ -84,6 +85,7 @@ export default function Index({
     table: tableMeta,
 }: PageProps) {
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [bulkSheetOpen, setBulkSheetOpen] = useState(false);
     const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
 
     const [detailOpen, setDetailOpen] = useState(false);
@@ -447,7 +449,10 @@ export default function Index({
             <Head title={`Units - ${property.name}`} />
 
             <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-end gap-2">
+                    <Button variant="outline" onClick={() => setBulkSheetOpen(true)}>
+                        Bulk Create Units
+                    </Button>
                     <Button onClick={openCreate}>New Unit</Button>
                 </div>
 
@@ -557,6 +562,12 @@ export default function Index({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <BulkUnitSheet
+                property={property}
+                open={bulkSheetOpen}
+                onOpenChange={setBulkSheetOpen}
+            />
         </PropertyLayout>
     );
 }

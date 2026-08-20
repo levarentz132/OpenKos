@@ -25,6 +25,10 @@ class ReminderController extends Controller
             'reminder_overdue_intervals',
             'reminder_message_templates',
             'reminder_channels',
+            'late_fee_enabled',
+            'late_fee_type',
+            'late_fee_amount',
+            'late_fee_grace_days',
         ]);
 
         $legacyTemplate = Setting::get('reminder_message_template');
@@ -68,6 +72,10 @@ class ReminderController extends Controller
             'reminder_message_templates.overdue' => ['nullable', 'string', 'max:1000'],
             'reminder_channels' => ['required', 'array', 'min:1'],
             'reminder_channels.*' => ['string', 'in:log,whatsapp,mail'],
+            'late_fee_enabled' => ['nullable', 'boolean'],
+            'late_fee_type' => ['required', 'string', 'in:flat,daily_flat,percentage'],
+            'late_fee_amount' => ['required', 'integer', 'min:0'],
+            'late_fee_grace_days' => ['required', 'integer', 'min:0', 'max:90'],
         ]);
 
         $validated['reminder_overdue_intervals'] = array_map(

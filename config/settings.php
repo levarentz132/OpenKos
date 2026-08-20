@@ -16,5 +16,9 @@ return [
     'reminder_channels' => ['default' => ['log'], 'cast' => 'array'],
     'mail_config' => ['default' => [], 'cast' => 'encrypted:array'],
     'whatsapp_config' => ['default' => [], 'cast' => 'encrypted:array'],
+    'late_fee_enabled' => ['default' => false, 'cast' => 'boolean'],
+    'late_fee_type' => ['default' => 'flat', 'cast' => 'string'],
+    'late_fee_amount' => ['default' => 50000, 'cast' => 'integer'],
+    'late_fee_grace_days' => ['default' => 3, 'cast' => 'integer'],
 
 ];

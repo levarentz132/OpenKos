@@ -99,6 +99,7 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
                 Route::prefix('units')->name('units.')->group(function () {
                     Route::get('/', [UnitController::class, 'index'])->name('index')->middleware('permission:units.view');
                     Route::post('/', [UnitController::class, 'store'])->name('store')->middleware('permission:units.create');
+                    Route::post('bulk', [UnitController::class, 'bulkStore'])->name('bulk-store')->middleware('permission:units.create');
 
                     Route::prefix('{unit}')->group(function () {
                         Route::get('/', [UnitController::class, 'show'])->name('show')->middleware('permission:units.view');
@@ -117,6 +118,7 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
                             Route::post('/', [LeaseController::class, 'store'])->name('store')->middleware('permission:leases.create');
                             Route::put('{lease}', [LeaseController::class, 'update'])->name('update')->middleware('permission:leases.update');
                             Route::delete('{lease}', [LeaseController::class, 'destroy'])->name('destroy')->middleware('permission:leases.delete');
+                            Route::delete('{lease}/force-delete', [LeaseController::class, 'forceDeleteLease'])->name('force-delete')->middleware('permission:leases.delete');
                             Route::post('{lease}/move', [LeaseController::class, 'move'])->name('move')->middleware('permission:leases.move');
                         });
                     });
@@ -151,6 +153,7 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
 
     Route::prefix('leases')->name('leases.')->group(function () {
         Route::get('/', [LeaseController::class, 'globalIndex'])->name('index')->middleware('permission:leases.view');
+        Route::post('invoices/calculate-late-fees', [LeaseInvoiceController::class, 'calculateLateFees'])->name('invoices.calculate-late-fees')->middleware('permission:leases.view');
 
         Route::prefix('{lease}')->whereNumber('lease')->group(function () {
             Route::get('/', [LeaseController::class, 'show'])->name('show')->middleware('permission:leases.view');
@@ -166,6 +169,7 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
             Route::get('rent-schedule', LeaseRentScheduleController::class)->name('rent-schedule')->middleware('permission:leases.view');
             Route::post('move-out', [LeaseController::class, 'moveOut'])->name('move-out')->middleware('permission:leases.move_out');
             Route::post('renew', [LeaseController::class, 'renew'])->name('renew')->middleware('permission:leases.renew');
+            Route::delete('delete', [LeaseController::class, 'forceDeleteLease'])->name('delete')->middleware('permission:leases.delete');
 
             Route::prefix('payments')->group(function () {
                 Route::get('/', [LeaseController::class, 'payments'])->name('workspace.payments')->middleware('permission:leases.view');

@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { InputError } from '@/components/shared';
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,15 @@ export default function QueuePaymentSheet({
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [fileName, setFileName] = useState<string | null>(null);
+    const [amount, setAmount] = useState<string>('');
+    const [paymentMethod, setPaymentMethod] = useState<string>('cash');
     const formRef = useRef<HTMLFormElement>(null);
+
+    useEffect(() => {
+        if (invoice) {
+            setAmount(String(invoice.outstanding));
+        }
+    }, [invoice]);
 
     function handleSubmit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -47,7 +55,13 @@ export default function QueuePaymentSheet({
         }
 
         const formData = new FormData(e.currentTarget);
-        formData.append('invoice_id', String(invoice.id));
+        formData.set('invoice_id', String(invoice.id));
+        if (paymentMethod) {
+            formData.set('payment_method', paymentMethod);
+        }
+        if (amount) {
+            formData.set('amount', amount);
+        }
 
         setProcessing(true);
         setErrors({});
@@ -110,8 +124,8 @@ export default function QueuePaymentSheet({
                                 name="amount"
                                 type="number"
                                 min={1}
-                                key={invoice?.id}
-                                defaultValue={invoice?.outstanding ?? ''}
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
                                 required
                             />
                             <InputError message={errors.amount} />
@@ -124,7 +138,8 @@ export default function QueuePaymentSheet({
                                 </Label>
                                 <Select
                                     name="payment_method"
-                                    defaultValue="cash"
+                                    value={paymentMethod}
+                                    onValueChange={setPaymentMethod}
                                 >
                                     <SelectTrigger
                                         id="payment_method"
