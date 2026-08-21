@@ -33,6 +33,13 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { useTable } from '@/hooks/use-table';
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants/billing';
 import { formatDate, formatPrice, formatRupiah } from '@/lib/formatters';
@@ -61,12 +68,17 @@ type Progress = {
     last_payment_at: string | null;
 };
 
+type OptionItem = { value: string; label: string };
+
 type PageProps = {
     entries: PaginatedData<NeedsAttentionInvoice>;
     sort?: string;
     search?: string;
     urgency?: string;
     properties?: string;
+    tenant_id?: string;
+    property_options?: OptionItem[];
+    tenant_options?: OptionItem[];
     per_page?: number;
     outstanding: { count: number; amount: number };
     tab_counts: TabCounts;
@@ -175,6 +187,9 @@ export default function CollectionQueue({
     search: currentSearch = '',
     urgency: currentUrgency = '',
     properties: currentProperties = '',
+    tenant_id: currentTenantId = '',
+    property_options: propertyOptions = [],
+    tenant_options: tenantOptions = [],
     per_page: currentPerPage = 25,
     outstanding,
     tab_counts: tabCounts,
@@ -190,6 +205,7 @@ export default function CollectionQueue({
             per_page: String(currentPerPage),
             urgency: currentUrgency,
             properties: currentProperties,
+            tenant_id: currentTenantId,
         },
         defaults: {
             sort: 'due_date',
@@ -243,6 +259,22 @@ export default function CollectionQueue({
         setPaymentSheetInvoice(entry);
     };
 
+    const handleFilterChange = (key: string, value: string) => {
+        router.get(
+            dashboardRent().url,
+            {
+                urgency: currentUrgency,
+                page: '',
+                search: currentSearch,
+                sort: currentSort,
+                per_page: String(currentPerPage),
+                properties: key === 'properties' ? value : currentProperties,
+                tenant_id: key === 'tenant_id' ? value : currentTenantId,
+            },
+            { preserveState: true, replace: true },
+        );
+    };
+
     const applyTab = (tab: string) => {
         router.get(
             dashboardRent().url,
@@ -253,6 +285,7 @@ export default function CollectionQueue({
                 sort: currentSort,
                 per_page: String(currentPerPage),
                 properties: currentProperties,
+                tenant_id: currentTenantId,
             },
             { preserveState: true, replace: true },
         );
@@ -686,14 +719,66 @@ export default function CollectionQueue({
                     })}
                 </div>
 
-                {/* Search */}
-                <div className="flex items-center gap-1">
-                    <SearchInput
-                        value={table.searchValue}
-                        onChange={table.onSearchChange}
-                        onClear={table.clearSearch}
-                        placeholder="Search tenant, invoice, unit, property..."
-                    />
+                {/* Search & Filters */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="min-w-[240px] flex-1">
+                        <SearchInput
+                            value={table.searchValue}
+                            onChange={table.onSearchChange}
+                            onClear={table.clearSearch}
+                            placeholder="Search tenant, invoice, unit, property..."
+                        />
+                    </div>
+
+                    {/* Property Filter */}
+                    {propertyOptions.length > 0 && (
+                        <Select
+                            value={currentProperties || 'all'}
+                            onValueChange={(val) =>
+                                handleFilterChange(
+                                    'properties',
+                                    val === 'all' ? '' : val,
+                                )
+                            }
+                        >
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="All Properties" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Properties</SelectItem>
+                                {propertyOptions.map((p) => (
+                                    <SelectItem key={p.value} value={p.value}>
+                                        {p.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+
+                    {/* Tenant Filter */}
+                    {tenantOptions.length > 0 && (
+                        <Select
+                            value={currentTenantId || 'all'}
+                            onValueChange={(val) =>
+                                handleFilterChange(
+                                    'tenant_id',
+                                    val === 'all' ? '' : val,
+                                )
+                            }
+                        >
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="All Tenants" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Tenants</SelectItem>
+                                {tenantOptions.map((t) => (
+                                    <SelectItem key={t.value} value={t.value}>
+                                        {t.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
                 </div>
 
                 {/* Queue */}

@@ -10,6 +10,7 @@ use App\Models\Payment;
 use App\Models\PaymentProof;
 use App\Models\Property;
 use App\Models\ReminderLog;
+use App\Models\Tenant;
 use App\Tables\Column;
 use App\Tables\Filter;
 use App\Tables\Table;
@@ -174,6 +175,18 @@ class RentController extends Controller
                         'lease.unit',
                         fn (Builder $q) => $q->whereIn('property_id', explode(',', $value)),
                     )),
+                Filter::select('tenant_id', 'Tenant', function () use ($accessiblePropertyIds): array {
+                    return Tenant::query()
+                        ->whereHas('leases.unit', fn (Builder $q) => $q->whereIn('property_id', $accessiblePropertyIds))
+                        ->orderBy('name')
+                        ->get(['id', 'name'])
+                        ->map(fn (Tenant $t) => ['value' => (string) $t->id, 'label' => $t->name])
+                        ->all();
+                })
+                    ->query(fn (Builder $q, string $value) => $q->whereHas(
+                        'lease.tenants',
+                        fn (Builder $q) => $q->whereIn('tenants.id', explode(',', $value)),
+                    )),
             ])
             ->defaultSort('due_date')
             ->withPerPage(25);
@@ -234,6 +247,23 @@ class RentController extends Controller
 
         return Inertia::render('dashboard/rent', [
             ...$needsAttention,
+            'properties' => $request->query('properties', ''),
+            'tenant_id' => $request->query('tenant_id', ''),
+            'property_options' => Property::query()
+                ->when(! $request->user()->isOwner(), fn (Builder $q) => $q->whereHas(
+                    'users',
+                    fn (Builder $q) => $q->whereKey($request->user()->id),
+                ))
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (Property $p) => ['value' => (string) $p->id, 'label' => $p->name])
+                ->all(),
+            'tenant_options' => Tenant::query()
+                ->whereHas('leases.unit', fn (Builder $q) => $q->whereIn('property_id', $accessiblePropertyIds))
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (Tenant $t) => ['value' => (string) $t->id, 'label' => $t->name])
+                ->all(),
             'outstanding' => [
                 'count' => $outstandingCount,
                 'amount' => $outstandingAmount,
