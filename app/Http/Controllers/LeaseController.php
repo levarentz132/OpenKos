@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Invoices\GenerateInvoices;
 use App\Actions\Leases\CreateLease;
 use App\Actions\Leases\MoveOutLease;
 use App\Actions\Leases\RenewLease;
@@ -362,9 +363,45 @@ class LeaseController extends Controller
 
         $lease->update($data);
 
+        $this->syncLeaseInvoices($lease->fresh());
+
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Lease updated successfully.')]);
 
         return back();
+    }
+
+    private function syncLeaseInvoices(Lease $lease): void
+    {
+        if (! $lease->rent_amount) {
+            return;
+        }
+
+        $pendingInvoices = Invoice::query()
+            ->where('lease_id', $lease->id)
+            ->where('status', InvoiceStatus::Pending->value)
+            ->where('amount_paid', 0)
+            ->get();
+
+        foreach ($pendingInvoices as $invoice) {
+            $dueDay = $lease->rent_due_day ?? 1;
+            $effectiveDueDay = min($dueDay, $invoice->period_start->daysInMonth);
+            $newDueDate = $invoice->period_start->copy()->setDay($effectiveDueDay);
+
+            if ($lease->start_date && $newDueDate->lt($lease->start_date)) {
+                $newDueDate = $lease->start_date->copy();
+            }
+
+            $invoice->update([
+                'total' => $lease->rent_amount,
+                'due_date' => $newDueDate->toDateString(),
+            ]);
+
+            $invoice->lineItems()
+                ->where('type', 'rent')
+                ->update(['amount' => $lease->rent_amount]);
+        }
+
+        app(GenerateInvoices::class)->execute($lease);
     }
 
     public function destroy(Property $property, Unit $unit, Lease $lease): RedirectResponse

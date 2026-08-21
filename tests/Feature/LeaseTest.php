@@ -423,3 +423,48 @@ describe('unit occupancy derived from lease', function () {
             );
     });
 });
+
+describe('lease update billing sync', function () {
+    it('updates pending invoices when lease rent_amount or rent_due_day is updated', function () {
+        [$property, $unit] = createPropertyWithUnit();
+        $user = User::factory()->owner()->create();
+        $tenant = Tenant::factory()->create();
+
+        $lease = Lease::factory()->create([
+            'unit_id' => $unit->id,
+            'primary_tenant_id' => $tenant->id,
+            'start_date' => '2026-06-01',
+            'rent_amount' => 1000000,
+            'rent_due_day' => 1,
+            'status' => 'active',
+        ]);
+
+        $invoice = \App\Models\Invoice::factory()->create([
+            'lease_id' => $lease->id,
+            'period_start' => '2026-06-01',
+            'period_end' => '2026-06-30',
+            'due_date' => '2026-06-01',
+            'total' => 1000000,
+            'amount_paid' => 0,
+            'status' => \App\Enums\InvoiceStatus::Pending,
+        ]);
+
+        \App\Models\InvoiceLineItem::factory()->create([
+            'invoice_id' => $invoice->id,
+            'type' => 'rent',
+            'amount' => 1000000,
+        ]);
+
+        $this->actingAs($user)
+            ->patch(route('properties.units.leases.update', [$property, $unit, $lease]), [
+                'rent_amount' => 1500000,
+                'rent_due_day' => 5,
+            ])
+            ->assertRedirect();
+
+        $invoice->refresh();
+        expect((float) $invoice->total)->toBe(1500000.0);
+        expect($invoice->due_date->format('Y-m-d'))->toBe('2026-06-05');
+        expect((float) $invoice->lineItems()->where('type', 'rent')->first()->amount)->toBe(1500000.0);
+    });
+});
