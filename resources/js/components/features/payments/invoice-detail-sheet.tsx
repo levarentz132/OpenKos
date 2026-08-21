@@ -165,6 +165,14 @@ export default function InvoiceDetailSheet({
                                                 }
                                             />
                                         )}
+                                        {invoice.rent_amount !== undefined && (
+                                            <DetailRow
+                                                label="Room Price"
+                                                value={formatPrice(
+                                                    invoice.rent_amount,
+                                                )}
+                                            />
+                                        )}
                                         <DetailRow
                                             label="Due date"
                                             value={formatDate(invoice.due_date)}

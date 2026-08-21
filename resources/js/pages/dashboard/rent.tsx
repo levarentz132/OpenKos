@@ -379,6 +379,12 @@ export default function CollectionQueue({
             },
         },
         {
+            key: 'rent_amount',
+            label: 'Room Price',
+            className: 'tabular-nums font-medium text-muted-foreground hidden md:table-cell',
+            render: (entry) => formatPrice(entry.rent_amount),
+        },
+        {
             key: 'total',
             label: 'Amount',
             sortable: true,
