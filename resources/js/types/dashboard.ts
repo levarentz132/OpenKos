@@ -60,6 +60,7 @@ export type NeedsAttentionInvoice = {
     period_start: string;
     period_end: string;
     due_date: string;
+    deposit_amount: string;
     total: string;
     amount_paid: string;
     outstanding: string;

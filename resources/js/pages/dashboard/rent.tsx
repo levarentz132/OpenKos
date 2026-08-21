@@ -346,6 +346,39 @@ export default function CollectionQueue({
             },
         },
         {
+            key: 'deposit_amount',
+            label: 'Deposit',
+            className: 'tabular-nums font-medium hidden sm:table-cell',
+            render: (entry) => {
+                const depositNum = Number.parseFloat(
+                    entry.deposit_amount || '0',
+                );
+                const isBelowThreshold = depositNum < 500000;
+
+                return (
+                    <div className="flex flex-col items-start gap-0.5">
+                        <span
+                            className={
+                                isBelowThreshold
+                                    ? 'font-semibold text-red-600 dark:text-red-400'
+                                    : 'text-foreground'
+                            }
+                        >
+                            {formatPrice(entry.deposit_amount)}
+                        </span>
+                        {isBelowThreshold && (
+                            <span
+                                className="inline-flex items-center rounded-full border border-red-200 bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:border-red-800 dark:bg-red-950/80 dark:text-red-300"
+                                title="Deposit is below Rp 500.000"
+                            >
+                                &lt; 500k
+                            </span>
+                        )}
+                    </div>
+                );
+            },
+        },
+        {
             key: 'total',
             label: 'Amount',
             sortable: true,

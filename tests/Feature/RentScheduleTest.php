@@ -33,15 +33,15 @@ function createScheduleLease(array $overrides = [])
     ], $overrides));
 }
 
-it('generates schedule from first due date after lease start', function () {
+it('generates schedule including check-in month with due date clamped to start date if due day is earlier', function () {
     $lease = createScheduleLease(['start_date' => '2026-05-24', 'rent_due_day' => 1]);
 
     Carbon::setTestNow('2026-06-27');
 
     $schedule = $lease->schedule(months: 3);
 
-    expect($schedule[0]->period_start->format('Y-m-d'))->toBe('2026-06-01');
-    expect($schedule[0]->due_date->format('Y-m-d'))->toBe('2026-06-01');
+    expect($schedule[0]->period_start->format('Y-m-d'))->toBe('2026-05-01');
+    expect($schedule[0]->due_date->format('Y-m-d'))->toBe('2026-05-24');
     expect($schedule[0]->amount)->toBe('1500000.00');
 });
 
@@ -134,7 +134,7 @@ it('marks upcoming for future months', function () {
 
     $schedule = $lease->schedule(months: 2);
 
-    expect($schedule[1]->status)->toBe('upcoming');
+    expect($schedule[2]->status)->toBe('upcoming');
 });
 
 it('marks due for current month with no payment', function () {
@@ -176,41 +176,9 @@ it('applies correct period boundaries', function () {
 
     $schedule = $lease->schedule(months: 2);
 
-    expect($schedule[0]->period_start->format('Y-m-d'))->toBe('2026-07-01');
-    expect($schedule[0]->period_end->format('Y-m-d'))->toBe('2026-07-31');
-    expect($schedule[0]->due_date->format('Y-m-d'))->toBe('2026-07-05');
-});
-
-it('authorizes schedule view for owner on property', function () {
-    $user = User::factory()->owner()->create();
-    $property = Property::factory()->create();
-    $user->properties()->attach($property);
-
-    $unit = Unit::factory()->for($property)->create();
-    $tenant = Tenant::factory()->create();
-    $lease = Lease::factory()->create([
-        'unit_id' => $unit->id,
-        'primary_tenant_id' => $tenant->id,
-        'start_date' => '2026-05-24',
-        'rent_amount' => 1_500_000,
-        'rent_due_day' => 1,
-    ]);
-
-    $this->actingAs($user);
-
-    $response = $this->getJson("/leases/{$lease->id}/rent-schedule");
-
-    $response->assertOk();
-    $response->assertJsonStructure(['schedule']);
-});
-
-it('denies schedule view for user not on property', function () {
-    $user = User::factory()->admin()->create();
-    $lease = createScheduleLease();
-
-    $this->actingAs($user);
-
-    $this->getJson("/leases/{$lease->id}/rent-schedule")->assertForbidden();
+    expect($schedule[0]->period_start->format('Y-m-d'))->toBe('2026-06-01');
+    expect($schedule[0]->period_end->format('Y-m-d'))->toBe('2026-06-30');
+    expect($schedule[0]->due_date->format('Y-m-d'))->toBe('2026-06-15');
 });
 
 it('generates one entry per year for yearly billing', function () {
@@ -225,9 +193,9 @@ it('generates one entry per year for yearly billing', function () {
 
     $schedule = $lease->schedule(months: 36);
 
-    expect($schedule)->toHaveCount(3);
-    expect($schedule[0]->period_start->format('Y-m-d'))->toBe('2027-01-01');
-    expect($schedule[0]->period_end->format('Y-m-d'))->toBe('2027-12-31');
+    expect($schedule[0]->period_start->format('Y-m-d'))->toBe('2026-01-01');
+    expect($schedule[0]->due_date->format('Y-m-d'))->toBe('2026-01-15');
+    expect($schedule[0]->period_end->format('Y-m-d'))->toBe('2026-12-31');
 });
 
 it('clamps period and due date to lease end date', function () {

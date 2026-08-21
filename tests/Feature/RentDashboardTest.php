@@ -47,6 +47,35 @@ test('collection queue loads with data for owner', function () {
     Carbon::setTestNow();
 });
 
+test('collection queue includes lease deposit amount', function () {
+    Carbon::setTestNow(Carbon::parse('2026-07-10'));
+
+    $user = User::factory()->owner()->create();
+
+    $lease = Lease::factory()->create([
+        'status' => 'active',
+        'start_date' => now()->subMonths(2),
+        'deposit_amount' => 450000,
+    ]);
+
+    Invoice::factory()->create([
+        'lease_id' => $lease->id,
+        'due_date' => '2026-07-05',
+        'total' => 100000,
+        'amount_paid' => 0,
+        'status' => InvoiceStatus::Pending,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard.rent'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('entries.data.0.deposit_amount', '450000.00')
+        );
+
+    Carbon::setTestNow();
+});
+
 test('collection queue includes invoice detail payload', function () {
     Carbon::setTestNow(Carbon::parse('2026-07-10'));
 

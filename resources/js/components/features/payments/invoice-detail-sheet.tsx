@@ -136,6 +136,35 @@ export default function InvoiceDetailSheet({
                                                 invoice.outstanding,
                                             )}
                                         />
+                                        {invoice.deposit_amount !== undefined && (
+                                            <DetailRow
+                                                label="Deposit"
+                                                value={
+                                                    <span
+                                                        className={
+                                                            Number.parseFloat(
+                                                                invoice.deposit_amount ||
+                                                                    '0',
+                                                            ) < 500000
+                                                                ? 'font-semibold text-red-600 dark:text-red-400'
+                                                                : ''
+                                                        }
+                                                    >
+                                                        {formatPrice(
+                                                            invoice.deposit_amount,
+                                                        )}
+                                                        {Number.parseFloat(
+                                                            invoice.deposit_amount ||
+                                                                '0',
+                                                        ) < 500000 && (
+                                                            <span className="ml-1 text-xs font-semibold text-red-600 dark:text-red-400">
+                                                                (&lt; 500k)
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                }
+                                            />
+                                        )}
                                         <DetailRow
                                             label="Due date"
                                             value={formatDate(invoice.due_date)}
@@ -304,7 +333,13 @@ export default function InvoiceDetailSheet({
     );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({
+    label,
+    value,
+}: {
+    label: string;
+    value: React.ReactNode;
+}) {
     return (
         <div>
             <p className="text-muted-foreground">{label}</p>

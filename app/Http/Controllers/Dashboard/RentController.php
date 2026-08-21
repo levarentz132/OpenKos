@@ -130,6 +130,7 @@ class RentController extends Controller
                     });
                 }),
                 Column::make('urgency', 'Status'),
+                Column::make('deposit_amount', 'Deposit'),
                 Column::make('total', 'Amount')->sortable(),
                 Column::make('outstanding', 'Outstanding'),
                 Column::make('due_date', 'Due')->sortable(),
@@ -294,6 +295,7 @@ class RentController extends Controller
             'period_start' => $invoice->period_start->toDateString(),
             'period_end' => $invoice->period_end->toDateString(),
             'due_date' => $invoice->due_date->toDateString(),
+            'deposit_amount' => (string) ($lease->deposit_amount ?? '0'),
             'total' => (string) $invoice->total,
             'amount_paid' => (string) $invoice->amount_paid,
             'outstanding' => $invoice->outstanding,

@@ -199,9 +199,6 @@ class Lease extends Model
             : now()->startOfMonth()->addMonthsNoOverflow(max(0, $months - 1));
 
         $cursor = $start->copy()->startOfMonth();
-        if ($start->day > $dueDay) {
-            $cursor->addMonthsNoOverflow($advanceMonths ?: 1);
-        }
 
         $schedule = collect();
 
@@ -216,6 +213,10 @@ class Lease extends Model
                     default => $cursor->copy()->endOfMonth(),
                 };
             $dueDate = $cursor->copy()->setDay($effectiveDueDay);
+
+            if ($dueDate < $start) {
+                $dueDate = $start->copy();
+            }
 
             if ($this->end_date) {
                 $endDateCarbon = Carbon::parse($this->end_date);
