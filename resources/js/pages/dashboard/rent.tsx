@@ -379,10 +379,33 @@ export default function CollectionQueue({
             },
         },
         {
-            key: 'rent_amount',
+            key: 'room_price',
             label: 'Room Price',
-            className: 'tabular-nums font-medium text-muted-foreground hidden md:table-cell',
-            render: (entry) => formatPrice(entry.rent_amount),
+            className: 'tabular-nums font-medium hidden md:table-cell',
+            render: (entry) => {
+                const roomPriceNum = Number.parseFloat(
+                    entry.room_price || '0',
+                );
+                const amountNum = Number.parseFloat(entry.total || '0');
+                const isHigherThanAmount =
+                    roomPriceNum > amountNum && amountNum > 0;
+
+                return (
+                    <div className="flex flex-col items-start gap-0.5">
+                        <span className="font-medium text-foreground">
+                            {formatPrice(entry.room_price)}
+                        </span>
+                        {isHigherThanAmount && (
+                            <span
+                                className="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/80 dark:text-amber-300"
+                                title={`Room Price (${formatPrice(entry.room_price)}) is higher than invoice amount (${formatPrice(entry.total)})`}
+                            >
+                                &gt; Amount
+                            </span>
+                        )}
+                    </div>
+                );
+            },
         },
         {
             key: 'total',

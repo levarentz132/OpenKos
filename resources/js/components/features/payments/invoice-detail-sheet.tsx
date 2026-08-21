@@ -165,11 +165,11 @@ export default function InvoiceDetailSheet({
                                                 }
                                             />
                                         )}
-                                        {invoice.rent_amount !== undefined && (
+                                        {invoice.room_price !== undefined && (
                                             <DetailRow
                                                 label="Room Price"
                                                 value={formatPrice(
-                                                    invoice.rent_amount,
+                                                    invoice.room_price,
                                                 )}
                                             />
                                         )}

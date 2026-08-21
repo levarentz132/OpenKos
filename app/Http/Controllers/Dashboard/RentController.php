@@ -98,6 +98,8 @@ class RentController extends Controller
                 'lease.primaryTenant',
                 'lease.tenants',
                 'lease.unit.property',
+                'lease.unit.activeRates',
+                'lease.unitRate',
                 'lineItems',
                 'payments' => fn ($q) => $q
                     ->with(['confirmedBy:id,name', 'proofs'])
@@ -284,6 +286,11 @@ class RentController extends Controller
             default => 'upcoming',
         };
 
+        $roomPrice = $lease->unitRate?->amount
+            ?? $unit?->activeRates?->first()?->amount
+            ?? $unit?->rates?->first()?->amount
+            ?? $lease->rent_amount;
+
         return [
             'id' => $invoice->id,
             'lease_id' => $lease->id,
@@ -297,6 +304,7 @@ class RentController extends Controller
             'period_end' => $invoice->period_end->toDateString(),
             'due_date' => $invoice->due_date->toDateString(),
             'deposit_amount' => (string) ($lease->deposit_amount ?? '0'),
+            'room_price' => (string) ($roomPrice ?? '0'),
             'rent_amount' => (string) ($lease->rent_amount ?? '0'),
             'total' => (string) $invoice->total,
             'amount_paid' => (string) $invoice->amount_paid,

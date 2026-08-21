@@ -61,6 +61,7 @@ export type NeedsAttentionInvoice = {
     period_end: string;
     due_date: string;
     deposit_amount: string;
+    room_price: string;
     rent_amount: string;
     total: string;
     amount_paid: string;
