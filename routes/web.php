@@ -6,6 +6,7 @@ use App\Http\Controllers\LeaseController;
 use App\Http\Controllers\LeaseInvoiceController;
 use App\Http\Controllers\LeaseRentScheduleController;
 use App\Http\Controllers\MaintenanceTicketController;
+use App\Http\Controllers\N8nWebSyncController;
 use App\Http\Controllers\PaymentAttemptController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PropertyController;
@@ -85,6 +86,8 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
     });
 
     Route::get('reports', ReportController::class)->name('reports.index');
+    Route::get('n8n/preview', [N8nWebSyncController::class, 'preview'])->name('n8n.preview');
+    Route::post('n8n/sync-now', [N8nWebSyncController::class, 'sync'])->name('n8n.sync-now');
 
     Route::prefix('properties')->name('properties.')->group(function () {
         Route::get('/', [PropertyController::class, 'index'])->name('index')->middleware('permission:properties.view');

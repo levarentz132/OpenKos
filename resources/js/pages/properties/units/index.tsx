@@ -8,6 +8,7 @@ import {
     Pencil,
     RotateCcw,
     Trash2,
+    Zap,
 } from 'lucide-react';
 import { useState } from 'react';
 import { DataTable } from '@/components/data-table';
@@ -20,6 +21,7 @@ import {
     BulkUnitSheet,
     MoveOutSheet,
     MoveUnitSheet,
+    N8nSyncDialog,
     UnitDetailSheet,
     UnitFormSheet,
 } from '@/components/features';
@@ -480,6 +482,7 @@ export default function Index({
                             Clear ({selectedIds.length})
                         </Button>
                     )}
+                    <N8nSyncDialog />
                     <Button variant="outline" onClick={() => setBulkEditSheetOpen(true)}>
                         {selectedIds.length > 0
                             ? `Bulk Edit (${selectedIds.length})`

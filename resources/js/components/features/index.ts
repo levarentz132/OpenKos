@@ -8,3 +8,4 @@ export * from './properties';
 export * from './roles';
 export * from './units';
 export * from './tenants';
+export * from './n8n-sync-dialog';
