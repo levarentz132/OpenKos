@@ -3,11 +3,14 @@
 namespace App\Business\Dashboard;
 
 use App\Enums\InvoiceStatus;
+use App\Enums\LeaseStatus;
 use App\Enums\PaymentStatus;
+use App\Enums\UnitStatus;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Property;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -50,45 +53,89 @@ class OverviewStatsCalculator
         ];
     }
 
-    public function computeMonthlyPropertyIncome(Collection $accessiblePropertyIds, int $monthsCount = 6): array
-    {
-        $months = [];
-        $startDate = now()->subMonths($monthsCount - 1)->startOfMonth();
-        $endDate = now()->endOfMonth();
+    public function computeMonthlyPropertyIncome(
+        Collection $accessiblePropertyIds,
+        ?CarbonInterface $startDate = null,
+        ?CarbonInterface $endDate = null
+    ): array {
+        $start = ($startDate ? $startDate->copy() : now()->subMonths(5))->startOfMonth();
+        $end = ($endDate ? $endDate->copy() : now())->endOfMonth();
 
-        $payments = Payment::query()
-            ->where('status', PaymentStatus::Confirmed->value)
-            ->whereBetween('payment_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-            ->whereHas('invoice.lease.unit', fn (Builder $q) => $q->whereIn('property_id', $accessiblePropertyIds))
-            ->with(['invoice.lease.unit' => fn ($q) => $q->select('id', 'property_id')])
-            ->get(['id', 'invoice_id', 'amount', 'payment_date']);
+        if ($start->gt($end)) {
+            $temp = $start;
+            $start = $end->copy()->startOfMonth();
+            $end = $temp->copy()->endOfMonth();
+        }
+
+        // Cap maximum date range to 36 months to guarantee instant execution
+        if ($start->diffInMonths($end) > 36) {
+            $start = $end->copy()->subMonths(35)->startOfMonth();
+        }
+
+        $paymentRecords = $accessiblePropertyIds->isNotEmpty()
+            ? DB::table('payments')
+                ->join('invoices', 'invoices.id', '=', 'payments.invoice_id')
+                ->join('leases', 'leases.id', '=', 'invoices.lease_id')
+                ->join('units', 'units.id', '=', 'leases.unit_id')
+                ->where('payments.status', PaymentStatus::Confirmed->value)
+                ->whereBetween('payments.payment_date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
+                ->whereIn('units.property_id', $accessiblePropertyIds)
+                ->select(['units.property_id', 'payments.amount', 'payments.payment_date'])
+                ->get()
+            : collect();
+
+        $incomeMap = [];
+        foreach ($paymentRecords as $rec) {
+            $monthKey = substr((string) $rec->payment_date, 0, 7);
+            $propId = (int) $rec->property_id;
+            $incomeMap[$monthKey][$propId] = ($incomeMap[$monthKey][$propId] ?? 0) + (int) $rec->amount;
+        }
 
         $properties = Property::query()
             ->whereIn('id', $accessiblePropertyIds)
+            ->withCount([
+                'units',
+                'units as occupied_units_count' => fn (Builder $q) => $q
+                    ->where(function (Builder $q) {
+                        $q->where('status', UnitStatus::Occupied)
+                            ->orWhereHas('leases', fn (Builder $q) => $q->where('status', LeaseStatus::Active->value));
+                    }),
+                'units as maintenance_units_count' => fn (Builder $q) => $q
+                    ->where('status', UnitStatus::Maintenance)
+                    ->whereDoesntHave('leases', fn (Builder $q) => $q->where('status', LeaseStatus::Active->value)),
+                'units as unavailable_units_count' => fn (Builder $q) => $q
+                    ->where('status', UnitStatus::Unavailable)
+                    ->whereDoesntHave('leases', fn (Builder $q) => $q->where('status', LeaseStatus::Active->value)),
+            ])
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'slug']);
 
-        for ($i = $monthsCount - 1; $i >= 0; $i--) {
-            $date = now()->subMonths($i);
-            $monthKey = $date->format('Y-m');
-            $monthName = $date->format('M Y');
+        $months = [];
+        $current = $start->copy()->startOfMonth();
+
+        while ($current->lte($end)) {
+            $monthKey = $current->format('Y-m');
+            $monthName = $current->format('M Y');
 
             $byProperty = [];
-            foreach ($properties as $prop) {
-                $byProperty[$prop->id] = 0;
-            }
-
+            $occupancyByProperty = [];
             $totalIncome = 0;
 
-            foreach ($payments as $payment) {
-                if ($payment->payment_date && $payment->payment_date->format('Y-m') === $monthKey) {
-                    $propId = $payment->invoice?->lease?->unit?->property_id;
-                    if ($propId && isset($byProperty[$propId])) {
-                        $amount = (int) $payment->amount;
-                        $byProperty[$propId] += $amount;
-                        $totalIncome += $amount;
-                    }
-                }
+            foreach ($properties as $prop) {
+                $amount = $incomeMap[$monthKey][$prop->id] ?? 0;
+                $byProperty[$prop->id] = $amount;
+                $totalIncome += $amount;
+
+                $totalU = (int) $prop->units_count;
+                $occupiedU = (int) $prop->occupied_units_count;
+                $rate = $totalU > 0 ? round(($occupiedU / $totalU) * 100) : 0;
+
+                $occupancyByProperty[$prop->id] = [
+                    'total_units' => $totalU,
+                    'occupied_units' => $occupiedU,
+                    'available_units' => max(0, $totalU - $occupiedU - (int) $prop->maintenance_units_count - (int) $prop->unavailable_units_count),
+                    'occupancy_rate' => $rate,
+                ];
             }
 
             $months[] = [
@@ -96,12 +143,24 @@ class OverviewStatsCalculator
                 'month_name' => $monthName,
                 'total_income' => $totalIncome,
                 'by_property' => $byProperty,
+                'occupancy_by_property' => $occupancyByProperty,
             ];
+
+            $current = $current->startOfMonth()->addMonthNoOverflow()->startOfMonth();
         }
 
         return [
+            'start_date' => $start->format('Y-m-d'),
+            'end_date' => $end->format('Y-m-d'),
             'months' => $months,
-            'properties' => $properties->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->values()->toArray(),
+            'properties' => $properties->map(fn ($p) => [
+                'id' => $p->id,
+                'name' => $p->name,
+                'slug' => $p->slug,
+                'total_units' => $p->units_count,
+                'occupied_units' => $p->occupied_units_count,
+                'occupancy_rate' => $p->units_count > 0 ? round(($p->occupied_units_count / $p->units_count) * 100) : 0,
+            ])->values()->toArray(),
         ];
     }
 

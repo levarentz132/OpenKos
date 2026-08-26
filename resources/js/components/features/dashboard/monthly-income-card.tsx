@@ -1,7 +1,17 @@
+import { Link, router } from '@inertiajs/react';
+import {
+    ArrowUpRight,
+    Banknote,
+    BarChart2,
+    Calendar,
+    Filter,
+    Table as TableIcon,
+    TrendingUp,
+} from 'lucide-react';
 import { useState } from 'react';
-import { Banknote, BarChart2, Building, Table as TableIcon, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { formatRupiah } from '@/lib/formatters';
 import type { MonthlyIncomeData } from '@/types';
 
@@ -17,12 +27,27 @@ const PROPERTY_COLORS = [
 export function MonthlyIncomeCard({ data }: { data: MonthlyIncomeData }) {
     const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart');
     const [selectedPropertyId, setSelectedPropertyId] = useState<number | 'all'>('all');
+    const [startDate, setStartDate] = useState(data?.start_date || '');
+    const [endDate, setEndDate] = useState(data?.end_date || '');
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     if (!data || !data.months || data.months.length === 0) {
         return null;
     }
 
     const { months, properties } = data;
+
+    const handleDateFilterSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        router.get(
+            '/dashboard',
+            {
+                start_date: startDate,
+                end_date: endDate,
+            },
+            { preserveState: true },
+        );
+    };
 
     // Aggregate overall total income across all months
     const totalAccumulatedIncome = months.reduce((acc, m) => acc + m.total_income, 0);
@@ -50,16 +75,40 @@ export function MonthlyIncomeCard({ data }: { data: MonthlyIncomeData }) {
                             </span>
                             <div>
                                 <h2 className="text-base font-bold text-foreground">
-                                    Monthly Income per Property
+                                    Monthly Income & Occupancy per Property
                                 </h2>
                                 <p className="text-xs text-muted-foreground">
-                                    Revenue collected over the past 6 months across properties.
+                                    Revenue collected and occupancy rate breakdown per property.
                                 </p>
                             </div>
                         </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                        {/* Link to Full Reports Page */}
+                        <Button
+                            variant="outline"
+                            size="xs"
+                            asChild
+                            className="gap-1 bg-card text-xs font-semibold shadow-2xs"
+                        >
+                            <Link href="/reports">
+                                Full Reports Page
+                                <ArrowUpRight className="size-3.5" />
+                            </Link>
+                        </Button>
+
+                        {/* Date Filter Toggle */}
+                        <Button
+                            variant={showDatePicker ? 'secondary' : 'outline'}
+                            size="xs"
+                            onClick={() => setShowDatePicker(!showDatePicker)}
+                            className="gap-1 text-xs cursor-pointer"
+                        >
+                            <Calendar className="size-3.5" />
+                            Select Date
+                        </Button>
+
                         {/* View Switcher Buttons */}
                         <div className="flex items-center rounded-lg border border-border bg-muted/40 p-1 text-xs">
                             <button
@@ -115,12 +164,49 @@ export function MonthlyIncomeCard({ data }: { data: MonthlyIncomeData }) {
                     </div>
                 </div>
 
+                {/* Optional Expandable Date Picker Bar */}
+                {showDatePicker && (
+                    <form
+                        onSubmit={handleDateFilterSubmit}
+                        className="mb-6 flex flex-wrap items-end gap-3 rounded-lg border border-border/80 bg-muted/30 p-3 text-xs"
+                    >
+                        <div className="space-y-1">
+                            <label className="text-muted-foreground font-medium flex items-center gap-1">
+                                <Calendar className="size-3" />
+                                Start Date
+                            </label>
+                            <Input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="h-8 text-xs bg-background"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-muted-foreground font-medium flex items-center gap-1">
+                                <Calendar className="size-3" />
+                                End Date
+                            </label>
+                            <Input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="h-8 text-xs bg-background"
+                            />
+                        </div>
+                        <Button type="submit" size="xs" className="h-8 gap-1 cursor-pointer">
+                            <Filter className="size-3" />
+                            Apply Date Range
+                        </Button>
+                    </form>
+                )}
+
                 {/* Total Summary Badge Banner */}
                 <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
                     <div className="flex items-center gap-2">
                         <TrendingUp className="size-4 text-surface-green-foreground" />
                         <span className="text-xs font-medium text-muted-foreground">
-                            Total Income (Past 6 Months):
+                            Total Income ({data.start_date} to {data.end_date}):
                         </span>
                         <span className="text-sm font-bold text-foreground tabular-nums">
                             {formatRupiah(totalAccumulatedIncome)}
@@ -160,12 +246,19 @@ export function MonthlyIncomeCard({ data }: { data: MonthlyIncomeData }) {
                                         <div className="relative flex h-36 w-full items-end justify-center rounded-md bg-muted/30 p-1">
                                             {selectedPropertyId === 'all' ? (
                                                 /* Stacked/Segmented Bar */
-                                                <div className="flex w-full flex-col-reverse justify-start overflow-hidden rounded-sm transition-all duration-300" style={{ height: `${Math.max(4, heightPercentage)}%` }}>
+                                                <div
+                                                    className="flex w-full flex-col-reverse justify-start overflow-hidden rounded-xs transition-all duration-300"
+                                                    style={{ height: `${Math.max(4, heightPercentage)}%` }}
+                                                >
                                                     {properties.map((prop, idx) => {
                                                         const pAmount = m.by_property[prop.id] || 0;
                                                         if (pAmount <= 0) return null;
-                                                        const pPct = m.total_income > 0 ? (pAmount / m.total_income) * 100 : 0;
-                                                        const color = PROPERTY_COLORS[idx % PROPERTY_COLORS.length];
+                                                        const pPct =
+                                                            m.total_income > 0
+                                                                ? (pAmount / m.total_income) * 100
+                                                                : 0;
+                                                        const color =
+                                                            PROPERTY_COLORS[idx % PROPERTY_COLORS.length];
 
                                                         return (
                                                             <div
@@ -180,7 +273,7 @@ export function MonthlyIncomeCard({ data }: { data: MonthlyIncomeData }) {
                                             ) : (
                                                 /* Single Property Bar */
                                                 <div
-                                                    className="w-full rounded-sm bg-primary transition-all duration-300"
+                                                    className="w-full rounded-xs bg-primary transition-all duration-300"
                                                     style={{ height: `${Math.max(4, heightPercentage)}%` }}
                                                 />
                                             )}
@@ -205,6 +298,11 @@ export function MonthlyIncomeCard({ data }: { data: MonthlyIncomeData }) {
                                             <span className={`size-2.5 rounded-xs ${color.bg}`} />
                                             <span className="font-medium text-muted-foreground">
                                                 {prop.name}
+                                                {prop.occupancy_rate !== undefined && (
+                                                    <span className="font-bold text-foreground ml-1">
+                                                        ({prop.occupancy_rate}% occupied)
+                                                    </span>
+                                                )}
                                             </span>
                                         </div>
                                     );
@@ -237,12 +335,19 @@ export function MonthlyIncomeCard({ data }: { data: MonthlyIncomeData }) {
                                         </td>
                                         {properties.map((prop) => {
                                             const pAmount = m.by_property[prop.id] || 0;
+                                            const occStat = m.occupancy_by_property?.[prop.id];
+
                                             return (
                                                 <td
                                                     key={prop.id}
                                                     className="px-4 py-3 text-right tabular-nums text-muted-foreground"
                                                 >
-                                                    {pAmount > 0 ? formatRupiah(pAmount) : '—'}
+                                                    <div>{pAmount > 0 ? formatRupiah(pAmount) : '—'}</div>
+                                                    {occStat && (
+                                                        <div className="text-[10px] text-muted-foreground/80 font-medium">
+                                                            {occStat.occupancy_rate}% occupied
+                                                        </div>
+                                                    )}
                                                 </td>
                                             );
                                         })}

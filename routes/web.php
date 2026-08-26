@@ -11,6 +11,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\PropertyDocumentsController;
 use App\Http\Controllers\PropertyLeasesController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SignedPaymentController;
 use App\Http\Controllers\TenantController;
@@ -82,6 +83,8 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
         Route::get('/', OverviewController::class)->name('dashboard');
         Route::get('rent', RentController::class)->name('dashboard.rent');
     });
+
+    Route::get('reports', ReportController::class)->name('reports.index');
 
     Route::prefix('properties')->name('properties.')->group(function () {
         Route::get('/', [PropertyController::class, 'index'])->name('index')->middleware('permission:properties.view');

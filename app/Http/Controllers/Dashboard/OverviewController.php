@@ -175,8 +175,11 @@ class OverviewController extends Controller
 
         $propertyTypes = PropertyType::active()->ordered()->get(['slug', 'label']);
 
+        $startDate = $request->filled('start_date') ? Carbon::parse($request->query('start_date')) : null;
+        $endDate = $request->filled('end_date') ? Carbon::parse($request->query('end_date')) : null;
+
         $financeResult = $finance->computeFinance($activeLeases);
-        $monthlyIncome = $finance->computeMonthlyPropertyIncome($accessibleProperties, 6);
+        $monthlyIncome = $finance->computeMonthlyPropertyIncome($accessibleProperties, $startDate, $endDate);
         $occupancyReview = $finance->computeOccupancyReview($properties);
 
         return Inertia::render('dashboard/overview', [

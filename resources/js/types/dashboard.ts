@@ -19,19 +19,33 @@ export type Finance = {
     collection_rate: number;
 };
 
+export type PropertyOccupancyMonthStat = {
+    total_units: number;
+    occupied_units: number;
+    available_units: number;
+    occupancy_rate: number;
+};
+
 export type MonthlyPropertyIncomeEntry = {
     month_key: string;
     month_name: string;
     total_income: number;
     by_property: Record<number, number>;
+    occupancy_by_property?: Record<number, PropertyOccupancyMonthStat>;
 };
 
 export type PropertyIncomeInfo = {
     id: number;
     name: string;
+    slug?: string;
+    total_units?: number;
+    occupied_units?: number;
+    occupancy_rate?: number;
 };
 
 export type MonthlyIncomeData = {
+    start_date?: string;
+    end_date?: string;
     months: MonthlyPropertyIncomeEntry[];
     properties: PropertyIncomeInfo[];
 };

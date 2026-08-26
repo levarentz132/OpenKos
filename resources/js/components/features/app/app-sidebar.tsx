@@ -1,5 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
+    BarChart3,
     Building2,
     DollarSign,
     FileText,
@@ -129,6 +130,17 @@ export function AppSidebar() {
                                               title: 'Billing',
                                               icon: DollarSign,
                                               href: dashboardRent(),
+                                          },
+                                      ]
+                                    : []),
+                                ...(isOwner ||
+                                permissions.includes('dashboard.view') ||
+                                permissions.includes('reports.view')
+                                    ? [
+                                          {
+                                              title: 'Reports',
+                                              href: '/reports',
+                                              icon: BarChart3,
                                           },
                                       ]
                                     : []),
