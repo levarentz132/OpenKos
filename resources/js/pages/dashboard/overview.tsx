@@ -16,6 +16,8 @@ import {
     ActivityFeedItem,
     BusinessHealthPanel,
     getActivitySummaryChips,
+    MonthlyIncomeCard,
+    OccupancyReviewCard,
     OperationalBriefingCard,
     PropertyFormSheet,
     PropertyOverviewCard,
@@ -37,6 +39,8 @@ import type {
     Finance,
     MaintenanceProperty,
     MaintenanceUnit,
+    MonthlyIncomeData,
+    OccupancyReviewData,
     PropertyStats,
     RecentActivityEntry,
     Stats,
@@ -45,6 +49,8 @@ import type {
 export default function Overview({
     attention,
     finance,
+    monthly_income,
+    occupancy_review,
     stats,
     recent_activity,
     properties,
@@ -52,6 +58,8 @@ export default function Overview({
 }: {
     attention: AttentionData;
     finance: Finance;
+    monthly_income: MonthlyIncomeData;
+    occupancy_review: OccupancyReviewData;
     stats: Stats;
     recent_activity: RecentActivityEntry[];
     properties: MaintenanceProperty[];
@@ -191,7 +199,13 @@ export default function Overview({
                 {/* 4. Business Health Neutral Panel */}
                 <BusinessHealthPanel finance={finance} />
 
-                {/* 5. Lower Dashboard: Operational Workspace (Two-Column Layout) */}
+                {/* 5. Monthly Income Breakdown per Property */}
+                <MonthlyIncomeCard data={monthly_income} />
+
+                {/* 6. Occupancy Rate Review & Portfolio Breakdown */}
+                <OccupancyReviewCard data={occupancy_review} />
+
+                {/* 7. Lower Dashboard: Operational Workspace (Two-Column Layout) */}
                 <div className="grid gap-8 lg:grid-cols-12">
                     {/* Left Column: Property Overview (~65% / lg:col-span-7) */}
                     <section className="flex flex-col gap-3 lg:col-span-7">

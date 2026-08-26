@@ -176,10 +176,14 @@ class OverviewController extends Controller
         $propertyTypes = PropertyType::active()->ordered()->get(['slug', 'label']);
 
         $financeResult = $finance->computeFinance($activeLeases);
+        $monthlyIncome = $finance->computeMonthlyPropertyIncome($accessibleProperties, 6);
+        $occupancyReview = $finance->computeOccupancyReview($properties);
 
         return Inertia::render('dashboard/overview', [
             'attention' => $attention,
             'finance' => $financeResult,
+            'monthly_income' => $monthlyIncome,
+            'occupancy_review' => $occupancyReview,
             'stats' => [
                 'total_units' => $totalUnits,
                 'occupied_units' => $occupiedUnits,

@@ -19,6 +19,54 @@ export type Finance = {
     collection_rate: number;
 };
 
+export type MonthlyPropertyIncomeEntry = {
+    month_key: string;
+    month_name: string;
+    total_income: number;
+    by_property: Record<number, number>;
+};
+
+export type PropertyIncomeInfo = {
+    id: number;
+    name: string;
+};
+
+export type MonthlyIncomeData = {
+    months: MonthlyPropertyIncomeEntry[];
+    properties: PropertyIncomeInfo[];
+};
+
+export type PropertyOccupancyReview = {
+    id: number;
+    name: string;
+    slug: string;
+    total_units: number;
+    occupied_units: number;
+    available_units: number;
+    maintenance_units: number;
+    unavailable_units: number;
+    occupancy_rate: number;
+    status_label: string;
+};
+
+export type OccupancyReviewData = {
+    total_units: number;
+    occupied_units: number;
+    available_units: number;
+    maintenance_units: number;
+    unavailable_units: number;
+    occupancy_rate: number;
+    vacancy_rate: number;
+    maintenance_rate: number;
+    unavailable_rate: number;
+    property_reviews: PropertyOccupancyReview[];
+    insights: {
+        highest_occupancy: { name: string; rate: number } | null;
+        lowest_occupancy: { name: string; rate: number } | null;
+        vacant_units_count: number;
+    };
+};
+
 export type Stats = {
     total_units: number;
     occupied_units: number;

@@ -394,3 +394,29 @@ test('dashboard returns properties and units for maintenance sheet', function ()
             ->has('units')
         );
 });
+
+test('dashboard includes monthly income and occupancy review data', function () {
+    $user = User::factory()->owner()->create();
+
+    $property = createPropertyWithUnits([
+        ['state' => 'occupied'],
+        ['state' => 'available'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('monthly_income')
+            ->has('monthly_income.months')
+            ->has('monthly_income.properties')
+            ->has('occupancy_review')
+            ->where('occupancy_review.total_units', 2)
+            ->where('occupancy_review.occupied_units', 1)
+            ->where('occupancy_review.available_units', 1)
+            ->where('occupancy_review.occupancy_rate', 50)
+            ->has('occupancy_review.property_reviews', 1)
+            ->has('occupancy_review.insights')
+        );
+});
+
