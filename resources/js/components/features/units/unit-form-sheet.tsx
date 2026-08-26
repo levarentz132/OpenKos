@@ -313,6 +313,14 @@ export default function UnitFormSheet({
                                                 label: 'Occupied',
                                             },
                                             {
+                                                value: 'employee',
+                                                label: 'Employee / Staff',
+                                            },
+                                            {
+                                                value: 'vendor',
+                                                label: 'Vendor',
+                                            },
+                                            {
                                                 value: 'maintenance',
                                                 label: 'Maintenance',
                                             },

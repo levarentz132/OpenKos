@@ -95,7 +95,7 @@ class UnitController extends Controller
                 Column::make('capacity', 'Capacity')->sortable(),
             ])
             ->filters([
-                Filter::select('status', 'Status', ['available', 'occupied', 'maintenance', 'unavailable', 'archived'])
+                Filter::select('status', 'Status', ['available', 'occupied', 'employee', 'vendor', 'maintenance', 'unavailable', 'archived'])
                     ->query(fn (Builder $q, string $value) => match ($value) {
                         'archived' => null,
                         default => $q->where('status', $value),

@@ -8,6 +8,8 @@ enum UnitStatus: string
     case Occupied = 'occupied';
     case Maintenance = 'maintenance';
     case Unavailable = 'unavailable';
+    case Employee = 'employee';
+    case Vendor = 'vendor';
 
     public function label(): string
     {
@@ -16,6 +18,8 @@ enum UnitStatus: string
             self::Occupied => 'Occupied',
             self::Maintenance => 'Maintenance',
             self::Unavailable => 'Unavailable',
+            self::Employee => 'Employee / Staff',
+            self::Vendor => 'Vendor',
         };
     }
 

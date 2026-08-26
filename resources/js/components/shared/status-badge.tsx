@@ -18,6 +18,16 @@ const STATUS_CONFIGS: Record<string, Record<string, StatusConfig>> = {
             className:
                 'bg-surface-blue/70 text-surface-blue-foreground border-surface-blue-border/80',
         },
+        employee: {
+            label: 'Employee / Staff',
+            className:
+                'bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40',
+        },
+        vendor: {
+            label: 'Vendor',
+            className:
+                'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40',
+        },
         maintenance: {
             label: 'Maintenance',
             className:

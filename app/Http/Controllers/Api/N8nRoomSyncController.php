@@ -49,7 +49,8 @@ class N8nRoomSyncController extends Controller
                     ->where('status', UnitStatus::Occupied->value)
                     ->orWhereHas('leases', fn ($q) => $q->where('status', 'active')),
                 'units as available_units_count' => fn ($q) => $q
-                    ->where('status', UnitStatus::Available->value),
+                    ->where('status', UnitStatus::Available->value)
+                    ->whereDoesntHave('leases', fn ($q) => $q->where('status', 'active')),
             ])
             ->when($propertyId, fn ($q) => $q->where('id', $propertyId))
             ->get();
@@ -61,11 +62,6 @@ class N8nRoomSyncController extends Controller
 
             return [
                 'id_col' => $idCol,
-                'property_id' => $p->id,
-                'location_name' => $p->name,
-                'display_title' => $p->name,
-                'total_units' => (int) $p->units_count,
-                'occupied_units' => (int) $p->occupied_units_count,
                 'available_rooms' => $avail,
                 'availability_text' => $availText,
             ];

@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 class N8nWebhookService
 {
     /**
-     * Get the exact JSON payload that will be sent to n8n.
+     * Get the exact JSON payload that will be sent to n8n matching database columns.
      */
     public function getBulkPayload(): array
     {
@@ -24,12 +24,9 @@ class N8nWebhookService
 
         $properties = Property::query()
             ->withCount([
-                'units',
-                'units as occupied_units_count' => fn (Builder $q) => $q
-                    ->where('status', UnitStatus::Occupied->value)
-                    ->orWhereHas('leases', fn ($q) => $q->where('status', 'active')),
                 'units as available_units_count' => fn (Builder $q) => $q
-                    ->where('status', UnitStatus::Available->value),
+                    ->where('status', UnitStatus::Available->value)
+                    ->whereDoesntHave('leases', fn ($q) => $q->where('status', 'active')),
             ])
             ->get();
 
@@ -40,11 +37,6 @@ class N8nWebhookService
 
             return [
                 'id_col' => $idCol,
-                'property_id' => $p->id,
-                'location_name' => $p->name,
-                'display_title' => $p->name,
-                'total_units' => (int) $p->units_count,
-                'occupied_units' => (int) $p->occupied_units_count,
                 'available_rooms' => $avail,
                 'availability_text' => $availText,
             ];
@@ -106,11 +98,14 @@ class N8nWebhookService
             ];
         }
 
-        $unit->loadMissing(['property:id,name,slug', 'activeRates']);
+        $unit->loadMissing(['property', 'activeRates']);
         $property = $unit->property;
 
         $availableCount = $property
-            ? Unit::where('property_id', $property->id)->where('status', UnitStatus::Available->value)->count()
+            ? Unit::where('property_id', $property->id)
+                ->where('status', UnitStatus::Available->value)
+                ->whereDoesntHave('leases', fn ($q) => $q->where('status', 'active'))
+                ->count()
             : 0;
 
         $availText = $availableCount > 0 ? "Ready {$availableCount} kamar" : 'Belum ada kamar ready';
@@ -121,8 +116,6 @@ class N8nWebhookService
             'timestamp' => now()->toIso8601String(),
             'property_summary' => [
                 'id_col' => $idCol,
-                'property_id' => $property?->id,
-                'location_name' => $property?->name,
                 'available_rooms' => $availableCount,
                 'availability_text' => $availText,
             ],

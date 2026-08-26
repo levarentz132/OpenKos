@@ -310,6 +310,9 @@ export default function BulkEditUnitSheet({
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="available">Available</SelectItem>
+                                                <SelectItem value="occupied">Occupied</SelectItem>
+                                                <SelectItem value="employee">Employee / Staff</SelectItem>
+                                                <SelectItem value="vendor">Vendor</SelectItem>
                                                 <SelectItem value="maintenance">Maintenance</SelectItem>
                                                 <SelectItem value="unavailable">Unavailable</SelectItem>
                                             </SelectContent>

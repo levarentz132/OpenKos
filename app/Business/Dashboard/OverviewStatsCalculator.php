@@ -97,7 +97,7 @@ class OverviewStatsCalculator
                 'units',
                 'units as occupied_units_count' => fn (Builder $q) => $q
                     ->where(function (Builder $q) {
-                        $q->where('status', UnitStatus::Occupied)
+                        $q->whereIn('status', [UnitStatus::Occupied, UnitStatus::Vendor])
                             ->orWhereHas('leases', fn (Builder $q) => $q->where('status', LeaseStatus::Active->value));
                     }),
                 'units as maintenance_units_count' => fn (Builder $q) => $q
