@@ -39,10 +39,22 @@ export type PaidBillingDetail = {
     unit_name: string;
 };
 
+export type AdditionalIncomeItem = {
+    id: number;
+    title: string;
+    category: string;
+    amount: number;
+    income_date: string;
+    notes?: string | null;
+};
+
 export type MonthlyPropertyIncomeEntry = {
     month_key: string;
     month_name: string;
     total_income: number;
+    property_income?: number;
+    additional_income_total?: number;
+    additional_incomes?: AdditionalIncomeItem[];
     by_property: Record<number, number>;
     occupancy_by_property?: Record<number, PropertyOccupancyMonthStat>;
     payments_by_property?: Record<number, PaidBillingDetail[]>;

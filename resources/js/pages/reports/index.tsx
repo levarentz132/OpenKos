@@ -14,6 +14,7 @@ import {
     Filter,
     Home,
     PieChart,
+    PlusCircle,
     Receipt,
     RefreshCw,
     Table as TableIcon,
@@ -51,8 +52,12 @@ export default function ReportsIndex({
 }) {
     const [startDate, setStartDate] = useState(filters.start_date || '');
     const [endDate, setEndDate] = useState(filters.end_date || '');
-    const [selectedPropertyId, setSelectedPropertyId] = useState<number | 'all'>(
-        filters.property_id ? (filters.property_id === 'all' ? 'all' : Number(filters.property_id)) : 'all',
+    const [selectedPropertyId, setSelectedPropertyId] = useState<number | 'all' | 'additional'>(
+        filters.property_id
+            ? (filters.property_id === 'all'
+                ? 'all'
+                : (filters.property_id === 'additional' ? 'additional' : Number(filters.property_id)))
+            : 'all',
     );
     const [activeTab, setActiveTab] = useState<'matrix' | 'charts'>('matrix');
     const [expandedRow, setExpandedRow] = useState<string | null>(null);
@@ -97,25 +102,39 @@ export default function ReportsIndex({
         if (!income_report?.months) return;
 
         const rows: string[][] = [
-            ['Month', 'Property', 'Revenue Collected (Rp)', 'Occupancy Rate (%)', 'Occupied Units', 'Total Units'],
+            ['Month', 'Property / Income Category', 'Revenue Collected (Rp)', 'Occupancy Rate (%)', 'Occupied Units', 'Total Units'],
         ];
 
         income_report.months.forEach((m) => {
-            income_report.properties.forEach((prop) => {
-                if (selectedPropertyId !== 'all' && prop.id !== selectedPropertyId) return;
+            if (selectedPropertyId !== 'additional') {
+                income_report.properties.forEach((prop) => {
+                    if (selectedPropertyId !== 'all' && prop.id !== selectedPropertyId) return;
 
-                const income = m.by_property[prop.id] || 0;
-                const occStat = m.occupancy_by_property?.[prop.id];
+                    const income = m.by_property[prop.id] || 0;
+                    const occStat = m.occupancy_by_property?.[prop.id];
 
+                    rows.push([
+                        m.month_name,
+                        `"${prop.name}"`,
+                        income.toString(),
+                        occStat ? `${occStat.occupancy_rate}%` : '—',
+                        occStat ? occStat.occupied_units.toString() : '—',
+                        occStat ? occStat.total_units.toString() : '—',
+                    ]);
+                });
+            }
+
+            if (selectedPropertyId === 'all' || selectedPropertyId === 'additional') {
+                const addIncTotal = m.additional_income_total || 0;
                 rows.push([
                     m.month_name,
-                    `"${prop.name}"`,
-                    income.toString(),
-                    occStat ? `${occStat.occupancy_rate}%` : '—',
-                    occStat ? occStat.occupied_units.toString() : '—',
-                    occStat ? occStat.total_units.toString() : '—',
+                    '"Additional / General Income (Non-Property)"',
+                    addIncTotal.toString(),
+                    '—',
+                    '—',
+                    '—',
                 ]);
-            });
+            }
         });
 
         const csvContent = 'data:text/csv;charset=utf-8,' + rows.map((e) => e.join(',')).join('\n');
@@ -128,7 +147,15 @@ export default function ReportsIndex({
         document.body.removeChild(link);
     };
 
-    const totalIncomeAll = income_report?.months?.reduce((acc, m) => acc + m.total_income, 0) || 0;
+    const totalIncomeAll = income_report?.months?.reduce((acc, m) => {
+        if (selectedPropertyId === 'additional') {
+            return acc + (m.additional_income_total || 0);
+        }
+        if (selectedPropertyId !== 'all' && typeof selectedPropertyId === 'number') {
+            return acc + (m.by_property[selectedPropertyId] || 0);
+        }
+        return acc + m.total_income;
+    }, 0) || 0;
 
     return (
         <>
@@ -154,6 +181,17 @@ export default function ReportsIndex({
 
                     <div className="flex items-center gap-2">
                         <N8nSyncDialog buttonSize="sm" />
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            asChild
+                            className="cursor-pointer gap-2 bg-card shadow-xs"
+                        >
+                            <Link href="/additional-incomes">
+                                <PlusCircle className="size-4 text-primary" />
+                                Record Additional Income
+                            </Link>
+                        </Button>
                         <Button
                             variant="outline"
                             size="sm"
@@ -256,10 +294,11 @@ export default function ReportsIndex({
                                 </label>
                                 <select
                                     value={selectedPropertyId}
-                                    onChange={(e) => setSelectedPropertyId(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                                    onChange={(e) => setSelectedPropertyId(e.target.value === 'all' ? 'all' : (e.target.value === 'additional' ? 'additional' : Number(e.target.value)))}
                                     className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-2xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                                 >
-                                    <option value="all">All Properties ({properties.length})</option>
+                                    <option value="all">All Revenues & Properties ({properties.length + 1})</option>
+                                    <option value="additional">✦ Additional / Non-Property Income</option>
                                     {properties.map((p) => (
                                         <option key={p.id} value={p.id}>
                                             {p.name}
@@ -385,10 +424,13 @@ export default function ReportsIndex({
                                 </thead>
                                 <tbody className="divide-y divide-border">
                                     {income_report?.months?.map((m) => {
-                                        return income_report.properties.map((prop) => {
-                                            if (selectedPropertyId !== 'all' && prop.id !== selectedPropertyId) {
-                                                return null;
-                                            }
+                                         const propertyRows = income_report.properties.map((prop) => {
+                                             if (selectedPropertyId === 'additional') {
+                                                 return null;
+                                             }
+                                             if (selectedPropertyId !== 'all' && prop.id !== selectedPropertyId) {
+                                                 return null;
+                                             }
 
                                             const income = m.by_property[prop.id] || 0;
                                             const occStat = m.occupancy_by_property?.[prop.id];
@@ -474,8 +516,7 @@ export default function ReportsIndex({
                                                         </td>
                                                     </tr>
 
-                                                    {/* Expanded Billings Breakdown Row */}
-                                                    {isExpanded && (
+                                            {isExpanded && (
                                                         <tr className="bg-muted/30">
                                                             <td colSpan={6} className="p-4">
                                                                 <div className="rounded-xl border border-primary/20 bg-card p-4 shadow-sm">
@@ -559,6 +600,129 @@ export default function ReportsIndex({
                                                 </Fragment>
                                             );
                                         });
+
+                                        const addIncRowKey = `${m.month_key}-additional`;
+                                        const isAddIncExpanded = expandedRow === addIncRowKey;
+                                        const addIncomes = m.additional_incomes || [];
+                                        const addIncTotal = m.additional_income_total || 0;
+
+                                        return (
+                                            <React.Fragment key={m.month_key}>
+                                                {propertyRows}
+                                                {(selectedPropertyId === 'all' || selectedPropertyId === 'additional') && (
+                                                    <Fragment key={addIncRowKey}>
+                                                        <tr className={`transition-colors ${isAddIncExpanded ? 'bg-primary/5' : 'hover:bg-muted/20'}`}>
+                                                            <td className="px-4 py-3 font-semibold text-foreground">
+                                                                {m.month_name}
+                                                            </td>
+                                                            <td className="px-4 py-3">
+                                                                <Link
+                                                                    href="/additional-incomes"
+                                                                    className="flex items-center gap-1.5 font-semibold text-foreground hover:text-primary transition-colors"
+                                                                >
+                                                                    <PlusCircle className="size-3.5 text-surface-green-foreground" />
+                                                                    <span>Additional / General Income (Non-Property)</span>
+                                                                </Link>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right">
+                                                                <div className="flex flex-col items-end">
+                                                                    <span className="font-bold text-foreground tabular-nums">
+                                                                        {addIncTotal > 0 ? formatRupiah(addIncTotal) : '—'}
+                                                                    </span>
+                                                                    {addIncomes.length > 0 && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setExpandedRow(isAddIncExpanded ? null : addIncRowKey)}
+                                                                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline cursor-pointer bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded-full transition-all"
+                                                                        >
+                                                                            <PlusCircle className="size-3" />
+                                                                            <span>{addIncomes.length} {addIncomes.length === 1 ? 'entry' : 'entries'}</span>
+                                                                            {isAddIncExpanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-center text-muted-foreground">—</td>
+                                                            <td className="px-4 py-3 text-center text-muted-foreground font-medium">Non-Property</td>
+                                                            <td className="px-4 py-3 text-center">
+                                                                <Badge variant="secondary" className="text-xs">
+                                                                    Extra Income
+                                                                </Badge>
+                                                            </td>
+                                                        </tr>
+
+                                                        {isAddIncExpanded && (
+                                                            <tr className="bg-muted/30">
+                                                                <td colSpan={6} className="p-4">
+                                                                    <div className="rounded-xl border border-primary/20 bg-card p-4 shadow-sm">
+                                                                        <div className="mb-3 flex items-center justify-between">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                                                                    <PlusCircle className="size-4" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <h4 className="text-xs font-bold text-foreground">
+                                                                                        Non-Property Additional Incomes — {m.month_name}
+                                                                                    </h4>
+                                                                                    <p className="text-[11px] text-muted-foreground">
+                                                                                        Individual non-property income items (laundry, vending, parking, services, etc.)
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-3">
+                                                                                <Badge variant="secondary" className="text-xs font-semibold">
+                                                                                    {addIncomes.length} {addIncomes.length === 1 ? 'Item' : 'Items'}
+                                                                                </Badge>
+                                                                                <span className="text-xs font-bold text-surface-green-foreground tabular-nums">
+                                                                                    Total: {formatRupiah(addIncTotal)}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="overflow-x-auto rounded-lg border border-border/80">
+                                                                            <table className="w-full text-left text-xs">
+                                                                                <thead className="border-b border-border bg-muted/70 text-[11px] font-semibold text-muted-foreground uppercase">
+                                                                                    <tr>
+                                                                                        <th className="px-3 py-2">Title / Description</th>
+                                                                                        <th className="px-3 py-2">Category</th>
+                                                                                        <th className="px-3 py-2">Income Date</th>
+                                                                                        <th className="px-3 py-2">Notes</th>
+                                                                                        <th className="px-3 py-2 text-right">Amount</th>
+                                                                                    </tr>
+                                                                                </thead>
+                                                                                <tbody className="divide-y divide-border/40 bg-background">
+                                                                                    {addIncomes.map((ai) => (
+                                                                                        <tr key={ai.id} className="hover:bg-muted/20">
+                                                                                            <td className="px-3 py-2 font-medium text-foreground">
+                                                                                                {ai.title}
+                                                                                            </td>
+                                                                                            <td className="px-3 py-2">
+                                                                                                <Badge variant="outline" className="text-[10px] capitalize">
+                                                                                                    {ai.category}
+                                                                                                </Badge>
+                                                                                            </td>
+                                                                                            <td className="px-3 py-2 text-muted-foreground font-mono">
+                                                                                                {ai.income_date}
+                                                                                            </td>
+                                                                                            <td className="px-3 py-2 text-muted-foreground">
+                                                                                                {ai.notes || '—'}
+                                                                                            </td>
+                                                                                            <td className="px-3 py-2 text-right font-bold text-surface-green-foreground tabular-nums">
+                                                                                                {formatRupiah(ai.amount)}
+                                                                                            </td>
+                                                                                        </tr>
+                                                                                    ))}
+                                                                                </tbody>
+                                                                            </table>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </Fragment>
+                                                )}
+                                            </React.Fragment>
+                                        );
                                     })}
                                 </tbody>
                             </table>

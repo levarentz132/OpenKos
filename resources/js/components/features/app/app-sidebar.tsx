@@ -6,6 +6,7 @@ import {
     FileText,
     Landmark,
     LayoutGrid,
+    PlusCircle,
     Receipt,
     Shield,
     Tags,
@@ -130,6 +131,11 @@ export function AppSidebar() {
                                               title: 'Billing',
                                               icon: DollarSign,
                                               href: dashboardRent(),
+                                          },
+                                          {
+                                              title: 'Additional Income',
+                                              icon: PlusCircle,
+                                              href: '/additional-incomes',
                                           },
                                       ]
                                     : []),

@@ -30,11 +30,15 @@ class OverviewStatsCalculator
         $periodStart = Carbon::create($currentYear, $currentMonth, 1)->startOfDay();
         $periodEnd = Carbon::create($currentYear, $currentMonth, 1)->endOfMonth()->endOfDay();
 
+        $additionalIncomeThisMonth = (float) DB::table('additional_incomes')
+            ->whereBetween('income_date', [$periodStart->format('Y-m-d'), $periodEnd->format('Y-m-d')])
+            ->sum('amount');
+
         $revenueThisMonth = Payment::where('status', 'confirmed')
             ->whereHas('invoice', fn (Builder $q) => $q
                 ->whereBetween('period_start', [$periodStart, $periodEnd])
                 ->whereIn('lease_id', $leaseIds))
-            ->sum('amount');
+            ->sum('amount') + $additionalIncomeThisMonth;
 
         $outstanding = (float) Invoice::whereIn('lease_id', $leaseIds)
             ->whereBetween('period_start', [$periodStart, $periodEnd])
@@ -120,6 +124,27 @@ class OverviewStatsCalculator
             ];
         }
 
+        // Fetch non-property additional incomes
+        $additionalIncomeRecords = DB::table('additional_incomes')
+            ->whereBetween('income_date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
+            ->select(['id', 'title', 'category', 'amount', 'income_date', 'notes'])
+            ->get();
+
+        $additionalIncomeMap = [];
+        $additionalIncomeDetailsMap = [];
+        foreach ($additionalIncomeRecords as $addRec) {
+            $monthKey = substr((string) $addRec->income_date, 0, 7);
+            $additionalIncomeMap[$monthKey] = ($additionalIncomeMap[$monthKey] ?? 0) + (int) $addRec->amount;
+            $additionalIncomeDetailsMap[$monthKey][] = [
+                'id' => (int) $addRec->id,
+                'title' => $addRec->title,
+                'category' => $addRec->category,
+                'amount' => (int) $addRec->amount,
+                'income_date' => (string) $addRec->income_date,
+                'notes' => $addRec->notes,
+            ];
+        }
+
         // Fetch all historical and active leases overlapping with the requested date range
         $leaseRecords = ! empty($propIds)
             ? DB::table('leases')
@@ -173,13 +198,13 @@ class OverviewStatsCalculator
 
             $byProperty = [];
             $occupancyByProperty = [];
-            $totalIncome = 0;
+            $totalPropertyIncome = 0;
 
             $paymentsByProperty = [];
             foreach ($properties as $prop) {
                 $amount = $incomeMap[$monthKey][$prop->id] ?? 0;
                 $byProperty[$prop->id] = $amount;
-                $totalIncome += $amount;
+                $totalPropertyIncome += $amount;
                 $paymentsByProperty[$prop->id] = $paymentDetailsMap[$monthKey][$prop->id] ?? [];
 
                 $totalU = (int) $prop->units_count;
@@ -218,10 +243,16 @@ class OverviewStatsCalculator
                 ];
             }
 
+            $additionalIncomeTotal = $additionalIncomeMap[$monthKey] ?? 0;
+            $additionalIncomesList = $additionalIncomeDetailsMap[$monthKey] ?? [];
+
             $months[] = [
                 'month_key' => $monthKey,
                 'month_name' => $monthName,
-                'total_income' => $totalIncome,
+                'total_income' => $totalPropertyIncome + $additionalIncomeTotal,
+                'property_income' => $totalPropertyIncome,
+                'additional_income_total' => $additionalIncomeTotal,
+                'additional_incomes' => $additionalIncomesList,
                 'by_property' => $byProperty,
                 'occupancy_by_property' => $occupancyByProperty,
                 'payments_by_property' => $paymentsByProperty,

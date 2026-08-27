@@ -91,3 +91,15 @@ test('reports monthly revenue calculates paid billing based on invoice period_st
         });
 });
 
+test('reports index supports filtering by property_id=additional', function () {
+    $user = User::factory()->owner()->create();
+
+    $this->actingAs($user)
+        ->get('/reports?property_id=additional')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('filters.property_id', 'additional')
+        );
+});
+
+
