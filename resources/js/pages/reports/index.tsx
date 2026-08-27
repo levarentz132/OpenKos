@@ -7,16 +7,21 @@ import {
     Building2,
     Calendar,
     CheckCircle2,
+    ChevronDown,
+    ChevronUp,
+    CreditCard,
     Download,
     Filter,
     Home,
     PieChart,
+    Receipt,
     RefreshCw,
     Table as TableIcon,
     TrendingUp,
+    User,
     Zap,
 } from 'lucide-react';
-import { useState } from 'react';
+import React, { Fragment, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { N8nSyncDialog } from '@/components/features/n8n-sync-dialog';
@@ -25,6 +30,7 @@ import { formatRupiah } from '@/lib/formatters';
 import type {
     MonthlyIncomeData,
     OccupancyReviewData,
+    PaidBillingDetail,
     PropertyIncomeInfo,
 } from '@/types';
 
@@ -49,6 +55,7 @@ export default function ReportsIndex({
         filters.property_id ? (filters.property_id === 'all' ? 'all' : Number(filters.property_id)) : 'all',
     );
     const [activeTab, setActiveTab] = useState<'matrix' | 'charts'>('matrix');
+    const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
     const handleFilterSubmit = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -376,7 +383,7 @@ export default function ReportsIndex({
                                         <th className="px-4 py-3.5 text-center">Status</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-border/60">
+                                <tbody className="divide-y divide-border">
                                     {income_report?.months?.map((m) => {
                                         return income_report.properties.map((prop) => {
                                             if (selectedPropertyId !== 'all' && prop.id !== selectedPropertyId) {
@@ -386,67 +393,170 @@ export default function ReportsIndex({
                                             const income = m.by_property[prop.id] || 0;
                                             const occStat = m.occupancy_by_property?.[prop.id];
                                             const occRate = occStat?.occupancy_rate ?? 0;
+                                            const payments = m.payments_by_property?.[prop.id] || [];
+                                            const rowKey = `${m.month_key}-${prop.id}`;
+                                            const isExpanded = expandedRow === rowKey;
 
                                             return (
-                                                <tr key={`${m.month_key}-${prop.id}`} className="hover:bg-muted/20">
-                                                    <td className="px-4 py-3 font-semibold text-foreground">
-                                                        {m.month_name}
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <Link
-                                                            href={`/properties/${prop.slug || ''}`}
-                                                            className="flex items-center gap-1.5 font-semibold text-foreground hover:text-primary transition-colors"
-                                                        >
-                                                            <Building2 className="size-3.5 text-muted-foreground" />
-                                                            <span>{prop.name}</span>
-                                                        </Link>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right font-bold text-foreground tabular-nums">
-                                                        {income > 0 ? formatRupiah(income) : '—'}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-center">
-                                                        <div className="flex items-center justify-center gap-2">
-                                                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                                                                <div
-                                                                    className="h-full bg-primary rounded-full transition-all"
-                                                                    style={{ width: `${occRate}%` }}
-                                                                />
+                                                <Fragment key={rowKey}>
+                                                    <tr className={`transition-colors ${isExpanded ? 'bg-primary/5' : 'hover:bg-muted/20'}`}>
+                                                        <td className="px-4 py-3 font-semibold text-foreground">
+                                                            {m.month_name}
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <Link
+                                                                href={`/properties/${prop.slug || ''}`}
+                                                                className="flex items-center gap-1.5 font-semibold text-foreground hover:text-primary transition-colors"
+                                                            >
+                                                                <Building2 className="size-3.5 text-muted-foreground" />
+                                                                <span>{prop.name}</span>
+                                                            </Link>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="font-bold text-foreground tabular-nums">
+                                                                    {income > 0 ? formatRupiah(income) : '—'}
+                                                                </span>
+                                                                {payments.length > 0 && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setExpandedRow(isExpanded ? null : rowKey)}
+                                                                        className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline cursor-pointer bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded-full transition-all"
+                                                                    >
+                                                                        <Receipt className="size-3" />
+                                                                        <span>{payments.length} paid {payments.length === 1 ? 'billing' : 'billings'}</span>
+                                                                        {isExpanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                                                                    </button>
+                                                                )}
                                                             </div>
-                                                            <span className="font-bold text-foreground tabular-nums">
-                                                                {occRate}%
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-center text-muted-foreground tabular-nums">
-                                                        {occStat ? (
-                                                            <span>
-                                                                <strong className="text-foreground">{occStat.occupied_units}</strong> / {occStat.total_units} units occupied
-                                                            </span>
-                                                        ) : (
-                                                            '—'
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-center">
-                                                        <Badge
-                                                            variant={
-                                                                occRate >= 90
-                                                                    ? 'default'
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                                                                    <div
+                                                                        className="h-full bg-primary rounded-full transition-all"
+                                                                        style={{ width: `${occRate}%` }}
+                                                                    />
+                                                                </div>
+                                                                <span className="font-bold text-foreground tabular-nums">
+                                                                    {occRate}%
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center text-muted-foreground tabular-nums">
+                                                            {occStat ? (
+                                                                <span>
+                                                                    <strong className="text-foreground">{occStat.occupied_units}</strong> / {occStat.total_units} units occupied
+                                                                </span>
+                                                            ) : (
+                                                                '—'
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <Badge
+                                                                variant={
+                                                                    occRate >= 90
+                                                                        ? 'default'
+                                                                        : occRate >= 70
+                                                                          ? 'secondary'
+                                                                          : 'outline'
+                                                                }
+                                                                className="text-xs"
+                                                            >
+                                                                {occRate >= 90
+                                                                    ? 'Full'
                                                                     : occRate >= 70
-                                                                      ? 'secondary'
-                                                                      : 'outline'
-                                                            }
-                                                            className="text-xs"
-                                                        >
-                                                            {occRate >= 90
-                                                                ? 'Full'
-                                                                : occRate >= 70
-                                                                  ? 'High'
-                                                                  : occRate >= 40
-                                                                    ? 'Moderate'
-                                                                    : 'Low'}
-                                                        </Badge>
-                                                    </td>
-                                                </tr>
+                                                                      ? 'High'
+                                                                      : occRate >= 40
+                                                                        ? 'Moderate'
+                                                                        : 'Low'}
+                                                            </Badge>
+                                                        </td>
+                                                    </tr>
+
+                                                    {/* Expanded Billings Breakdown Row */}
+                                                    {isExpanded && (
+                                                        <tr className="bg-muted/30">
+                                                            <td colSpan={6} className="p-4">
+                                                                <div className="rounded-xl border border-primary/20 bg-card p-4 shadow-sm">
+                                                                    <div className="mb-3 flex items-center justify-between">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                                                                <Receipt className="size-4" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <h4 className="text-xs font-bold text-foreground">
+                                                                                    Paid Billings Breakdown — {prop.name} ({m.month_name})
+                                                                                </h4>
+                                                                                <p className="text-[11px] text-muted-foreground">
+                                                                                    Individual payments received for this location during {m.month_name}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-3">
+                                                                            <Badge variant="secondary" className="text-xs font-semibold">
+                                                                                {payments.length} {payments.length === 1 ? 'Payment Record' : 'Payment Records'}
+                                                                            </Badge>
+                                                                            <span className="text-xs font-bold text-surface-green-foreground tabular-nums">
+                                                                                Accumulated Total: {formatRupiah(income)}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="overflow-x-auto rounded-lg border border-border/80">
+                                                                        <table className="w-full text-left text-xs">
+                                                                            <thead className="border-b border-border bg-muted/70 text-[11px] font-semibold text-muted-foreground uppercase">
+                                                                                <tr>
+                                                                                    <th className="px-3 py-2">Invoice #</th>
+                                                                                    <th className="px-3 py-2">Tenant / Payer</th>
+                                                                                    <th className="px-3 py-2">Room / Unit</th>
+                                                                                    <th className="px-3 py-2">Payment Date</th>
+                                                                                    <th className="px-3 py-2">Payment Method</th>
+                                                                                    <th className="px-3 py-2 text-right">Amount Paid</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody className="divide-y divide-border/40 bg-background">
+                                                                                {payments.map((p) => (
+                                                                                    <tr key={p.id} className="hover:bg-muted/20">
+                                                                                        <td className="px-3 py-2 font-mono font-medium text-foreground">
+                                                                                            <Link
+                                                                                                href={`/leases/${p.lease_id}`}
+                                                                                                className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
+                                                                                            >
+                                                                                                <Receipt className="size-3" />
+                                                                                                <span>{p.invoice_reference}</span>
+                                                                                            </Link>
+                                                                                        </td>
+                                                                                        <td className="px-3 py-2 font-medium text-foreground">
+                                                                                            <div className="flex items-center gap-1.5">
+                                                                                                <User className="size-3.5 text-muted-foreground" />
+                                                                                                <span>{p.tenant_name}</span>
+                                                                                            </div>
+                                                                                        </td>
+                                                                                        <td className="px-3 py-2 font-medium text-foreground">
+                                                                                            {p.unit_name}
+                                                                                        </td>
+                                                                                        <td className="px-3 py-2 text-muted-foreground">
+                                                                                            {p.payment_date}
+                                                                                        </td>
+                                                                                        <td className="px-3 py-2">
+                                                                                            <Badge variant="outline" className="text-[10px] capitalize">
+                                                                                                {p.payment_method}
+                                                                                            </Badge>
+                                                                                        </td>
+                                                                                        <td className="px-3 py-2 text-right font-bold text-surface-green-foreground tabular-nums">
+                                                                                            {formatRupiah(p.amount)}
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </Fragment>
                                             );
                                         });
                                     })}

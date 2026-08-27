@@ -52,3 +52,42 @@ test('reports index filters by property_id when specified', function () {
             ->where('filters.property_id', (string) $prop1->id)
         );
 });
+
+test('reports monthly revenue calculates paid billing based on invoice period_start instead of payment_date', function () {
+    $user = User::factory()->owner()->create();
+
+    $property = Property::factory()->create();
+    $unit = Unit::factory()->create(['property_id' => $property->id]);
+    $lease = \App\Models\Lease::factory()->create(['unit_id' => $unit->id]);
+
+    // Invoice is for August 2026 (period_start 2026-08-01)
+    $invoice = \App\Models\Invoice::factory()->create([
+        'lease_id' => $lease->id,
+        'period_start' => '2026-08-01',
+        'period_end' => '2026-08-31',
+        'total' => 1500000,
+        'amount_paid' => 1500000,
+        'status' => \App\Enums\InvoiceStatus::Paid,
+    ]);
+
+    // Payment was actually paid early on July 28, 2026
+    \App\Models\Payment::factory()->create([
+        'invoice_id' => $invoice->id,
+        'amount' => 1500000,
+        'payment_date' => '2026-07-28',
+        'status' => \App\Enums\PaymentStatus::Confirmed,
+    ]);
+
+    $this->actingAs($user)
+        ->get('/reports?start_date=2026-08-01&end_date=2026-08-31')
+        ->assertOk()
+        ->assertInertia(function ($page) use ($property) {
+            $months = $page->toArray()['props']['income_report']['months'];
+            $augustData = collect($months)->firstWhere('month_key', '2026-08');
+
+            expect($augustData)->not->toBeNull()
+                ->and($augustData['total_income'])->toEqual(1500000)
+                ->and($augustData['by_property'][$property->id])->toEqual(1500000);
+        });
+});
+

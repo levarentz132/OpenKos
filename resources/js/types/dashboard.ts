@@ -26,12 +26,26 @@ export type PropertyOccupancyMonthStat = {
     occupancy_rate: number;
 };
 
+export type PaidBillingDetail = {
+    id: number;
+    amount: number;
+    payment_date: string;
+    payment_method: string;
+    reference_number: string | null;
+    invoice_id: number;
+    invoice_reference: string;
+    lease_id: number;
+    tenant_name: string;
+    unit_name: string;
+};
+
 export type MonthlyPropertyIncomeEntry = {
     month_key: string;
     month_name: string;
     total_income: number;
     by_property: Record<number, number>;
     occupancy_by_property?: Record<number, PropertyOccupancyMonthStat>;
+    payments_by_property?: Record<number, PaidBillingDetail[]>;
 };
 
 export type PropertyIncomeInfo = {
