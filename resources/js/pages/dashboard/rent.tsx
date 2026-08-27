@@ -316,27 +316,19 @@ export default function CollectionQueue({
             },
         },
         {
-            key: 'lease_reference',
-            label: 'Lease',
+            key: 'location_room',
+            label: 'Location & Room',
             className: 'text-xs',
-            render: (entry) =>
-                entry.lease_reference ? (
-                    <Link
-                        href={`/leases/${entry.lease_id}`}
-                        className="hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {entry.lease_reference}
-                    </Link>
-                ) : (
-                    <Link
-                        href={`/leases/${entry.lease_id}`}
-                        className="text-muted-foreground hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        #{entry.lease_id}
-                    </Link>
-                ),
+            render: (entry) => (
+                <Link
+                    href={`/leases/${entry.lease_id}`}
+                    className="flex flex-col hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <span className="font-medium text-foreground">{entry.property_name}</span>
+                    <span className="text-xs text-muted-foreground">{entry.unit_name}</span>
+                </Link>
+            ),
         },
         {
             key: 'tenant_name',

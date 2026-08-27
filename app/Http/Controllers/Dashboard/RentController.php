@@ -122,7 +122,7 @@ class RentController extends Controller
 
         $table = Table::make()
             ->columns([
-                Column::make('lease_reference', 'Lease'),
+                Column::make('location_room', 'Location & Room'),
                 Column::make('tenant_name', 'Tenant')->searchable(function (Builder $q, string $search): void {
                     $q->whereHas('lease.tenants', function (Builder $q) use ($search): void {
                         $q->whereRaw('lower(name) like ?', ['%'.mb_strtolower($search).'%']);

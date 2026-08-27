@@ -178,11 +178,8 @@ export default function InvoiceDetailSheet({
                                             value={formatDate(invoice.due_date)}
                                         />
                                         <DetailRow
-                                            label="Lease"
-                                            value={
-                                                invoice.lease_reference ??
-                                                `#${invoice.lease_id}`
-                                            }
+                                            label="Location & Room"
+                                            value={`${invoice.property_name} · ${invoice.unit_name}`}
                                         />
                                     </div>
                                 </section>
