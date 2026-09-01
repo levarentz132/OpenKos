@@ -82,6 +82,16 @@ export default function PropertyDetailSheet({
                 {property && (
                     <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-4 pt-4 pb-6">
                         <div className="space-y-5">
+                            {property.image_url && (
+                                <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-muted">
+                                    <img
+                                        src={property.image_url}
+                                        alt={property.name}
+                                        className="size-full object-cover"
+                                    />
+                                </div>
+                            )}
+
                             <div className="flex items-center gap-2">
                                 <span>Status:</span>
                                 <StatusBadge
@@ -98,6 +108,17 @@ export default function PropertyDetailSheet({
                                     </Badge>
                                 )}
                             </div>
+
+                            {property.description && (
+                                <div>
+                                    <p className="text-xs font-medium text-muted-foreground uppercase">
+                                        Description
+                                    </p>
+                                    <p className="mt-1 text-sm whitespace-pre-line text-foreground/90">
+                                        {property.description}
+                                    </p>
+                                </div>
+                            )}
 
                             {property.address && (
                                 <div>

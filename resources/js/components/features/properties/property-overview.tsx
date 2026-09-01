@@ -17,6 +17,16 @@ export default function PropertyOverview({ property }: { property: Property }) {
 
     return (
         <div className="space-y-6">
+            {property.image_url && (
+                <div className="aspect-21/9 max-h-72 w-full overflow-hidden rounded-xl border border-border bg-muted shadow-xs">
+                    <img
+                        src={property.image_url}
+                        alt={property.name}
+                        className="size-full object-cover"
+                    />
+                </div>
+            )}
+
             <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">Status:</span>
                 <StatusBadge
@@ -29,6 +39,17 @@ export default function PropertyOverview({ property }: { property: Property }) {
                     </Badge>
                 )}
             </div>
+
+            {property.description && (
+                <div>
+                    <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                        Description
+                    </p>
+                    <p className="mt-1 text-sm whitespace-pre-line text-foreground/90">
+                        {property.description}
+                    </p>
+                </div>
+            )}
 
             {property.address && (
                 <div>

@@ -10,6 +10,7 @@ export type PropertyStats = {
     maintenance_units: number;
     unavailable_units: number;
     occupancy_percentage: number;
+    image_url?: string | null;
 };
 
 export type Finance = {

@@ -66,6 +66,9 @@ export type Property = {
     city_id?: number | null;
     postal_code?: string | null;
     phone?: string | null;
+    description?: string | null;
+    image?: string | null;
+    image_url?: string | null;
     is_active?: boolean;
     city?: string | { id: number; name: string } | null;
     region?: { id: number; name: string } | null;
@@ -407,6 +410,9 @@ export type ManagedProperty = {
     city_id: number | null;
     postal_code: string | null;
     phone: string | null;
+    description: string | null;
+    image?: string | null;
+    image_url?: string | null;
     is_active: boolean;
     units_count: number;
     occupied_units_count: number;

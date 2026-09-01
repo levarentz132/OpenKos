@@ -1,4 +1,6 @@
-import { useForm, usePage } from '@inertiajs/react';
+import { router, useForm, usePage } from '@inertiajs/react';
+import { Image as ImageIcon, Upload, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { InputError, PhoneInput, SearchableSelect } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,29 +43,86 @@ export default function PropertyFormSheet({
             ? property.city
             : null;
 
-    const { data, setData, submit, reset, processing, errors } = useForm({
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(
+        property?.image_url ?? null,
+    );
+
+    const { data, setData, reset, processing, errors } = useForm({
         name: property?.name ?? '',
         type: property?.type ?? propertyTypes[0]?.slug ?? '',
         address: property?.address ?? '',
+        description: property?.description ?? '',
         region_id: property?.region_id ?? property?.region?.id ?? null,
         city_id: property?.city_id ?? city?.id ?? null,
         postal_code: property?.postal_code ?? '',
         phone: property?.phone ?? '',
+        image: null as File | null,
+        remove_image: false,
     });
+
+    useEffect(() => {
+        setImagePreview(property?.image_url ?? null);
+    }, [property]);
 
     function handleOpenChange(next: boolean) {
         onOpenChange(next);
 
         if (!next) {
             reset();
+            setImagePreview(property?.image_url ?? null);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    }
+
+    function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (file) {
+            setData((prev) => ({
+                ...prev,
+                image: file,
+                remove_image: false,
+            }));
+            const previewUrl = URL.createObjectURL(file);
+            setImagePreview(previewUrl);
+        }
+    }
+
+    function handleRemoveImage() {
+        setData((prev) => ({
+            ...prev,
+            image: null,
+            remove_image: true,
+        }));
+        setImagePreview(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
         }
     }
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        submit(isEdit ? update(property!) : store(), {
-            onSuccess: () => handleOpenChange(false),
-        });
+
+        if (isEdit && property) {
+            router.post(
+                update.url(property),
+                {
+                    ...data,
+                    _method: 'put',
+                },
+                {
+                    forceFormData: true,
+                    onSuccess: () => handleOpenChange(false),
+                },
+            );
+        } else {
+            router.post(store.url(), data, {
+                forceFormData: true,
+                onSuccess: () => handleOpenChange(false),
+            });
+        }
     }
 
     const regionOptions = regions.map((r) => ({
@@ -102,6 +161,67 @@ export default function PropertyFormSheet({
                 >
                     <div className="space-y-6">
                         <div className="grid gap-2">
+                            <Label>Property Image</Label>
+                            {imagePreview ? (
+                                <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border bg-muted">
+                                    <img
+                                        src={imagePreview}
+                                        alt="Property preview"
+                                        className="size-full object-cover"
+                                    />
+                                    <div className="absolute top-2 right-2 flex gap-2">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="secondary"
+                                            className="h-8 shadow-sm"
+                                            onClick={() =>
+                                                fileInputRef.current?.click()
+                                            }
+                                        >
+                                            <Upload className="mr-1.5 size-3.5" />
+                                            Change
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="destructive"
+                                            className="size-8 shadow-sm"
+                                            onClick={handleRemoveImage}
+                                        >
+                                            <X className="size-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div
+                                    onClick={() =>
+                                        fileInputRef.current?.click()
+                                    }
+                                    className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-input p-6 text-center transition-colors hover:border-primary/50 hover:bg-accent/40"
+                                >
+                                    <div className="rounded-full bg-muted p-3 text-muted-foreground">
+                                        <ImageIcon className="size-6" />
+                                    </div>
+                                    <p className="mt-2 text-sm font-medium">
+                                        Click to upload image
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        PNG, JPG, WEBP up to 5MB
+                                    </p>
+                                </div>
+                            )}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/png,image/jpeg,image/jpg,image/webp"
+                                className="hidden"
+                                onChange={handleImageChange}
+                            />
+                            <InputError message={errors.image} />
+                        </div>
+
+                        <div className="grid gap-2">
                             <Label htmlFor="name">Name</Label>
                             <Input
                                 id="name"
@@ -136,6 +256,20 @@ export default function PropertyFormSheet({
                                 </SelectContent>
                             </Select>
                             <InputError message={errors.type} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="description">Description</Label>
+                            <Textarea
+                                id="description"
+                                rows={3}
+                                value={data.description}
+                                onChange={(e) =>
+                                    setData('description', e.target.value)
+                                }
+                                placeholder="Describe the property, key facilities, rules, or surroundings..."
+                            />
+                            <InputError message={errors.description} />
                         </div>
 
                         <div className="grid gap-2">

@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -96,7 +97,13 @@ class PropertyController extends Controller
 
     public function store(StorePropertyRequest $request): RedirectResponse
     {
-        $property = Property::create($request->validated());
+        $data = $request->validated();
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')->store('properties', 'public');
+        }
+
+        $property = Property::create($data);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Property created.')]);
 
@@ -107,7 +114,25 @@ class PropertyController extends Controller
     {
         $this->authorize('update', $property);
 
-        $property->update($request->validated());
+        $data = $request->validated();
+
+        if ($request->boolean('remove_image')) {
+            if ($property->image) {
+                Storage::disk('public')->delete($property->image);
+            }
+            $data['image'] = null;
+        } elseif ($request->hasFile('image')) {
+            if ($property->image) {
+                Storage::disk('public')->delete($property->image);
+            }
+            $data['image'] = $request->file('image')->store('properties', 'public');
+        } else {
+            unset($data['image']);
+        }
+
+        unset($data['remove_image']);
+
+        $property->update($data);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Property updated.')]);
 

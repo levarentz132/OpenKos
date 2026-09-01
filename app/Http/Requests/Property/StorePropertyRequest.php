@@ -23,6 +23,7 @@ class StorePropertyRequest extends FormRequest
             'postal_code' => ['nullable', 'string', 'max:20'],
             'phone' => ['nullable', 'string', 'max:20', 'regex:/^\+[1-9]\d{6,14}$/'],
             'description' => ['nullable', 'string', 'max:65535'],
+            'image' => ['nullable', 'image', 'max:5120'],
             'is_active' => ['nullable', 'boolean'],
         ];
     }

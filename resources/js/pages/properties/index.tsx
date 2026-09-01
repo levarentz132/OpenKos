@@ -1,5 +1,6 @@
 import { Head, router } from '@inertiajs/react';
 import {
+    Building2,
     EllipsisVertical,
     ExternalLink,
     Eye,
@@ -128,6 +129,31 @@ export default function Index({
             label: 'Name',
             sortable: true,
             className: 'font-medium',
+            render: (p) => (
+                <div className="flex items-center gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
+                        {p.image_url ? (
+                            <img
+                                src={p.image_url}
+                                alt={p.name}
+                                className="size-full object-cover"
+                            />
+                        ) : (
+                            <Building2 className="size-4 text-muted-foreground" />
+                        )}
+                    </div>
+                    <div className="min-w-0">
+                        <span className="block truncate font-medium text-foreground">
+                            {p.name}
+                        </span>
+                        {p.description && (
+                            <span className="block max-w-xs truncate text-xs text-muted-foreground">
+                                {p.description}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            ),
         },
         {
             key: 'type',

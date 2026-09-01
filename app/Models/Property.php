@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 #[Fillable([
@@ -27,6 +28,7 @@ use Illuminate\Support\Str;
     'postal_code',
     'phone',
     'description',
+    'image',
     'is_active',
 ])]
 class Property extends Model
@@ -35,7 +37,7 @@ class Property extends Model
 
     protected array $auditableMask = ['phone'];
 
-    protected $appends = ['type_label'];
+    protected $appends = ['type_label', 'image_url'];
 
     protected function casts(): array
     {
@@ -62,6 +64,16 @@ class Property extends Model
         return Attribute::get(fn () => $this->relationLoaded('propertyType')
             ? $this->propertyType?->label ?? $this->type
             : $this->type);
+    }
+
+    /**
+     * Public storage URL for the property image.
+     */
+    protected function imageUrl(): Attribute
+    {
+        return Attribute::get(fn () => $this->image
+            ? Storage::disk('public')->url($this->image)
+            : null);
     }
 
     protected static function booted(): void

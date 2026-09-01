@@ -314,7 +314,7 @@ export default function AdditionalIncomesIndex({
                                                 </Badge>
                                             </td>
                                             <td className="px-4 py-3.5 text-right font-bold text-surface-green-foreground tabular-nums">
-                                                {formatRupiah(item.amount)}
+                                                {formatRupiah(Number(item.amount))}
                                             </td>
                                             <td className="px-4 py-3.5 text-muted-foreground font-mono">
                                                 {item.income_date}
