@@ -1,7 +1,6 @@
 import { Link, router } from '@inertiajs/react';
 import { Award, CheckCircle2, Home, PieChart, Sparkles, Wrench, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { N8nSyncDialog } from '@/components/features/n8n-sync-dialog';
 import { Button } from '@/components/ui/button';
 import type { OccupancyReviewData } from '@/types';
 
@@ -44,7 +43,6 @@ export function OccupancyReviewCard({ data }: { data: OccupancyReviewData }) {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <N8nSyncDialog buttonSize="xs" />
                         <Badge
                             variant={occupancy_rate >= 75 ? 'default' : 'outline'}
                             className="w-fit text-xs font-semibold"

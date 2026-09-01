@@ -21,7 +21,6 @@ import {
     BulkUnitSheet,
     MoveOutSheet,
     MoveUnitSheet,
-    N8nSyncDialog,
     UnitDetailSheet,
     UnitFormSheet,
 } from '@/components/features';
@@ -482,7 +481,6 @@ export default function Index({
                             Clear ({selectedIds.length})
                         </Button>
                     )}
-                    <N8nSyncDialog />
                     <Button variant="outline" onClick={() => setBulkEditSheetOpen(true)}>
                         {selectedIds.length > 0
                             ? `Bulk Edit (${selectedIds.length})`

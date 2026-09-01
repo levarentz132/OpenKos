@@ -18,6 +18,7 @@ class UpdatePropertyRequest extends FormRequest
             'type' => ['sometimes', Rule::exists('property_types', 'slug')->where('is_active', true)],
             'slug' => ['nullable', 'string', 'max:255', 'unique:properties,slug,'.$this->route('property')?->id],
             'address' => ['nullable', 'string', 'max:65535'],
+            'address_url' => ['nullable', 'url', 'max:2048'],
             'region_id' => ['nullable', 'integer', 'exists:regions,id'],
             'city_id' => ['nullable', 'integer', 'exists:cities,id'],
             'postal_code' => ['nullable', 'string', 'max:20'],

@@ -55,15 +55,6 @@ class Unit extends Model
                 $unit->slug = $slug;
             }
         });
-
-        static::saved(function (Unit $unit) {
-            $statusVal = is_string($unit->status) ? $unit->status : ($unit->status->value ?? null);
-            if ($statusVal === UnitStatus::Available->value) {
-                if ($unit->wasRecentlyCreated || $unit->wasChanged('status')) {
-                    app(\App\Services\N8nWebhookService::class)->pushSingleVacantRoom($unit, 'room_vacated');
-                }
-            }
-        });
     }
 
     public function getRouteKeyName(): string

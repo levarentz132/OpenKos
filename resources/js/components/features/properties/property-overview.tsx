@@ -1,3 +1,4 @@
+import { ExternalLink, MapPin } from 'lucide-react';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Badge } from '@/components/ui/badge';
 import type { Property } from '@/types';
@@ -53,9 +54,23 @@ export default function PropertyOverview({ property }: { property: Property }) {
 
             {property.address && (
                 <div>
-                    <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                        Address
-                    </p>
+                    <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                            Address
+                        </p>
+                        {property.address_url && (
+                            <a
+                                href={property.address_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                            >
+                                <MapPin className="size-3.5" />
+                                View on Map
+                                <ExternalLink className="size-3" />
+                            </a>
+                        )}
+                    </div>
                     <p className="mt-1 text-sm">{property.address}</p>
                     {locationLabel && (
                         <p className="text-sm text-muted-foreground">

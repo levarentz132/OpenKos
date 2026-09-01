@@ -62,6 +62,7 @@ export type Property = {
     type_label?: string; // resolved label (appended by the model)
     slug: string; // route key
     address?: string | null;
+    address_url?: string | null;
     region_id?: number | null;
     city_id?: number | null;
     postal_code?: string | null;
@@ -406,6 +407,7 @@ export type ManagedProperty = {
     type: string;
     type_label?: string;
     address: string | null;
+    address_url?: string | null;
     region_id: number | null;
     city_id: number | null;
     postal_code: string | null;

@@ -25,7 +25,6 @@ import {
 import React, { Fragment, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { N8nSyncDialog } from '@/components/features/n8n-sync-dialog';
 import { Input } from '@/components/ui/input';
 import { formatRupiah } from '@/lib/formatters';
 import type {
@@ -180,7 +179,6 @@ export default function ReportsIndex({
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <N8nSyncDialog buttonSize="sm" />
                         <Button
                             variant="outline"
                             size="sm"

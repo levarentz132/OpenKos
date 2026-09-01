@@ -52,6 +52,7 @@ export default function PropertyFormSheet({
         name: property?.name ?? '',
         type: property?.type ?? propertyTypes[0]?.slug ?? '',
         address: property?.address ?? '',
+        address_url: property?.address_url ?? '',
         description: property?.description ?? '',
         region_id: property?.region_id ?? property?.region?.id ?? null,
         city_id: property?.city_id ?? city?.id ?? null,
@@ -283,6 +284,22 @@ export default function PropertyFormSheet({
                                 placeholder="Property address"
                             />
                             <InputError message={errors.address} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="address_url">
+                                Google Maps / Address URL
+                            </Label>
+                            <Input
+                                id="address_url"
+                                type="url"
+                                value={data.address_url}
+                                onChange={(e) =>
+                                    setData('address_url', e.target.value)
+                                }
+                                placeholder="https://maps.google.com/?q=..."
+                            />
+                            <InputError message={errors.address_url} />
                         </div>
 
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

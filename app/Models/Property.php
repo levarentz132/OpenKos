@@ -23,6 +23,7 @@ use Illuminate\Support\Str;
     'type',
     'slug',
     'address',
+    'address_url',
     'region_id',
     'city_id',
     'postal_code',
