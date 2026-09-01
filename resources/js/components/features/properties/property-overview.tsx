@@ -9,6 +9,7 @@ export default function PropertyOverview({ property }: { property: Property }) {
             ? property.city
             : null;
     const locationLabel = [
+        property?.kecamatan ? `Kec. ${property.kecamatan}` : null,
         city?.name,
         property?.region?.name,
         property?.postal_code,

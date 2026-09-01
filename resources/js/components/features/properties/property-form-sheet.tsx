@@ -56,6 +56,7 @@ export default function PropertyFormSheet({
         description: property?.description ?? '',
         region_id: property?.region_id ?? property?.region?.id ?? null,
         city_id: property?.city_id ?? city?.id ?? null,
+        kecamatan: property?.kecamatan ?? '',
         postal_code: property?.postal_code ?? '',
         phone: property?.phone ?? '',
         image: null as File | null,
@@ -302,7 +303,7 @@ export default function PropertyFormSheet({
                             <InputError message={errors.address_url} />
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div className="grid gap-2">
                                 <Label>Province</Label>
                                 <SearchableSelect
@@ -339,6 +340,21 @@ export default function PropertyFormSheet({
                                     disabled={!data.region_id}
                                 />
                                 <InputError message={errors.city_id} />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div className="grid gap-2">
+                                <Label htmlFor="kecamatan">Kecamatan</Label>
+                                <Input
+                                    id="kecamatan"
+                                    value={data.kecamatan}
+                                    onChange={(e) =>
+                                        setData('kecamatan', e.target.value)
+                                    }
+                                    placeholder="e.g. Setiabudi, Kebayoran Baru"
+                                />
+                                <InputError message={errors.kecamatan} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="postal_code">Postal Code</Label>

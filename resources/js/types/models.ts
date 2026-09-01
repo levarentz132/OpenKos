@@ -65,6 +65,7 @@ export type Property = {
     address_url?: string | null;
     region_id?: number | null;
     city_id?: number | null;
+    kecamatan?: string | null;
     postal_code?: string | null;
     phone?: string | null;
     description?: string | null;
@@ -410,6 +411,7 @@ export type ManagedProperty = {
     address_url?: string | null;
     region_id: number | null;
     city_id: number | null;
+    kecamatan: string | null;
     postal_code: string | null;
     phone: string | null;
     description: string | null;

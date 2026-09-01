@@ -20,8 +20,9 @@ Returns all active properties with their full property details (image, address, 
 | `property_slug` / `property` | `string` | Filter by property slug | `?property_slug=kemang-exclusive` |
 | `city` | `string` | Filter by city name (partial match) | `?city=Jakarta` |
 | `city_id` | `integer` | Filter by city ID | `?city_id=3` |
+| `kecamatan` | `string` | Filter by kecamatan / district name (partial match) | `?kecamatan=Mampang` |
 | `type` | `string` | Filter by property type slug | `?type=boarding_house` |
-| `search` | `string` | Keyword search in property name, address, description, city, or room name | `?search=Kemang` |
+| `search` | `string` | Keyword search in property name, address, kecamatan, description, city, or room name | `?search=Kemang` |
 | `min_price` | `number` | Minimum room rate amount | `?min_price=1500000` |
 | `max_price` | `number` | Maximum room rate amount | `?max_price=3000000` |
 | `only_available` | `boolean` | If `true` (default), only includes properties that currently have at least one vacant room. If `false`, includes all active properties. | `?only_available=false` |
@@ -31,7 +32,7 @@ Returns all active properties with their full property details (image, address, 
 ### Example Request
 
 ```bash
-curl -X GET "http://localhost:8080/api/v1/available-rooms?city=Jakarta" \
+curl -X GET "http://localhost:8080/api/v1/available-rooms?city=Jakarta&kecamatan=Mampang" \
   -H "Accept: application/json"
 ```
 
@@ -53,6 +54,7 @@ curl -X GET "http://localhost:8080/api/v1/available-rooms?city=Jakarta" \
       "address": "Jl. Kemang Raya No. 45",
       "address_url": "https://maps.google.com/?q=-6.2608,106.8166",
       "city": "Jakarta Selatan",
+      "kecamatan": "Mampang Prapatan",
       "province": "DKI Jakarta",
       "region": "DKI Jakarta",
       "postal_code": "12730",
@@ -144,6 +146,7 @@ If the secret does not match, the API will respond with `401 Unauthorized`:
 | `address` | `string|null` | Physical street address |
 | `address_url` | `string|null` | Google Maps / map location URL |
 | `city` | `string|null` | City / Regency name |
+| `kecamatan` | `string|null` | Kecamatan / District name |
 | `province` / `region` | `string|null` | Province / State name |
 | `postal_code` | `string|null` | Postal ZIP code |
 | `phone` | `string|null` | Contact / WhatsApp phone number |

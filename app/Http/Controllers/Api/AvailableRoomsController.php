@@ -23,6 +23,7 @@ class AvailableRoomsController extends Controller
         $propertySlug = $request->query('property_slug') ?: $request->query('property');
         $cityId = $request->query('city_id');
         $cityName = $request->query('city');
+        $kecamatan = $request->query('kecamatan');
         $propertyType = $request->query('type');
         $search = $request->query('search');
         $minPrice = $request->query('min_price');
@@ -35,11 +36,13 @@ class AvailableRoomsController extends Controller
             ->when($propertySlug, fn (Builder $q) => $q->where('slug', $propertySlug))
             ->when($cityId, fn (Builder $q) => $q->where('city_id', $cityId))
             ->when($cityName, fn (Builder $q) => $q->whereHas('city', fn (Builder $q) => $q->where('name', 'like', "%{$cityName}%")))
+            ->when($kecamatan, fn (Builder $q) => $q->where('kecamatan', 'like', "%{$kecamatan}%"))
             ->when($propertyType, fn (Builder $q) => $q->where('type', $propertyType))
             ->when($search, function (Builder $q) use ($search) {
                 $q->where(function (Builder $sub) use ($search) {
                     $sub->where('name', 'like', "%{$search}%")
                         ->orWhere('address', 'like', "%{$search}%")
+                        ->orWhere('kecamatan', 'like', "%{$search}%")
                         ->orWhere('description', 'like', "%{$search}%")
                         ->orWhereHas('city', fn (Builder $c) => $c->where('name', 'like', "%{$search}%"));
                 });
@@ -118,6 +121,7 @@ class AvailableRoomsController extends Controller
                     'property_phone' => $property->phone,
                     'property_image_url' => $property->image_url,
                     'property_city' => $property->city?->name,
+                    'property_kecamatan' => $property->kecamatan,
                 ]);
             }
 
@@ -131,6 +135,7 @@ class AvailableRoomsController extends Controller
                 'address' => $property->address,
                 'address_url' => $property->address_url,
                 'city' => $property->city?->name,
+                'kecamatan' => $property->kecamatan,
                 'province' => $property->region?->name,
                 'region' => $property->region?->name,
                 'postal_code' => $property->postal_code,

@@ -26,6 +26,7 @@ use Illuminate\Support\Str;
     'address_url',
     'region_id',
     'city_id',
+    'kecamatan',
     'postal_code',
     'phone',
     'description',

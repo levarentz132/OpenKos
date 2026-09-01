@@ -21,6 +21,7 @@ class UpdatePropertyRequest extends FormRequest
             'address_url' => ['nullable', 'url', 'max:2048'],
             'region_id' => ['nullable', 'integer', 'exists:regions,id'],
             'city_id' => ['nullable', 'integer', 'exists:cities,id'],
+            'kecamatan' => ['nullable', 'string', 'max:255'],
             'postal_code' => ['nullable', 'string', 'max:20'],
             'phone' => ['nullable', 'string', 'max:20', 'regex:/^\+[1-9]\d{6,14}$/'],
             'description' => ['nullable', 'string', 'max:65535'],

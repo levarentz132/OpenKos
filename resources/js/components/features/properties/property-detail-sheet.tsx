@@ -60,6 +60,7 @@ export default function PropertyDetailSheet({
             ? property.city
             : null;
     const locationLabel = [
+        property?.kecamatan ? `Kec. ${property.kecamatan}` : null,
         city?.name,
         property?.region?.name,
         property?.postal_code,
