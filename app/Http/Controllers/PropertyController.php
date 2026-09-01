@@ -41,18 +41,14 @@ class PropertyController extends Controller
             ->columns([
                 Column::make('name', 'Name')->sortable()->searchable(),
                 Column::make('type', 'Type')->sortable(),
-                Column::make('city', 'City')->sortable(
-                    fn (Builder $q, string $dir) => $q->orderBy(
-                        City::select('name')->whereColumn('cities.id', 'properties.city_id'),
-                        $dir,
-                    ),
-                )->searchable(function (Builder $q, string $search): void {
-                    $q->orWhereHas('region', fn (Builder $q) => $q->where(
-                        DB::raw('lower(name)'), 'like', '%'.mb_strtolower($search).'%',
-                    ));
-                    $q->orWhereHas('city', fn (Builder $q) => $q->where(
-                        DB::raw('lower(name)'), 'like', '%'.mb_strtolower($search).'%',
-                    ));
+                Column::make('kecamatan', 'Kecamatan')->sortable()->searchable(function (Builder $q, string $search): void {
+                    $q->orWhere('properties.kecamatan', 'like', '%'.$search.'%')
+                        ->orWhereHas('city', fn (Builder $q) => $q->where(
+                            DB::raw('lower(name)'), 'like', '%'.mb_strtolower($search).'%',
+                        ))
+                        ->orWhereHas('region', fn (Builder $q) => $q->where(
+                            DB::raw('lower(name)'), 'like', '%'.mb_strtolower($search).'%',
+                        ));
                 }),
                 Column::make('units_count', 'Total Units')->sortable(),
                 Column::make('occupied_units_count', 'Occupied')->sortable(),

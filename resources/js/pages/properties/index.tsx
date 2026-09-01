@@ -164,11 +164,11 @@ export default function Index({
             ),
         },
         {
-            key: 'city',
-            label: 'City',
+            key: 'kecamatan',
+            label: 'Kecamatan',
             sortable: true,
             className: 'text-muted-foreground',
-            render: (p) => p.city?.name ?? '\u2014',
+            render: (p) => p.kecamatan ?? '\u2014',
         },
         {
             key: 'units_count',
@@ -274,7 +274,7 @@ export default function Index({
                             value={table.searchValue}
                             onChange={table.onSearchChange}
                             onClear={table.clearSearch}
-                            placeholder="Search by name, province, or city..."
+                            placeholder="Search by name, kecamatan, city, or province..."
                         />
                     }
                 />
