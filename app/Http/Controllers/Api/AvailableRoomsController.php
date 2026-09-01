@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 class AvailableRoomsController extends Controller
 {
     /**
-     * Get all properties with their available rooms.
+     * Get concise properties data with available rooms, status in Indonesian, and price range.
      */
     public function index(Request $request): JsonResponse
     {
@@ -48,9 +48,6 @@ class AvailableRoomsController extends Controller
                 });
             })
             ->with([
-                'city:id,name',
-                'region:id,name',
-                'propertyType:slug,label',
                 'units' => function ($q) use ($minPrice, $maxPrice, $search) {
                     $q->where('status', UnitStatus::Available->value)
                         ->whereDoesntHave('leases', fn (Builder $lq) => $lq->where('status', 'active'))
@@ -64,15 +61,6 @@ class AvailableRoomsController extends Controller
                         ->with('activeRates')
                         ->orderBy('name');
                 },
-            ])
-            ->withCount([
-                'units as total_units',
-                'units as available_units_count' => fn (Builder $q) => $q
-                    ->where('status', UnitStatus::Available->value)
-                    ->whereDoesntHave('leases', fn (Builder $q) => $q->where('status', 'active')),
-                'units as occupied_units_count' => fn (Builder $q) => $q
-                    ->where('status', UnitStatus::Occupied->value)
-                    ->orWhereHas('leases', fn (Builder $q) => $q->where('status', 'active')),
             ]);
 
         if ($onlyWithAvailableRooms) {
@@ -84,87 +72,55 @@ class AvailableRoomsController extends Controller
 
         $properties = $propertiesQuery->orderBy('name')->get();
 
-        $allRooms = collect();
+        $data = $properties->map(function (Property $property) {
+            $availableRoomNames = $property->units->pluck('name')->values()->all();
+            $availableCount = count($availableRoomNames);
 
-        $data = $properties->map(function (Property $property) use (&$allRooms) {
-            $rooms = $property->units->map(function (Unit $unit) use ($property) {
-                $primaryRate = $unit->activeRates->first();
-                $primaryUnitStr = $primaryRate?->billing_unit instanceof \BackedEnum
-                    ? $primaryRate->billing_unit->value
-                    : (string) ($primaryRate->billing_unit ?? '');
+            // Collect all active price rates for available rooms
+            $allPrices = $property->units
+                ->flatMap(fn (Unit $unit) => $unit->activeRates->pluck('amount'))
+                ->map(fn ($amt) => (float) $amt)
+                ->filter(fn ($amt) => $amt > 0)
+                ->values();
 
-                return [
-                    'id' => $unit->id,
-                    'name' => $unit->name,
-                    'floor' => $unit->floor,
-                    'price' => $primaryRate ? (float) $primaryRate->amount : null,
-                    'price_formatted' => $primaryRate
-                        ? 'Rp '.number_format((float) $primaryRate->amount, 0, ',', '.').($primaryUnitStr ? '/'.$primaryUnitStr : '')
-                        : null,
-                    'status' => $unit->status instanceof \BackedEnum ? $unit->status->value : (string) ($unit->status ?? 'available'),
-                ];
-            });
+            $priceRange = null;
+            if ($allPrices->isNotEmpty()) {
+                $min = $allPrices->min();
+                $max = $allPrices->max();
 
-            foreach ($rooms as $r) {
-                $allRooms->push([
-                    'id' => $r['id'],
-                    'name' => $r['name'],
-                    'floor' => $r['floor'],
-                    'price' => $r['price'],
-                    'price_formatted' => $r['price_formatted'],
-                    'status' => $r['status'],
-                    'property_id' => $property->id,
-                    'property_name' => $property->name,
-                    'property_slug' => $property->slug,
-                    'property_address' => $property->address,
-                    'property_address_url' => $property->address_url,
-                    'property_phone' => $property->phone,
-                    'property_image_url' => $property->image_url,
-                    'property_city' => $property->city?->name,
-                    'property_kecamatan' => $property->kecamatan,
-                ]);
+                if ($min === $max) {
+                    $priceRange = 'Rp '.number_format($min, 0, ',', '.').'/bulan';
+                } else {
+                    $priceRange = 'Rp '.number_format($min, 0, ',', '.').' - Rp '.number_format($max, 0, ',', '.').'/bulan';
+                }
             }
 
+            $availabilityStatus = $availableCount > 0
+                ? "Ready {$availableCount} kamar"
+                : 'Belum ada kamar ready';
+
             return [
-                'id' => $property->id,
                 'name' => $property->name,
                 'slug' => $property->slug,
-                'type' => $property->type,
-                'type_label' => $property->type_label,
                 'description' => $property->description,
-                'address' => $property->address,
                 'address_url' => $property->address_url,
-                'city' => $property->city?->name,
                 'kecamatan' => $property->kecamatan,
-                'province' => $property->region?->name,
-                'region' => $property->region?->name,
-                'postal_code' => $property->postal_code,
                 'phone' => $property->phone,
-                'image' => $property->image,
                 'image_url' => $property->image_url,
-                'total_units' => (int) $property->total_units,
-                'occupied_units' => (int) $property->occupied_units_count,
-                'available_rooms_count' => (int) $property->available_units_count,
-                'occupancy_rate' => $property->total_units > 0
-                    ? round(((int) $property->occupied_units_count / (int) $property->total_units) * 100, 1)
-                    : 0,
-                'availability_status' => (int) $property->available_units_count > 0
-                    ? "Ready {$property->available_units_count} room(s)"
-                    : 'No rooms available',
-                'available_rooms' => $rooms,
+                'available_rooms' => $availableRoomNames,
+                'availability_status' => $availabilityStatus,
+                'price_range' => $priceRange,
             ];
         });
 
         return response()->json([
             'success' => true,
-            'total_properties' => $data->count(),
-            'total_available_rooms' => $allRooms->count(),
-            'properties' => $data,
+            'data' => $data,
         ]);
     }
 
     /**
-     * Get property details with its available rooms for a specific property.
+     * Get details and available rooms for a specific property.
      */
     public function forProperty(Request $request, Property $property): JsonResponse
     {
