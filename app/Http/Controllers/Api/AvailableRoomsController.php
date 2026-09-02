@@ -28,7 +28,7 @@ class AvailableRoomsController extends Controller
         $search = $request->query('search');
         $minPrice = $request->query('min_price');
         $maxPrice = $request->query('max_price');
-        $onlyWithAvailableRooms = $request->boolean('only_available', true);
+        $onlyWithAvailableRooms = $request->boolean('only_available', false);
 
         $propertiesQuery = Property::query()
             ->where('is_active', true)
@@ -49,16 +49,14 @@ class AvailableRoomsController extends Controller
             })
             ->with([
                 'units' => function ($q) use ($minPrice, $maxPrice, $search) {
-                    $q->where('status', UnitStatus::Available->value)
-                        ->whereDoesntHave('leases', fn (Builder $lq) => $lq->where('status', 'active'))
-                        ->when($search, fn (Builder $sq) => $sq->where('name', 'like', "%{$search}%"))
+                    $q->when($search, fn (Builder $sq) => $sq->where('name', 'like', "%{$search}%"))
                         ->when($minPrice || $maxPrice, function (Builder $rq) use ($minPrice, $maxPrice) {
                             $rq->whereHas('activeRates', function (Builder $subRate) use ($minPrice, $maxPrice) {
                                 $subRate->when($minPrice, fn ($p) => $p->where('amount', '>=', (float) $minPrice))
                                     ->when($maxPrice, fn ($p) => $p->where('amount', '<=', (float) $maxPrice));
                             });
                         })
-                        ->with('activeRates')
+                        ->with(['activeRates', 'leases' => fn (Builder $lq) => $lq->where('status', 'active')])
                         ->orderBy('name');
                 },
             ]);
@@ -73,11 +71,17 @@ class AvailableRoomsController extends Controller
         $properties = $propertiesQuery->orderBy('name')->get();
 
         $data = $properties->map(function (Property $property) {
-            $availableRoomNames = $property->units->pluck('name')->values()->all();
+            $availableUnits = $property->units->filter(function (Unit $unit) {
+                return $unit->status === UnitStatus::Available
+                    && $unit->leases->isEmpty();
+            })->values();
+
+            $availableRoomNames = $availableUnits->pluck('name')->values()->all();
             $availableCount = count($availableRoomNames);
 
-            // Collect all active price rates for available rooms
-            $allPrices = $property->units
+            // Collect all active price rates (prefer available units, fallback to all units)
+            $targetUnits = $availableUnits->isNotEmpty() ? $availableUnits : $property->units;
+            $allPrices = $targetUnits
                 ->flatMap(fn (Unit $unit) => $unit->activeRates->pluck('amount'))
                 ->map(fn ($amt) => (float) $amt)
                 ->filter(fn ($amt) => $amt > 0)
@@ -97,7 +101,7 @@ class AvailableRoomsController extends Controller
 
             $availabilityStatus = $availableCount > 0
                 ? "Ready {$availableCount} kamar"
-                : 'Belum ada kamar ready';
+                : 'Kamar full';
 
             return [
                 'name' => $property->name,
