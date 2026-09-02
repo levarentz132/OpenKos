@@ -56,7 +56,8 @@ class AvailableRoomsController extends Controller
                                     ->when($maxPrice, fn ($p) => $p->where('amount', '<=', (float) $maxPrice));
                             });
                         })
-                        ->with(['activeRates', 'leases' => fn (Builder $lq) => $lq->where('status', 'active')])
+                        ->with('activeRates')
+                        ->withExists(['leases as has_active_lease' => fn (Builder $lq) => $lq->where('status', 'active')])
                         ->orderBy('name');
                 },
             ]);
@@ -72,8 +73,10 @@ class AvailableRoomsController extends Controller
 
         $data = $properties->map(function (Property $property) {
             $availableUnits = $property->units->filter(function (Unit $unit) {
-                return $unit->status === UnitStatus::Available
-                    && $unit->leases->isEmpty();
+                $isStatusAvailable = $unit->status === UnitStatus::Available
+                    || (is_string($unit->status) && $unit->status === 'available');
+
+                return $isStatusAvailable && empty($unit->has_active_lease);
             })->values();
 
             $availableRoomNames = $availableUnits->pluck('name')->values()->all();
