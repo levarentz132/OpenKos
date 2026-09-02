@@ -51,6 +51,7 @@ export default function PropertyFormSheet({
     const { data, setData, reset, processing, errors } = useForm({
         name: property?.name ?? '',
         type: property?.type ?? propertyTypes[0]?.slug ?? '',
+        slug: property?.slug ?? '',
         address: property?.address ?? '',
         address_url: property?.address_url ?? '',
         description: property?.description ?? '',
@@ -235,6 +236,22 @@ export default function PropertyFormSheet({
                                 placeholder="e.g. Kos Melati"
                             />
                             <InputError message={errors.name} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="slug">Slug (URL & API identifier)</Label>
+                            <Input
+                                id="slug"
+                                value={data.slug}
+                                onChange={(e) =>
+                                    setData('slug', e.target.value)
+                                }
+                                placeholder="e.g. pesing-baru"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Unique URL slug. Leave blank to auto-generate from property name.
+                            </p>
+                            <InputError message={errors.slug} />
                         </div>
 
                         <div className="grid gap-2">

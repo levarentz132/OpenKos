@@ -94,7 +94,7 @@ export default function PropertyDetailSheet({
                                 </div>
                             )}
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <span>Status:</span>
                                 <StatusBadge
                                     domain="property"
@@ -107,6 +107,11 @@ export default function PropertyDetailSheet({
                                 {property.type && (
                                     <Badge variant="outline">
                                         {property.type_label ?? property.type}
+                                    </Badge>
+                                )}
+                                {property.slug && (
+                                    <Badge variant="secondary" className="font-mono text-xs">
+                                        slug: {property.slug}
                                     </Badge>
                                 )}
                             </div>

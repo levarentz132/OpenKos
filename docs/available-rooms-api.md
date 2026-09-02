@@ -25,7 +25,7 @@ Returns clean, lightweight property information including location, contact, pri
 | `search` | `string` | Keyword search in property name, address, kecamatan, description, or city | `?search=Alpukat` |
 | `min_price` | `number` | Minimum room rate amount | `?min_price=1000000` |
 | `max_price` | `number` | Maximum room rate amount | `?max_price=2000000` |
-| `only_available` | `boolean` | If `true` (default), only includes properties with at least 1 vacant room. If `false`, includes all properties. | `?only_available=false` |
+| `only_available` | `boolean` | If `false` (default), includes all active properties (full properties show status `Kamar full`). If `true`, only includes properties with at least 1 vacant room. | `?only_available=true` |
 
 ---
 
@@ -43,18 +43,18 @@ curl -X GET "http://localhost:8080/api/v1/available-rooms?kecamatan=Grogol" \
   "success": true,
   "data": [
     {
-      "name": "Alpukat",
-      "slug": "alpukat",
+      "name": "Pesing Baru",
+      "slug": "pesing-koneng-baru",
+      "canonical_slug": "pesing-baru",
+      "canonical_id": "LOC_PESING_BARU",
       "description": "AC, WiFi, kasur, lemari, meja, kamar mandi dalam",
-      "address_url": "https://maps.app.goo.gl/YBVADLa7G7E2q9fW8",
-      "kecamatan": "Grogol",
-      "phone": "+6285894999293",
-      "image_url": "http://dashboard.highlanderstay.com/storage/properties/nMetAAm73uduAjuNUXSbkIqcF98g6SFQ18Na5A21.jpg",
-      "available_rooms": [
-        "301"
-      ],
-      "availability_status": "Ready 1 kamar",
-      "price_range": "Rp 1.400.000/bulan"
+      "address_url": "https://maps.app.goo.gl/NkAYSEQgT6tFgbyc7",
+      "kecamatan": "Kebon Jeruk",
+      "phone": "+6285773577956",
+      "image_url": "http://dashboard.highlanderstay.com/storage/properties/J8GtTQJR78taVc09XUycYc0mdkLJoJzmPVg55Geg.jpg",
+      "available_rooms": [],
+      "availability_status": "Kamar full",
+      "price_range": "Rp 1.400.000 - Rp 2.200.000/bulan"
     }
   ]
 }
@@ -97,7 +97,9 @@ When configured, pass the secret using any of the following:
 | Field | Type | Description |
 | :--- | :--- | :--- |
 | `name` | `string` | Name of the property |
-| `slug` | `string` | Unique URL-safe slug for the property |
+| `slug` | `string` | Unique URL-safe slug stored for the property |
+| `canonical_slug` | `string` | Clean, standardized slug derived from property name (e.g. `pesing-baru`) |
+| `canonical_id` | `string` | Standardized Location ID for integrations (e.g. `LOC_PESING_BARU`) |
 | `description` | `string\|null` | Property description & facility list |
 | `address_url` | `string\|null` | Google Maps or address URL link |
 | `kecamatan` | `string\|null` | District / Kecamatan of the property |

@@ -80,12 +80,12 @@ class Property extends Model
 
     protected static function booted(): void
     {
-        static::creating(function (Property $property) {
-            if (empty($property->slug)) {
+        static::saving(function (Property $property) {
+            if (empty($property->slug) && ! empty($property->name)) {
                 $base = Str::slug($property->name);
                 $slug = $base;
                 $counter = 1;
-                while (static::withTrashed()->where('slug', $slug)->exists()) {
+                while (static::withTrashed()->where('id', '!=', $property->id)->where('slug', $slug)->exists()) {
                     $slug = $base.'-'.$counter++;
                 }
                 $property->slug = $slug;

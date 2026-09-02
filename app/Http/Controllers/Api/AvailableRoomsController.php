@@ -9,6 +9,7 @@ use App\Models\Unit;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class AvailableRoomsController extends Controller
 {
@@ -33,7 +34,15 @@ class AvailableRoomsController extends Controller
         $propertiesQuery = Property::query()
             ->where('is_active', true)
             ->when($propertyId, fn (Builder $q) => $q->where('id', $propertyId))
-            ->when($propertySlug, fn (Builder $q) => $q->where('slug', $propertySlug))
+            ->when($propertySlug, function (Builder $q) use ($propertySlug) {
+                $clean = strtolower(str_replace(['LOC_', '_'], ['', '-'], $propertySlug));
+                $nameSearch = str_replace('-', ' ', $clean);
+                $q->where(function (Builder $sub) use ($propertySlug, $clean, $nameSearch) {
+                    $sub->where('slug', $propertySlug)
+                        ->orWhere('slug', $clean)
+                        ->orWhere('name', 'like', "%{$nameSearch}%");
+                });
+            })
             ->when($cityId, fn (Builder $q) => $q->where('city_id', $cityId))
             ->when($cityName, fn (Builder $q) => $q->whereHas('city', fn (Builder $q) => $q->where('name', 'like', "%{$cityName}%")))
             ->when($kecamatan, fn (Builder $q) => $q->where('kecamatan', 'like', "%{$kecamatan}%"))
@@ -106,9 +115,14 @@ class AvailableRoomsController extends Controller
                 ? "Ready {$availableCount} kamar"
                 : 'Kamar full';
 
+            $canonicalSlug = Str::slug($property->name);
+            $canonicalId = 'LOC_'.strtoupper(Str::slug($property->name, '_'));
+
             return [
                 'name' => $property->name,
                 'slug' => $property->slug,
+                'canonical_slug' => $canonicalSlug,
+                'canonical_id' => $canonicalId,
                 'description' => $property->description,
                 'address_url' => $property->address_url,
                 'kecamatan' => $property->kecamatan,
