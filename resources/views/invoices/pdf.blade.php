@@ -56,12 +56,31 @@
 @php
     $formatDate = static fn ($date): string => $date?->copy()->locale($locale)->translatedFormat('d M Y') ?? '-';
     $formatDateTime = static fn ($date): string => $date?->copy()->timezone('Asia/Jakarta')->locale($locale)->translatedFormat('d M Y, H:i') ?? '-';
-    $formatMoney = static fn (string $amount): string => (string) Illuminate\Support\Number::currency(
-        (float) $amount,
-        in: $currency,
-        locale: $locale,
-        precision: 2,
-    );
+    $formatMoney = static function ($amount) use ($currency, $locale): string {
+        if (extension_loaded('intl')) {
+            try {
+                return (string) Illuminate\Support\Number::currency(
+                    (float) $amount,
+                    in: $currency,
+                    locale: $locale,
+                    precision: 2,
+                );
+            } catch (\Throwable) {
+                // Fallback below
+            }
+        }
+
+        $num = (float) $amount;
+        $formatted = number_format($num, 2, ',', '.');
+        $prefix = match ($currency) {
+            'IDR' => 'Rp',
+            'USD' => '$',
+            'EUR' => '€',
+            default => $currency,
+        };
+
+        return trim($prefix . ' ' . $formatted);
+    };
     $property = $invoice->lease?->unit?->property;
     $propertyAddress = collect([
         $property?->address,

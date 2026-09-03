@@ -76,17 +76,6 @@ final class InvoicePdfArtifact
 
     public function generate(Invoice $invoice, string $fingerprint, string $pdf): void
     {
-        if (! Setting::get('invoice_pdf_enabled')) {
-            return;
-        }
-
-        $currentFingerprint = $this->fingerprint($invoice);
-        if ($currentFingerprint !== $fingerprint) {
-            GenerateInvoicePdfArtifact::dispatch($invoice->getKey(), $currentFingerprint);
-
-            return;
-        }
-
         if (! Storage::disk(self::DISK)->put($this->path($invoice), $pdf)) {
             throw new \RuntimeException('Unable to store the generated invoice PDF.');
         }
