@@ -243,11 +243,7 @@ class PaymentController extends TenantPortalController
     {
         $this->ensureTenantOwnsInvoice($request, $invoice);
 
-        if ($artifact->status($invoice) !== 'available') {
-            $artifact->ensureQueued($invoice);
-
-            return redirect()->route('portal.billing.invoices.show', $invoice);
-        }
+        $path = $artifact->getOrGenerate($invoice);
 
         $reference = preg_replace(
             '/[^A-Za-z0-9_-]/',
@@ -256,7 +252,7 @@ class PaymentController extends TenantPortalController
         );
 
         return Storage::disk('local')->download(
-            $artifact->path($invoice),
+            $path,
             "invoice-{$reference}.pdf",
             ['Content-Type' => 'application/pdf'],
         );

@@ -182,11 +182,7 @@ class LeaseInvoiceController extends Controller
 
         $this->authorize('view', $lease);
 
-        if ($artifact->status($invoice) !== 'available') {
-            $artifact->ensureQueued($invoice);
-
-            return redirect()->route('leases.workspace.invoices.show', [$lease, $invoice]);
-        }
+        $path = $artifact->getOrGenerate($invoice);
 
         $reference = preg_replace(
             '/[^A-Za-z0-9_-]/',
@@ -195,7 +191,7 @@ class LeaseInvoiceController extends Controller
         );
 
         return Storage::disk('local')->download(
-            $artifact->path($invoice),
+            $path,
             "invoice-{$reference}.pdf",
             ['Content-Type' => 'application/pdf'],
         );

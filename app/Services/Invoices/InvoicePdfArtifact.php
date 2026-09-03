@@ -2,6 +2,7 @@
 
 namespace App\Services\Invoices;
 
+use App\Actions\Invoices\GenerateInvoicePdf;
 use App\Jobs\GenerateInvoicePdfArtifact;
 use App\Models\Invoice;
 use App\Models\Setting;
@@ -17,7 +18,7 @@ final class InvoicePdfArtifact
             return 'disabled';
         }
 
-        return $this->available($invoice) ? 'available' : 'pending';
+        return 'available';
     }
 
     public function available(Invoice $invoice): bool
@@ -32,13 +33,29 @@ final class InvoicePdfArtifact
 
     public function content(Invoice $invoice): ?string
     {
-        if (! $this->available($invoice)) {
-            $this->ensureQueued($invoice);
-
+        if (! Setting::get('invoice_pdf_enabled')) {
             return null;
         }
 
-        return Storage::disk(self::DISK)->get($this->path($invoice));
+        $path = $this->getOrGenerate($invoice);
+
+        return Storage::disk(self::DISK)->get($path);
+    }
+
+    public function getOrGenerate(Invoice $invoice): string
+    {
+        $fingerprint = $this->fingerprint($invoice);
+
+        if (Invoice::query()->whereKey($invoice->getKey())->value('invoice_pdf_fingerprint') === $fingerprint
+            && Storage::disk(self::DISK)->exists($this->path($invoice))) {
+            return $this->path($invoice);
+        }
+
+        $renderer = app(GenerateInvoicePdf::class);
+        $pdf = $renderer->execute($invoice);
+        $this->generate($invoice, $fingerprint, $pdf);
+
+        return $this->path($invoice);
     }
 
     public function ensureQueued(Invoice $invoice): void
