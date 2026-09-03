@@ -4,52 +4,287 @@
     <meta charset="UTF-8">
     <title>Invoice {{ $invoice->reference ?? $invoice->getKey() }}</title>
     <style>
-        @page { margin: 36px 42px; }
-        * { box-sizing: border-box; }
-        html, body { background: #ffffff; }
-        body { color: #172033; font-family: "DejaVu Sans", sans-serif; font-size: 11px; line-height: 1.5; margin: 0; }
-        h1, h2, p { margin: 0; }
-        h1 { font-size: 25px; letter-spacing: -0.4px; }
-        h2 { font-size: 12px; letter-spacing: 0.7px; text-transform: uppercase; }
-        table { border-collapse: collapse; width: 100%; }
-        thead { display: table-header-group; }
-        tr { page-break-inside: avoid; }
-        .muted { color: #667085; }
-        .right { text-align: right; }
-        .header td { padding-bottom: 26px; vertical-align: top; }
-        .brand { font-size: 16px; font-weight: 700; }
-        .status { border: 1px solid #667085; border-radius: 10px; display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 4px 9px; text-transform: uppercase; }
-        .meta { border: 1px solid #d8dee8; margin-bottom: 22px; }
-        .meta td { padding: 10px 12px; vertical-align: top; width: 33.33%; }
-        .meta td + td { border-left: 1px solid #d8dee8; }
-        .label { color: #667085; font-size: 9px; letter-spacing: 0.5px; margin-bottom: 3px; text-transform: uppercase; }
-        .value { font-weight: 600; }
-        .context { margin-bottom: 22px; }
-        .context td { padding: 2px 0; vertical-align: top; }
-        .context .key { color: #667085; padding-right: 16px; width: 110px; }
-        .bill-to { margin-bottom: 22px; }
-        .bill-to td { padding-top: 4px; vertical-align: top; }
-        .bill-to .name { font-size: 13px; font-weight: 700; }
-        .bill-to .detail { color: #667085; }
-        .items { margin-top: 8px; }
-        .items th { background: #f5f7fa; border-bottom: 1px solid #d8dee8; color: #667085; font-size: 9px; letter-spacing: 0.5px; padding: 9px 10px; text-align: left; text-transform: uppercase; }
-        .items th:last-child { text-align: right; }
-        .items td { border-bottom: 1px solid #e8ecf2; padding: 10px; vertical-align: top; }
-        .empty { color: #667085; text-align: center; }
-        .totals { margin-left: auto; margin-top: 16px; width: 280px; }
-        .totals td { padding: 5px 0 5px 12px; }
-        .totals td:first-child { color: #667085; }
-        .totals .outstanding td { border-top: 1px solid #172033; font-size: 14px; font-weight: 700; padding-top: 9px; }
-        .payment-details { margin-top: 28px; }
-        .payment-details h2 { margin-bottom: 8px; }
-        .payment-details .single { border: 1px solid #d8dee8; padding: 10px 12px; }
-        .payment-details .single td { padding: 2px 12px 2px 0; vertical-align: top; }
-        .payment-details .single td:last-child { padding-right: 0; }
-        .payments th { border-bottom: 1px solid #d8dee8; color: #667085; font-size: 9px; letter-spacing: 0.5px; padding: 7px 8px; text-align: left; text-transform: uppercase; }
-        .payments th:last-child, .payments td:last-child { text-align: right; }
-        .payments td { border-bottom: 1px solid #e8ecf2; padding: 8px; }
-        .payment-total td { border-bottom: 0; font-weight: 700; padding-top: 9px; }
-        .footer { border-top: 1px solid #d8dee8; color: #667085; font-size: 9px; margin-top: 30px; padding-top: 10px; }
+        @page {
+            margin: 32px 36px 36px 36px;
+            size: a4 portrait;
+        }
+        * {
+            box-sizing: border-box;
+        }
+        html, body {
+            background: #ffffff;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            color: #1e293b;
+            font-family: "DejaVu Sans", sans-serif;
+            font-size: 10px;
+            line-height: 1.45;
+        }
+
+        /* Typography */
+        h1, h2, h3, p { margin: 0; padding: 0; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .text-muted { color: #64748b; }
+        .text-dark { color: #0f172a; }
+        .font-bold { font-weight: 700; }
+        .font-semibold { font-weight: 600; }
+        .uppercase { text-transform: uppercase; }
+        .tabular { font-variant-numeric: tabular-nums; }
+
+        /* Tables & Layout */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        tr {
+            page-break-inside: avoid;
+        }
+
+        /* Top Brand Header */
+        .header-table {
+            border-bottom: 2px solid #0f172a;
+            padding-bottom: 18px;
+            margin-bottom: 20px;
+        }
+        .header-table td {
+            vertical-align: top;
+        }
+        .brand-title {
+            color: #0f172a;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .brand-property {
+            color: #2563eb;
+            font-size: 11px;
+            font-weight: 700;
+            margin-top: 3px;
+        }
+        .brand-address {
+            color: #64748b;
+            font-size: 9px;
+            line-height: 1.4;
+            margin-top: 4px;
+            max-width: 320px;
+        }
+        .invoice-title {
+            color: #0f172a;
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            line-height: 1;
+            text-transform: uppercase;
+        }
+        .invoice-ref {
+            color: #475569;
+            font-size: 12px;
+            font-weight: 700;
+            margin-top: 5px;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            border-radius: 12px;
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.6px;
+            margin-top: 8px;
+            padding: 4px 12px;
+            text-transform: uppercase;
+        }
+        .status-paid {
+            background-color: #dcfce7;
+            border: 1px solid #86efac;
+            color: #15803d;
+        }
+        .status-partial {
+            background-color: #e0e7ff;
+            border: 1px solid #a5b4fc;
+            color: #4338ca;
+        }
+        .status-pending {
+            background-color: #fef3c7;
+            border: 1px solid #fcd34d;
+            color: #b45309;
+        }
+        .status-overdue {
+            background-color: #fee2e2;
+            border: 1px solid #fca5a5;
+            color: #b91c1c;
+        }
+        .status-other {
+            background-color: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+        }
+
+        /* Two Column Info Section */
+        .info-card-table {
+            margin-bottom: 22px;
+        }
+        .info-card-table td {
+            vertical-align: top;
+            width: 50%;
+        }
+        .info-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px 14px;
+        }
+        .card-header {
+            color: #64748b;
+            font-size: 8.5px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        .tenant-name {
+            color: #0f172a;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .detail-row {
+            color: #475569;
+            font-size: 9.5px;
+            line-height: 1.5;
+        }
+        .detail-label {
+            color: #64748b;
+            display: inline-block;
+            width: 85px;
+        }
+        .detail-value {
+            color: #0f172a;
+            font-weight: 600;
+        }
+
+        /* Line Items Table */
+        .section-title {
+            color: #0f172a;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        .items-table {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+        .items-table th {
+            background-color: #f1f5f9;
+            border-bottom: 1px solid #cbd5e1;
+            color: #475569;
+            font-size: 8.5px;
+            font-weight: 700;
+            letter-spacing: 0.6px;
+            padding: 8px 12px;
+            text-align: left;
+            text-transform: uppercase;
+        }
+        .items-table td {
+            border-bottom: 1px solid #f1f5f9;
+            color: #1e293b;
+            font-size: 9.5px;
+            padding: 9px 12px;
+            vertical-align: middle;
+        }
+        .items-table tr:last-child td {
+            border-bottom: none;
+        }
+        .items-table .type-tag {
+            background: #f1f5f9;
+            border-radius: 4px;
+            color: #475569;
+            display: inline-block;
+            font-size: 8px;
+            font-weight: 600;
+            padding: 2px 6px;
+            text-transform: uppercase;
+        }
+
+        /* Totals Area */
+        .totals-container {
+            margin-bottom: 22px;
+        }
+        .totals-table {
+            margin-left: auto;
+            width: 280px;
+        }
+        .totals-table td {
+            font-size: 10px;
+            padding: 5px 8px;
+        }
+        .totals-label {
+            color: #64748b;
+            font-weight: 600;
+        }
+        .totals-value {
+            color: #0f172a;
+            font-weight: 700;
+            text-align: right;
+        }
+        .totals-highlight td {
+            border-top: 1.5px solid #0f172a;
+            font-size: 12px;
+            font-weight: 800;
+            padding: 8px 8px 6px 8px;
+        }
+        .totals-outstanding-zero {
+            color: #15803d;
+        }
+        .totals-outstanding-due {
+            color: #dc2626;
+        }
+
+        /* Payment Records Table */
+        .payments-table {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .payments-table th {
+            background-color: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            color: #64748b;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            padding: 6px 10px;
+            text-align: left;
+            text-transform: uppercase;
+        }
+        .payments-table td {
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+            font-size: 9px;
+            padding: 7px 10px;
+        }
+        .payments-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Footer Note */
+        .footer-table {
+            border-top: 1px solid #e2e8f0;
+            color: #94a3b8;
+            font-size: 8px;
+            margin-top: 24px;
+            padding-top: 12px;
+        }
+        .footer-table td {
+            vertical-align: top;
+        }
     </style>
 </head>
 <body>
@@ -81,6 +316,7 @@
 
         return trim($prefix . ' ' . $formatted);
     };
+
     $property = $invoice->lease?->unit?->property;
     $propertyAddress = collect([
         $property?->address,
@@ -88,137 +324,196 @@
         $property?->region?->name,
         $property?->postal_code,
     ])->filter()->implode(', ');
-    $status = match ($invoice->display_status) {
-        'partial' => 'Partially Paid',
-        'cancelled' => 'Cancelled',
-        'void' => 'Void',
-        default => str($invoice->display_status)->replace('_', ' ')->title(),
+
+    $rawStatus = $invoice->display_status ?? $invoice->status?->value ?? 'pending';
+    $statusClass = match ($rawStatus) {
+        'paid' => 'status-paid',
+        'partial' => 'status-partial',
+        'overdue' => 'status-overdue',
+        'pending' => 'status-pending',
+        default => 'status-other',
     };
+    $statusLabel = match ($rawStatus) {
+        'paid' => 'PAID',
+        'partial' => 'PARTIALLY PAID',
+        'overdue' => 'OVERDUE',
+        'pending' => 'PAYMENT PENDING',
+        'cancelled' => 'CANCELLED',
+        'void' => 'VOID',
+        default => strtoupper(str_replace('_', ' ', $rawStatus)),
+    };
+
     $tenant = $invoice->lease?->primaryTenant;
     $payments = $invoice->payments ?? collect();
     $generatedAt = now()->timezone('Asia/Jakarta')->locale($locale)->translatedFormat('d M Y, H:i');
+    $isPaidInFull = (float) $invoice->outstanding <= 0;
 @endphp
 
-<table class="header">
+<!-- Header Section -->
+<table class="header-table">
     <tr>
-        <td>
-            <p class="brand">{{ $siteName }}</p>
-            <p class="muted">{{ $property?->name ?? 'Property' }}</p>
-        </td>
-        <td class="right">
-            <h1>Invoice</h1>
-            <p>{{ $invoice->reference ?? '#'.$invoice->getKey() }}</p>
-            <p style="margin-top: 7px"><span class="status">{{ $status }}</span></p>
-        </td>
-    </tr>
-</table>
-
-<table class="meta">
-    <tr>
-        <td>
-            <p class="label">Issue date</p>
-            <p class="value">{{ $formatDate($invoice->created_at) }}</p>
-        </td>
-        <td>
-            <p class="label">Billing period</p>
-            <p class="value">{{ $formatDate($invoice->period_start) }} - {{ $formatDate($invoice->period_end) }}</p>
-        </td>
-        <td>
-            <p class="label">Due date</p>
-            <p class="value">{{ $formatDate($invoice->due_date) }}</p>
-        </td>
-    </tr>
-</table>
-
-<table class="bill-to">
-    <tr>
-        <td>
-            <h2>Bill To</h2>
-            <p class="name">{{ $tenant?->name ?? '-' }}</p>
-            @if ($tenant)
-                <p class="detail">Tenant ID {{ $tenant->getKey() }}</p>
-                @if ($tenant->user?->email)
-                    <p class="detail">{{ $tenant->user->email }}</p>
-                @endif
-                @if ($tenant->phone)
-                    <p class="detail">{{ $tenant->phone }}</p>
-                @endif
+        <td style="width: 60%">
+            <p class="brand-title">{{ $siteName }}</p>
+            @if ($property?->name)
+                <p class="brand-property">{{ $property->name }}</p>
+            @endif
+            @if ($propertyAddress !== '')
+                <p class="brand-address">{{ $propertyAddress }}</p>
             @endif
         </td>
+        <td class="text-right" style="width: 40%">
+            <h1 class="invoice-title">INVOICE</h1>
+            <p class="invoice-ref">{{ $invoice->reference ?? '#'.$invoice->getKey() }}</p>
+            <div style="margin-top: 6px;">
+                <span class="status-badge {{ $statusClass }}">{{ $statusLabel }}</span>
+            </div>
+        </td>
     </tr>
 </table>
 
-<table class="context">
-    <tr><td class="key">Lease</td><td class="value">{{ $invoice->lease?->reference ?? '-' }}</td></tr>
-    <tr><td class="key">Property</td><td class="value">{{ $property?->name ?? '-' }}</td></tr>
-    @if ($propertyAddress !== '')
-        <tr><td class="key">Address</td><td>{{ $propertyAddress }}</td></tr>
-    @endif
-    <tr><td class="key">Unit</td><td class="value">{{ $invoice->lease?->unit?->name ?? '-' }}</td></tr>
+<!-- Info Cards Section: Bill To & Particulars -->
+<table class="info-card-table">
+    <tr>
+        <td style="padding-right: 6px;">
+            <div class="info-box">
+                <p class="card-header">Billed To</p>
+                <p class="tenant-name">{{ $tenant?->name ?? 'Valued Tenant' }}</p>
+                <div class="detail-row">
+                    @if ($invoice->lease?->unit?->name)
+                        <span class="detail-label">Unit / Room:</span>
+                        <span class="detail-value">{{ $invoice->lease->unit->name }}</span><br>
+                    @endif
+                    @if ($invoice->lease?->reference)
+                        <span class="detail-label">Lease Ref:</span>
+                        <span class="detail-value">{{ $invoice->lease->reference }}</span><br>
+                    @endif
+                    @if ($tenant?->phone)
+                        <span class="detail-label">Phone:</span>
+                        <span class="detail-value">{{ $tenant->phone }}</span><br>
+                    @endif
+                    @if ($tenant?->user?->email)
+                        <span class="detail-label">Email:</span>
+                        <span class="detail-value">{{ $tenant->user->email }}</span>
+                    @endif
+                </div>
+            </div>
+        </td>
+        <td style="padding-left: 6px;">
+            <div class="info-box">
+                <p class="card-header">Invoice Details</p>
+                <div class="detail-row">
+                    <span class="detail-label">Issue Date:</span>
+                    <span class="detail-value">{{ $formatDate($invoice->created_at) }}</span><br>
+                    <span class="detail-label">Billing Period:</span>
+                    <span class="detail-value">{{ $formatDate($invoice->period_start) }} &ndash; {{ $formatDate($invoice->period_end) }}</span><br>
+                    <span class="detail-label">Due Date:</span>
+                    <span class="detail-value" style="{{ $rawStatus === 'overdue' ? 'color: #dc2626;' : '' }}">{{ $formatDate($invoice->due_date) }}</span><br>
+                    <span class="detail-label">Invoice Ref:</span>
+                    <span class="detail-value">{{ $invoice->reference ?? '#'.$invoice->getKey() }}</span>
+                </div>
+            </div>
+        </td>
+    </tr>
 </table>
 
-<h2>Line items</h2>
-<table class="items">
+<!-- Line Items Section -->
+<p class="section-title">Itemized Charges</p>
+<table class="items-table">
     <thead>
-        <tr><th>Description</th><th>Type</th><th>Amount</th></tr>
+        <tr>
+            <th style="width: 55%;">Description</th>
+            <th style="width: 20%;">Type</th>
+            <th class="text-right" style="width: 25%;">Amount</th>
+        </tr>
     </thead>
     <tbody>
     @forelse ($invoice->lineItems as $item)
         <tr>
-            <td>{{ $item->description }}</td>
-            <td>{{ str($item->type)->replace('_', ' ')->title() }}</td>
-            <td class="right">{{ $formatMoney($item->amount) }}</td>
+            <td>
+                <span class="font-semibold text-dark">{{ $item->description }}</span>
+            </td>
+            <td>
+                <span class="type-tag">{{ str($item->type)->replace('_', ' ') }}</span>
+            </td>
+            <td class="text-right font-semibold tabular">
+                {{ $formatMoney($item->amount) }}
+            </td>
         </tr>
     @empty
-        <tr><td class="empty" colspan="3">No itemized charges.</td></tr>
+        <tr>
+            <td class="text-center text-muted" colspan="3" style="padding: 16px;">
+                No itemized charges found for this invoice.
+            </td>
+        </tr>
     @endforelse
     </tbody>
 </table>
 
-<table class="totals">
-    <tr><td>Total</td><td class="right">{{ $formatMoney($invoice->total) }}</td></tr>
-    <tr><td>Amount paid</td><td class="right">{{ $formatMoney($invoice->amount_paid) }}</td></tr>
-    <tr class="outstanding"><td>Outstanding</td><td class="right">{{ $formatMoney($invoice->outstanding) }}</td></tr>
-</table>
+<!-- Totals Summary Section -->
+<div class="totals-container">
+    <table class="totals-table">
+        <tr>
+            <td class="totals-label">Subtotal / Total:</td>
+            <td class="totals-value tabular">{{ $formatMoney($invoice->total) }}</td>
+        </tr>
+        <tr>
+            <td class="totals-label">Amount Paid:</td>
+            <td class="totals-value tabular" style="color: #15803d;">
+                {{ $formatMoney($invoice->amount_paid) }}
+            </td>
+        </tr>
+        <tr class="totals-highlight">
+            <td class="totals-label" style="color: #0f172a;">Balance Due:</td>
+            <td class="totals-value tabular {{ $isPaidInFull ? 'totals-outstanding-zero' : 'totals-outstanding-due' }}">
+                {{ $formatMoney($invoice->outstanding) }}
+            </td>
+        </tr>
+    </table>
+</div>
 
+<!-- Payments Record (if any recorded) -->
 @if ($payments->isNotEmpty())
-    <section class="payment-details">
-        <h2>{{ $payments->count() === 1 ? 'Payment Details' : 'Payments' }}</h2>
-        @if ($payments->count() === 1)
-            @php($payment = $payments->first())
-            <table class="single">
+    <div style="margin-top: 10px;">
+        <p class="section-title">Payment History</p>
+        <table class="payments-table">
+            <thead>
                 <tr>
-                    <td><span class="label">Payment date</span><br>{{ $formatDate($payment->payment_date) }}</td>
-                    <td><span class="label">Method</span><br>{{ str($payment->payment_method)->replace('_', ' ')->title() }}</td>
-                    <td><span class="label">Reference</span><br>{{ $payment->reference_number ?? '-' }}</td>
-                    @if ($payment->verified_at)
-                        <td><span class="label">Verified at</span><br>{{ $formatDateTime($payment->verified_at) }}</td>
-                    @endif
+                    <th style="width: 25%;">Date</th>
+                    <th style="width: 25%;">Method</th>
+                    <th style="width: 25%;">Reference</th>
+                    <th class="text-right" style="width: 25%;">Amount</th>
                 </tr>
-            </table>
-        @else
-            <table class="payments">
-                <thead>
-                    <tr><th>Payment date</th><th>Method</th><th>Reference</th><th>Amount</th></tr>
-                </thead>
-                <tbody>
-                @foreach ($payments as $payment)
-                    <tr>
-                        <td>{{ $formatDate($payment->payment_date) }}</td>
-                        <td>{{ str($payment->payment_method)->replace('_', ' ')->title() }}</td>
-                        <td>{{ $payment->reference_number ?? '-' }}</td>
-                        <td>{{ $formatMoney($payment->amount) }}</td>
-                    </tr>
-                @endforeach
-                    <tr class="payment-total"><td colspan="3">Total paid</td><td>{{ $formatMoney($invoice->amount_paid) }}</td></tr>
-                    <tr class="payment-total"><td colspan="3">Outstanding</td><td>{{ $formatMoney($invoice->outstanding) }}</td></tr>
-                </tbody>
-            </table>
-        @endif
-    </section>
+            </thead>
+            <tbody>
+            @foreach ($payments as $payment)
+                <tr>
+                    <td>{{ $formatDate($payment->payment_date) }}</td>
+                    <td><span class="font-semibold">{{ str($payment->payment_method)->replace('_', ' ')->title() }}</span></td>
+                    <td class="text-muted">{{ $payment->reference_number ?? 'Manual Verification' }}</td>
+                    <td class="text-right font-semibold tabular" style="color: #15803d;">
+                        {{ $formatMoney($payment->amount) }}
+                    </td>
+                </tr>
+            @endforeach
+            </tbody>
+        </table>
+    </div>
 @endif
 
-<p class="footer">Generated on {{ $generatedAt }} WIB. This document reflects the invoice status at the time it was generated.</p>
+<!-- Footer Section -->
+<table class="footer-table">
+    <tr>
+        <td style="width: 60%">
+            <p class="font-semibold text-dark">{{ $siteName }}</p>
+            <p>Thank you for your business. For billing questions, please contact management.</p>
+        </td>
+        <td class="text-right" style="width: 40%">
+            <p>Generated on {{ $generatedAt }} WIB</p>
+            <p>This is a computer-generated document. No signature required.</p>
+        </td>
+    </tr>
+</table>
+
 @if ($autoPrint ?? false)
     <script>
         window.addEventListener('load', () => window.print());
