@@ -31,6 +31,8 @@ class UpdateUnitRequest extends FormRequest
             'capacity' => ['required', 'integer', 'min:0', 'max:255'],
             'status' => ['nullable', new Enum(UnitStatus::class)],
             'notes' => ['nullable', 'string', 'max:65535'],
+            'image' => ['nullable'],
+            'video' => ['nullable'],
             'rates' => ['nullable', 'array'],
             'rates.*.id' => ['nullable', 'integer', 'exists:unit_rates,id'],
             'rates.*.billing_interval' => ['required_with:rates', 'integer', 'min:1'],

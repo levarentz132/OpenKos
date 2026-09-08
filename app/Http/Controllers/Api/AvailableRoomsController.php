@@ -88,6 +88,22 @@ class AvailableRoomsController extends Controller
                 return $isStatusAvailable && empty($unit->has_active_lease);
             })->values();
 
+            $availableRoomsData = $availableUnits->map(function (Unit $unit) {
+                $rate = $unit->activeRates->first()?->amount;
+
+                return [
+                    'id' => $unit->id,
+                    'name' => $unit->name,
+                    'slug' => $unit->slug,
+                    'floor' => $unit->floor,
+                    'capacity' => $unit->capacity,
+                    'size_sqm' => $unit->size_sqm ? (float) $unit->size_sqm : null,
+                    'monthly_rate' => $rate ? (float) $rate : null,
+                    'image_url' => $unit->image_url,
+                    'video_url' => $unit->video_url,
+                ];
+            })->values()->all();
+
             $availableRoomNames = $availableUnits->pluck('name')->values()->all();
             $availableCount = count($availableRoomNames);
 
@@ -128,7 +144,10 @@ class AvailableRoomsController extends Controller
                 'kecamatan' => $property->kecamatan,
                 'phone' => $property->phone,
                 'image_url' => $property->image_url,
+                'image_urls' => $property->image_urls,
+                'video_url' => $property->video_url,
                 'available_rooms' => $availableRoomNames,
+                'available_room_details' => $availableRoomsData,
                 'availability_status' => $availabilityStatus,
                 'price_range' => $priceRange,
             ];

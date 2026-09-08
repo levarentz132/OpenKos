@@ -1,5 +1,6 @@
 import { useForm } from '@inertiajs/react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Image, Plus, Trash2, Upload, Video, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { InputError } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,16 @@ export default function UnitFormSheet({
 }) {
     const isEdit = Boolean(unit);
 
+    const imageInputRef = useRef<HTMLInputElement>(null);
+    const videoInputRef = useRef<HTMLInputElement>(null);
+
+    const [imagePreview, setImagePreview] = useState<string | null>(
+        unit?.image_url ?? null,
+    );
+    const [videoPreview, setVideoPreview] = useState<string | null>(
+        unit?.video_url ?? null,
+    );
+
     const { data, setData, submit, reset, processing, errors } = useForm({
         name: unit?.name ?? '',
         floor: unit?.floor ?? '',
@@ -51,6 +62,10 @@ export default function UnitFormSheet({
         status: unit?.status ?? 'available',
         description: unit?.description ?? '',
         notes: unit?.notes ?? '',
+        image: null as File | string | null,
+        remove_image: false,
+        video: (unit?.video ?? '') as File | string | null,
+        remove_video: false,
     });
 
     function handleOpenChange(next: boolean) {
@@ -58,6 +73,56 @@ export default function UnitFormSheet({
 
         if (!next) {
             reset();
+            setImagePreview(null);
+            setVideoPreview(null);
+        }
+    }
+
+    function handleImageFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (file) {
+            setData((prev) => ({
+                ...prev,
+                image: file,
+                remove_image: false,
+            }));
+            setImagePreview(URL.createObjectURL(file));
+        }
+    }
+
+    function handleRemoveImage() {
+        setData((prev) => ({
+            ...prev,
+            image: null,
+            remove_image: true,
+        }));
+        setImagePreview(null);
+        if (imageInputRef.current) {
+            imageInputRef.current.value = '';
+        }
+    }
+
+    function handleVideoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (file) {
+            setData((prev) => ({
+                ...prev,
+                video: file,
+                remove_video: false,
+            }));
+            setVideoPreview(URL.createObjectURL(file));
+        }
+    }
+
+    function handleRemoveVideo() {
+        setData((prev) => ({
+            ...prev,
+            video: '',
+            remove_video: true,
+        }));
+        setVideoPreview(null);
+        if (videoInputRef.current) {
+            videoInputRef.current.value = '';
         }
     }
 
@@ -130,6 +195,152 @@ export default function UnitFormSheet({
                                 placeholder="e.g. Unit 101"
                             />
                             <InputError message={errors.name} />
+                        </div>
+
+                        {/* Room Image Upload */}
+                        <div className="grid gap-2">
+                            <Label>Room Image</Label>
+                            {imagePreview ? (
+                                <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border bg-muted">
+                                    <img
+                                        src={imagePreview}
+                                        alt="Room preview"
+                                        className="size-full object-cover"
+                                    />
+                                    <div className="absolute top-2 right-2 flex gap-2">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="secondary"
+                                            className="h-8 shadow-sm"
+                                            onClick={() =>
+                                                imageInputRef.current?.click()
+                                            }
+                                        >
+                                            <Upload className="mr-1.5 size-3.5" />
+                                            Change
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="destructive"
+                                            className="size-8 shadow-sm"
+                                            onClick={handleRemoveImage}
+                                        >
+                                            <X className="size-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div
+                                    onClick={() =>
+                                        imageInputRef.current?.click()
+                                    }
+                                    className="flex aspect-video w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 p-4 transition hover:bg-muted/70"
+                                >
+                                    <Image className="size-8 text-muted-foreground" />
+                                    <div className="text-center text-xs text-muted-foreground">
+                                        <span className="font-semibold text-primary">
+                                            Click to upload room image
+                                        </span>
+                                        <p>JPG, PNG, WebP (max 10MB)</p>
+                                    </div>
+                                </div>
+                            )}
+                            <input
+                                ref={imageInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleImageFileChange}
+                            />
+                            <InputError message={errors.image} />
+                        </div>
+
+                        {/* Room Video Upload / Link */}
+                        <div className="grid gap-2">
+                            <Label>Room Video</Label>
+                            {videoPreview ? (
+                                <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border bg-black/90">
+                                    <video
+                                        src={videoPreview}
+                                        controls
+                                        className="size-full object-contain"
+                                    />
+                                    <div className="absolute top-2 right-2 flex gap-2">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="secondary"
+                                            className="h-8 shadow-sm"
+                                            onClick={() =>
+                                                videoInputRef.current?.click()
+                                            }
+                                        >
+                                            <Upload className="mr-1.5 size-3.5" />
+                                            Change
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="destructive"
+                                            className="size-8 shadow-sm"
+                                            onClick={handleRemoveVideo}
+                                        >
+                                            <X className="size-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <div
+                                        onClick={() =>
+                                            videoInputRef.current?.click()
+                                        }
+                                        className="flex aspect-video w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 p-4 transition hover:bg-muted/70"
+                                    >
+                                        <Video className="size-8 text-muted-foreground" />
+                                        <div className="text-center text-xs text-muted-foreground">
+                                            <span className="font-semibold text-primary">
+                                                Upload video file
+                                            </span>
+                                            <p>MP4, WebM (max 50MB)</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground">
+                                            Or enter video URL:
+                                        </span>
+                                        <Input
+                                            type="url"
+                                            placeholder="https://..."
+                                            value={
+                                                typeof data.video === 'string'
+                                                    ? data.video
+                                                    : ''
+                                            }
+                                            onChange={(e) => {
+                                                const url = e.target.value;
+                                                setData((prev) => ({
+                                                    ...prev,
+                                                    video: url,
+                                                    remove_video: false,
+                                                }));
+                                                setVideoPreview(url || null);
+                                            }}
+                                            className="h-8 text-xs"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                            <input
+                                ref={videoInputRef}
+                                type="file"
+                                accept="video/*"
+                                className="hidden"
+                                onChange={handleVideoFileChange}
+                            />
+                            <InputError message={errors.video} />
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">

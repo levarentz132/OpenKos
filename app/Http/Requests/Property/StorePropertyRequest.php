@@ -26,6 +26,9 @@ class StorePropertyRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:20', 'regex:/^\+[1-9]\d{6,14}$/'],
             'description' => ['nullable', 'string', 'max:65535'],
             'image' => ['nullable', 'image', 'max:5120'],
+            'images' => ['nullable', 'array'],
+            'images.*' => ['image', 'max:5120'],
+            'video' => ['nullable'],
             'is_active' => ['nullable', 'boolean'],
         ];
     }

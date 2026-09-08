@@ -26,7 +26,13 @@ class UpdatePropertyRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:20', 'regex:/^\+[1-9]\d{6,14}$/'],
             'description' => ['nullable', 'string', 'max:65535'],
             'image' => ['nullable', 'image', 'max:5120'],
+            'images' => ['nullable', 'array'],
+            'images.*' => ['image', 'max:5120'],
+            'removed_images' => ['nullable', 'array'],
+            'removed_images.*' => ['string'],
             'remove_image' => ['nullable', 'boolean'],
+            'video' => ['nullable'],
+            'remove_video' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ];
     }

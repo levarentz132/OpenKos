@@ -71,6 +71,10 @@ export type Property = {
     description?: string | null;
     image?: string | null;
     image_url?: string | null;
+    images?: string[] | null;
+    image_urls?: string[] | null;
+    video?: string | null;
+    video_url?: string | null;
     is_active?: boolean;
     city?: string | { id: number; name: string } | null;
     region?: { id: number; name: string } | null;
@@ -99,6 +103,10 @@ export type Unit = {
     property?: Property | null;
     status: string;
     notes: string | null;
+    image?: string | null;
+    video?: string | null;
+    image_url?: string | null;
+    video_url?: string | null;
     active_leases?: number;
     leases?: LeaseInfo[];
     active_rates?: UnitRate[];

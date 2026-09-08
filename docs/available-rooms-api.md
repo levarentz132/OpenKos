@@ -52,6 +52,11 @@ curl -X GET "http://localhost:8080/api/v1/available-rooms?kecamatan=Grogol" \
       "kecamatan": "Kebon Jeruk",
       "phone": "+6285773577956",
       "image_url": "http://dashboard.highlanderstay.com/storage/properties/J8GtTQJR78taVc09XUycYc0mdkLJoJzmPVg55Geg.jpg",
+      "image_urls": [
+        "http://dashboard.highlanderstay.com/storage/properties/J8GtTQJR78taVc09XUycYc0mdkLJoJzmPVg55Geg.jpg",
+        "http://dashboard.highlanderstay.com/storage/properties/photo2.jpg"
+      ],
+      "video_url": "http://dashboard.highlanderstay.com/storage/properties/videos/tour.mp4",
       "available_rooms": [],
       "availability_status": "Kamar full",
       "price_range": "Rp 1.400.000 - Rp 2.200.000/bulan"
@@ -104,7 +109,10 @@ When configured, pass the secret using any of the following:
 | `address_url` | `string\|null` | Google Maps or address URL link |
 | `kecamatan` | `string\|null` | District / Kecamatan of the property |
 | `phone` | `string\|null` | WhatsApp or phone contact number |
-| `image_url` | `string\|null` | Full accessible public URL of the property image banner |
+| `image_url` | `string\|null` | Full accessible public URL of the primary property image banner |
+| `image_urls` | `array<string>` | List of full accessible public URLs for all property gallery images |
+| `video_url` | `string\|null` | Full accessible public URL or link for the property tour video |
 | `available_rooms` | `array<string>` | List of currently vacant room numbers / names (e.g. `["301", "302"]`) |
+| `available_room_details` | `array<object>` | List of detailed vacant room objects with `id`, `name`, `slug`, `floor`, `capacity`, `size_sqm`, `monthly_rate`, `image_url`, `video_url` |
 | `availability_status` | `string` | Status in Indonesian (e.g. `"Ready 1 kamar"`, `"Belum ada kamar ready"`) |
 | `price_range` | `string\|null` | Formatted price or price range in IDR (e.g. `"Rp 1.400.000/bulan"`, `"Rp 1.200.000 - Rp 1.800.000/bulan"`) |

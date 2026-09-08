@@ -99,6 +99,23 @@ class PropertyController extends Controller
             $data['image'] = $request->file('image')->store('properties', 'public');
         }
 
+        $imagePaths = [];
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $imgFile) {
+                $imagePaths[] = $imgFile->store('properties', 'public');
+            }
+        }
+        if (! empty($imagePaths)) {
+            $data['images'] = $imagePaths;
+            if (empty($data['image'])) {
+                $data['image'] = $imagePaths[0];
+            }
+        }
+
+        if ($request->hasFile('video')) {
+            $data['video'] = $request->file('video')->store('properties/videos', 'public');
+        }
+
         $property = Property::create($data);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Property created.')]);
@@ -113,12 +130,12 @@ class PropertyController extends Controller
         $data = $request->validated();
 
         if ($request->boolean('remove_image')) {
-            if ($property->image) {
+            if ($property->image && ! str_starts_with($property->image, 'http')) {
                 Storage::disk('public')->delete($property->image);
             }
             $data['image'] = null;
         } elseif ($request->hasFile('image')) {
-            if ($property->image) {
+            if ($property->image && ! str_starts_with($property->image, 'http')) {
                 Storage::disk('public')->delete($property->image);
             }
             $data['image'] = $request->file('image')->store('properties', 'public');
@@ -126,7 +143,46 @@ class PropertyController extends Controller
             unset($data['image']);
         }
 
-        unset($data['remove_image']);
+        $existingImages = $property->images ?? [];
+        if (is_string($existingImages)) {
+            $existingImages = json_decode($existingImages, true) ?? [];
+        }
+
+        if (! empty($data['removed_images']) && is_array($data['removed_images'])) {
+            foreach ($data['removed_images'] as $pathToRemove) {
+                if (($key = array_search($pathToRemove, $existingImages)) !== false) {
+                    unset($existingImages[$key]);
+                    if (! str_starts_with($pathToRemove, 'http')) {
+                        Storage::disk('public')->delete($pathToRemove);
+                    }
+                }
+            }
+            $existingImages = array_values($existingImages);
+        }
+
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $imgFile) {
+                $existingImages[] = $imgFile->store('properties', 'public');
+            }
+        }
+
+        $data['images'] = array_values($existingImages);
+
+        if ($request->boolean('remove_video')) {
+            if ($property->video && ! str_starts_with($property->video, 'http')) {
+                Storage::disk('public')->delete($property->video);
+            }
+            $data['video'] = null;
+        } elseif ($request->hasFile('video')) {
+            if ($property->video && ! str_starts_with($property->video, 'http')) {
+                Storage::disk('public')->delete($property->video);
+            }
+            $data['video'] = $request->file('video')->store('properties/videos', 'public');
+        } elseif (! array_key_exists('video', $data)) {
+            unset($data['video']);
+        }
+
+        unset($data['remove_image'], $data['remove_video'], $data['removed_images']);
 
         $property->update($data);
 

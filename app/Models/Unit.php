@@ -6,12 +6,14 @@ use App\Concerns\Auditable;
 use App\Enums\UnitStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 #[Fillable([
@@ -24,10 +26,14 @@ use Illuminate\Support\Str;
     'capacity',
     'status',
     'notes',
+    'image',
+    'video',
 ])]
 class Unit extends Model
 {
     use Auditable, HasFactory, SoftDeletes;
+
+    protected $appends = ['image_url', 'video_url'];
 
     protected function casts(): array
     {
@@ -36,6 +42,30 @@ class Unit extends Model
             'capacity' => 'integer',
             'status' => UnitStatus::class,
         ];
+    }
+
+    /**
+     * Public storage or direct URL for the unit image.
+     */
+    protected function imageUrl(): Attribute
+    {
+        return Attribute::get(fn () => $this->image
+            ? (str_starts_with($this->image, 'http://') || str_starts_with($this->image, 'https://')
+                ? $this->image
+                : Storage::disk('public')->url($this->image))
+            : null);
+    }
+
+    /**
+     * Public storage or direct URL for the unit video.
+     */
+    protected function videoUrl(): Attribute
+    {
+        return Attribute::get(fn () => $this->video
+            ? (str_starts_with($this->video, 'http://') || str_starts_with($this->video, 'https://')
+                ? $this->video
+                : Storage::disk('public')->url($this->video))
+            : null);
     }
 
     protected static function booted(): void

@@ -29,6 +29,8 @@ class StoreUnitRequest extends FormRequest
             'capacity' => ['required', 'integer', 'min:0', 'max:255'],
             'status' => ['nullable', new Enum(UnitStatus::class)],
             'notes' => ['nullable', 'string', 'max:65535'],
+            'image' => ['nullable'],
+            'video' => ['nullable'],
             'rates' => ['nullable', 'array'],
             'rates.*.billing_interval' => ['required_with:rates', 'integer', 'min:1'],
             'rates.*.billing_unit' => ['required_with:rates', 'string', Rule::in(BillingUnit::values())],

@@ -77,6 +77,35 @@ export default function UnitDetailSheet({
                                 />
                             </section>
 
+                            {/* Room Media */}
+                            {(unit.image_url || unit.video_url) && (
+                                <section>
+                                    <h3 className="mb-3 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                                        Room Media
+                                    </h3>
+                                    <div className="space-y-3">
+                                        {unit.image_url && (
+                                            <div className="overflow-hidden rounded-lg border bg-muted">
+                                                <img
+                                                    src={unit.image_url}
+                                                    alt={unit.name}
+                                                    className="aspect-video w-full object-cover"
+                                                />
+                                            </div>
+                                        )}
+                                        {unit.video_url && (
+                                            <div className="overflow-hidden rounded-lg border bg-black">
+                                                <video
+                                                    src={unit.video_url}
+                                                    controls
+                                                    className="aspect-video w-full object-contain"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                </section>
+                            )}
+
                             {/* Unit Details */}
                             <section>
                                 <h3 className="mb-3 text-xs font-medium tracking-wider text-muted-foreground uppercase">

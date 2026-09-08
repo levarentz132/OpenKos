@@ -35,6 +35,7 @@ export default function PropertyDetailSheet({
     onEdit: () => void;
 }) {
     const [archiveConfirm, setArchiveConfirm] = useState(false);
+    const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
 
     function archive() {
         if (!property) {
@@ -68,6 +69,13 @@ export default function PropertyDetailSheet({
         .filter(Boolean)
         .join(', ');
 
+    const galleryUrls =
+        property?.image_urls && property.image_urls.length > 0
+            ? property.image_urls
+            : property?.image_url
+              ? [property.image_url]
+              : [];
+
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent
@@ -84,12 +92,57 @@ export default function PropertyDetailSheet({
                 {property && (
                     <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-4 pt-4 pb-6">
                         <div className="space-y-5">
-                            {property.image_url && (
-                                <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-muted">
-                                    <img
-                                        src={property.image_url}
-                                        alt={property.name}
-                                        className="size-full object-cover"
+                            {galleryUrls.length > 0 && (
+                                <div className="space-y-2">
+                                    <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-muted">
+                                        <img
+                                            src={
+                                                galleryUrls[
+                                                    activeGalleryIndex
+                                                ] ?? galleryUrls[0]
+                                            }
+                                            alt={property.name}
+                                            className="size-full object-cover transition-all"
+                                        />
+                                    </div>
+                                    {galleryUrls.length > 1 && (
+                                        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                                            {galleryUrls.map((url, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setActiveGalleryIndex(
+                                                            idx,
+                                                        )
+                                                    }
+                                                    className={`relative aspect-square size-14 shrink-0 overflow-hidden rounded-md border transition-all ${
+                                                        activeGalleryIndex ===
+                                                        idx
+                                                            ? 'ring-2 ring-primary border-transparent'
+                                                            : 'opacity-70 hover:opacity-100'
+                                                    }`}
+                                                >
+                                                    <img
+                                                        src={url}
+                                                        alt={`Thumbnail ${
+                                                            idx + 1
+                                                        }`}
+                                                        className="size-full object-cover"
+                                                    />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {property.video_url && (
+                                <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-black">
+                                    <video
+                                        src={property.video_url}
+                                        controls
+                                        className="size-full object-contain"
                                     />
                                 </div>
                             )}

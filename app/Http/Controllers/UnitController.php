@@ -20,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Inertia\Inertia;
@@ -95,7 +96,7 @@ class UnitController extends Controller
                 Column::make('capacity', 'Capacity')->sortable(),
             ])
             ->filters([
-                Filter::select('status', 'Status', ['available', 'occupied', 'employee', 'vendor', 'maintenance', 'unavailable', 'archived'])
+                Filter::select('status', 'Status', ['available', 'occupied', 'maintenance', 'unavailable', 'archived'])
                     ->query(fn (Builder $q, string $value) => match ($value) {
                         'archived' => null,
                         default => $q->where('status', $value),
@@ -146,7 +147,17 @@ class UnitController extends Controller
     {
         $this->authorize('create', [Unit::class, $property]);
 
-        $unit = $property->units()->create($request->validated());
+        $data = $request->validated();
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')->store('units/images', 'public');
+        }
+
+        if ($request->hasFile('video')) {
+            $data['video'] = $request->file('video')->store('units/videos', 'public');
+        }
+
+        $unit = $property->units()->create($data);
 
         if ($request->filled('rates')) {
             foreach ($request->rates as $rate) {
@@ -168,7 +179,39 @@ class UnitController extends Controller
     {
         $this->authorize('update', $unit);
 
-        $unit->update($request->validated());
+        $data = $request->validated();
+
+        if ($request->boolean('remove_image')) {
+            if ($unit->image && ! str_starts_with($unit->image, 'http')) {
+                Storage::disk('public')->delete($unit->image);
+            }
+            $data['image'] = null;
+        } elseif ($request->hasFile('image')) {
+            if ($unit->image && ! str_starts_with($unit->image, 'http')) {
+                Storage::disk('public')->delete($unit->image);
+            }
+            $data['image'] = $request->file('image')->store('units/images', 'public');
+        } elseif (! array_key_exists('image', $data)) {
+            unset($data['image']);
+        }
+
+        if ($request->boolean('remove_video')) {
+            if ($unit->video && ! str_starts_with($unit->video, 'http')) {
+                Storage::disk('public')->delete($unit->video);
+            }
+            $data['video'] = null;
+        } elseif ($request->hasFile('video')) {
+            if ($unit->video && ! str_starts_with($unit->video, 'http')) {
+                Storage::disk('public')->delete($unit->video);
+            }
+            $data['video'] = $request->file('video')->store('units/videos', 'public');
+        } elseif (! array_key_exists('video', $data)) {
+            unset($data['video']);
+        }
+
+        unset($data['remove_image'], $data['remove_video']);
+
+        $unit->update($data);
 
         if ($request->has('rates')) {
             $keepIds = [];

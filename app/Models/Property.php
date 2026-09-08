@@ -31,6 +31,8 @@ use Illuminate\Support\Str;
     'phone',
     'description',
     'image',
+    'images',
+    'video',
     'is_active',
 ])]
 class Property extends Model
@@ -39,12 +41,13 @@ class Property extends Model
 
     protected array $auditableMask = ['phone'];
 
-    protected $appends = ['type_label', 'image_url'];
+    protected $appends = ['type_label', 'image_url', 'image_urls', 'video_url'];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'images' => 'array',
         ];
     }
 
@@ -69,12 +72,64 @@ class Property extends Model
     }
 
     /**
-     * Public storage URL for the property image.
+     * Public storage URL for the primary property image.
      */
     protected function imageUrl(): Attribute
     {
-        return Attribute::get(fn () => $this->image
-            ? Storage::disk('public')->url($this->image)
+        return Attribute::get(function () {
+            if ($this->image) {
+                return str_starts_with($this->image, 'http://') || str_starts_with($this->image, 'https://')
+                    ? $this->image
+                    : Storage::disk('public')->url($this->image);
+            }
+
+            if (! empty($this->images) && is_array($this->images) && count($this->images) > 0) {
+                $first = $this->images[0];
+
+                return str_starts_with($first, 'http://') || str_starts_with($first, 'https://')
+                    ? $first
+                    : Storage::disk('public')->url($first);
+            }
+
+            return null;
+        });
+    }
+
+    /**
+     * Public storage or direct URLs for all property images.
+     */
+    protected function imageUrls(): Attribute
+    {
+        return Attribute::get(function () {
+            $urls = [];
+
+            if (! empty($this->images) && is_array($this->images)) {
+                foreach ($this->images as $path) {
+                    if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+                        $urls[] = $path;
+                    } else {
+                        $urls[] = Storage::disk('public')->url($path);
+                    }
+                }
+            }
+
+            if (empty($urls) && $this->image_url) {
+                $urls[] = $this->image_url;
+            }
+
+            return array_values(array_unique($urls));
+        });
+    }
+
+    /**
+     * Public storage or direct URL for the property video.
+     */
+    protected function videoUrl(): Attribute
+    {
+        return Attribute::get(fn () => $this->video
+            ? (str_starts_with($this->video, 'http://') || str_starts_with($this->video, 'https://')
+                ? $this->video
+                : Storage::disk('public')->url($this->video))
             : null);
     }
 
