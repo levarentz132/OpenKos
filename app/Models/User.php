@@ -19,7 +19,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'phone', 'phone_verified_at', 'password', 'is_active', 'invited_at', 'last_login_at'])]
+#[Fillable(['name', 'email', 'email_verified_at', 'phone', 'phone_verified_at', 'password', 'is_active', 'invited_at', 'last_login_at'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 {

@@ -13,7 +13,7 @@ beforeEach(function () {
     });
 });
 
-test('api user can register with name, email, phone, and password', function () {
+test('api registration sends OTP and does not create database records until verified', function () {
     $response = $this->postJson('/api/v1/auth/register', [
         'name' => 'John Doe',
         'email' => 'john@example.com',
@@ -26,20 +26,50 @@ test('api user can register with name, email, phone, and password', function () 
     $response->assertCreated()
         ->assertJsonStructure([
             'message',
-            'token',
+            'registration_token',
             'otp_sent',
-            'user' => [
-                'id',
-                'name',
-                'email',
-                'phone',
-                'phone_verified',
-                'phone_verified_at',
-                'is_active',
-                'has_tenant_profile',
-            ],
+            'otp_channel',
+            'target',
         ]);
 
+    $regToken = $response->json('registration_token');
+    expect($regToken)->toStartWith('reg_');
+
+    // CRITICAL: Ensure NO user and NO tenant were created in the database yet
+    $this->assertDatabaseMissing('users', [
+        'email' => 'john@example.com',
+    ]);
+    $this->assertDatabaseMissing('tenants', [
+        'name' => 'John Doe',
+    ]);
+
+    // Inspect cached pending registration
+    $pending = \Illuminate\Support\Facades\Cache::get("pending_reg_{$regToken}");
+    expect($pending)->not->toBeNull();
+    $code = $pending['otp'];
+
+    // 1. Verifying with wrong OTP fails and still leaves database empty
+    $failResponse = $this->postJson('/api/v1/auth/otp/verify', [
+        'registration_token' => $regToken,
+        'code' => '000000',
+    ]);
+    $failResponse->assertStatus(422);
+    $this->assertDatabaseMissing('users', ['email' => 'john@example.com']);
+
+    // 2. Verifying with correct OTP creates the user and tenant in database
+    $verifyResponse = $this->postJson('/api/v1/auth/otp/verify', [
+        'registration_token' => $regToken,
+        'code' => $code,
+    ]);
+
+    $verifyResponse->assertCreated()
+        ->assertJsonPath('verified', true)
+        ->assertJsonPath('phone_verified', true)
+        ->assertJsonPath('user.email', 'john@example.com');
+
+    expect($verifyResponse->json('token'))->not->toBeNull();
+
+    // Now records exist in the database!
     $this->assertDatabaseHas('users', [
         'email' => 'john@example.com',
         'phone' => '6281234567890',
@@ -47,7 +77,7 @@ test('api user can register with name, email, phone, and password', function () 
 
     $user = User::where('email', 'john@example.com')->first();
     expect($user->hasTenantProfile())->toBeTrue();
-    expect($user->hasVerifiedPhone())->toBeFalse();
+    expect($user->hasVerifiedPhone())->toBeTrue();
 });
 
 test('registration fails if email belongs to an admin account', function () {
@@ -199,7 +229,7 @@ test('user can send and verify phone OTP', function () {
     expect($user->phone_verified_at)->not->toBeNull();
 });
 
-test('user can register and choose email otp channel', function () {
+test('user can register and choose email otp channel and verify to create account', function () {
     \Illuminate\Support\Facades\Mail::fake();
 
     $response = $this->postJson('/api/v1/auth/register', [
@@ -214,9 +244,27 @@ test('user can register and choose email otp channel', function () {
         ->assertJsonPath('otp_sent', true)
         ->assertJsonPath('otp_channel', 'email');
 
+    // Database is empty before verification
+    $this->assertDatabaseMissing('users', ['email' => 'sarah@example.com']);
+
+    $regToken = $response->json('registration_token');
+    $pending = Cache::get("pending_reg_{$regToken}");
+    expect($pending)->not->toBeNull();
+    $code = $pending['otp'];
+
+    // Verify OTP creates the user with email_verified_at set
+    $verifyResponse = $this->postJson('/api/v1/auth/otp/verify', [
+        'registration_token' => $regToken,
+        'code' => $code,
+    ]);
+
+    $verifyResponse->assertCreated()
+        ->assertJsonPath('verified', true)
+        ->assertJsonPath('email_verified', true);
+
+    $this->assertDatabaseHas('users', ['email' => 'sarah@example.com']);
     $user = User::where('email', 'sarah@example.com')->first();
-    $cached = Cache::get("otp_{$user->id}_email");
-    expect($cached)->not->toBeNull();
+    expect($user->email_verified_at)->not->toBeNull();
 });
 
 test('user can send and verify email OTP via dual-channel endpoint', function () {

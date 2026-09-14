@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api\v1;
 
+use App\Http\Controllers\Api\v1\Concerns\FormatsUserResponse;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\LoginRequest;
 use App\Http\Requests\Api\RegisterRequest;
-use App\Models\Tenant;
 use App\Models\User;
 use App\Services\OtpVerificationService;
 use Illuminate\Http\JsonResponse;
@@ -15,61 +15,33 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    use FormatsUserResponse;
+
     public function __construct(
         protected OtpVerificationService $otpService,
     ) {}
 
     /**
-     * Register a new account via API.
+     * Staged registration via API.
+     * The User and Tenant accounts are NOT created in the database until the OTP is verified.
      */
     public function register(RegisterRequest $request): JsonResponse
     {
         $validated = $request->validated();
+        $otpChannel = $validated['otp_channel'] ?? (! empty($validated['phone']) ? 'whatsapp' : 'email');
 
-        $phone = ! empty($validated['phone'])
-            ? $this->otpService->normalizePhoneNumber($validated['phone'])
-            : null;
-
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => strtolower(trim($validated['email'])),
-            'phone' => $phone,
-            'password' => $validated['password'],
-            'is_active' => true,
-        ]);
-
-        // Automatically create a tenant profile for mobile/app users
-        Tenant::create([
-            'user_id' => $user->id,
-            'name' => $user->name,
-            'phone' => $phone ?? '',
-            'is_active' => true,
-        ]);
-
-        $deviceName = $validated['device_name'] ?? 'api-client';
-        $token = $user->createToken($deviceName)->plainTextToken;
-
-        $otpChannel = $validated['otp_channel'] ?? (! empty($phone) ? 'whatsapp' : 'email');
-        $otpSent = false;
-        $otpResult = null;
-        try {
-            $otpResult = $this->otpService->sendOtp($user, $otpChannel);
-            $otpSent = $otpResult['sent'] ?? true;
-        } catch (\Throwable) {
-            // If notification fails in dev/test, registration still succeeds
-            $otpSent = false;
-        }
+        $result = $this->otpService->createPendingRegistration($validated, $otpChannel);
 
         $response = [
-            'message' => 'Account registered successfully. Please verify your OTP code to complete registration.',
-            'token' => $token,
-            'otp_sent' => $otpSent,
-            'otp_channel' => $otpChannel,
-            'user' => $this->formatUserResponse($user),
+            'message' => 'Verification code sent. Please submit the OTP code to complete registration.',
+            'registration_token' => $result['registration_token'],
+            'otp_sent' => $result['sent'],
+            'otp_channel' => $result['channel'],
+            'target' => $result['target'],
         ];
 
-        if (config('app.debug') && isset($otpResult['debug_otp'])) {
-            $response['debug_otp'] = $otpResult['debug_otp'];
+        if (config('app.debug') && isset($result['debug_otp'])) {
+            $response['debug_otp'] = $result['debug_otp'];
         }
 
         return response()->json($response, 201);
@@ -146,31 +118,5 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Logged out successfully.',
         ]);
-    }
-
-    /**
-     * Format consistent user response with phone and email verification metadata.
-     */
-    protected function formatUserResponse(User $user): array
-    {
-        return [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'email_verified' => ! is_null($user->email_verified_at),
-            'email_verified_at' => $user->email_verified_at?->toIso8601String(),
-            'phone' => $user->phone,
-            'phone_verified' => $user->hasVerifiedPhone(),
-            'phone_verified_at' => $user->phone_verified_at?->toIso8601String(),
-            'is_active' => $user->is_active,
-            'roles' => $user->roles->pluck('name')->values()->all(),
-            'has_tenant_profile' => $user->hasTenantProfile(),
-            'tenant' => $user->tenant ? [
-                'id' => $user->tenant->id,
-                'name' => $user->tenant->name,
-                'phone' => $user->tenant->phone,
-                'id_card_number' => $user->tenant->id_card_number,
-            ] : null,
-        ];
     }
 }

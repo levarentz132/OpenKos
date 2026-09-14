@@ -77,31 +77,16 @@ Registers a new user, creates their tenant profile, and immediately generates an
 #### Successful Response (`201 Created`)
 ```json
 {
-  "message": "Account registered successfully. Please verify your OTP code to complete registration.",
-  "token": "1|2A3b4C5d6E...",
+  "message": "Verification code sent. Please submit the OTP code to complete registration.",
+  "registration_token": "reg_a1b2c3d4e5f6g7h8...",
   "otp_sent": true,
   "otp_channel": "whatsapp",
-  "user": {
-    "id": 15,
-    "name": "Jane Doe",
-    "email": "jane@example.com",
-    "email_verified": false,
-    "email_verified_at": null,
-    "phone": "6281234567890",
-    "phone_verified": false,
-    "phone_verified_at": null,
-    "is_active": true,
-    "roles": [],
-    "has_tenant_profile": true,
-    "tenant": {
-      "id": 15,
-      "name": "Jane Doe",
-      "phone": "6281234567890",
-      "id_card_number": null
-    }
-  }
+  "target": "6281234567890"
 }
 ```
+> [!NOTE]
+> **Anti-Spam Protection**: The `User` and `Tenant` database records are **NOT** inserted into the database at this step. This ensures that unverified or abandoned registrations do not pollute your database. Once the user submits the correct OTP via `/api/v1/auth/otp/verify`, their account and tenant profile are created.
+
 *(In debug/development mode, `"debug_otp": "123456"` is also included in the response for convenience)*.
 
 #### Validation Errors (`422 Unprocessable Entity`)

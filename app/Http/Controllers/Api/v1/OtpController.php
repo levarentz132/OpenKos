@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\v1;
 
+use App\Http\Controllers\Api\v1\Concerns\FormatsUserResponse;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\OtpVerificationService;
@@ -11,23 +12,52 @@ use Illuminate\Validation\ValidationException;
 
 class OtpController extends Controller
 {
+    use FormatsUserResponse;
+
     public function __construct(
         protected OtpVerificationService $otpService,
     ) {}
 
     /**
      * Send or resend OTP verification code via WhatsApp or Email.
-     * Accessible with Bearer token OR by specifying login/email/phone.
+     * Accessible with Bearer token, registration_token, OR login/email/phone.
      */
     public function send(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'channel' => ['required', 'string', 'in:whatsapp,email'],
+            'registration_token' => ['nullable', 'string'],
             'login' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:25'],
             'email' => ['nullable', 'string', 'email', 'max:255'],
         ]);
 
+        $identifier = $validated['registration_token']
+            ?? $validated['login']
+            ?? $validated['phone']
+            ?? $validated['email']
+            ?? null;
+
+        // 1. Resend for pending registration session
+        if ($identifier && $this->otpService->hasPendingRegistration($identifier)) {
+            $result = $this->otpService->resendPendingRegistrationOtp($identifier, $validated['channel']);
+
+            $response = [
+                'message' => "Verification code sent successfully via {$result['channel']}.",
+                'registration_token' => $result['registration_token'],
+                'channel' => $result['channel'],
+                'target' => $result['target'],
+                'sent' => $result['sent'],
+            ];
+
+            if (config('app.debug') && isset($result['debug_otp'])) {
+                $response['debug_otp'] = $result['debug_otp'];
+            }
+
+            return response()->json($response);
+        }
+
+        // 2. Resend for existing tenant account
         $user = $this->resolveTenantUser($request, $validated);
 
         $channel = $validated['channel'];
@@ -53,12 +83,14 @@ class OtpController extends Controller
 
     /**
      * Verify OTP code submitted by the tenant.
-     * Accessible with Bearer token OR by specifying login/email/phone + code.
+     * Completes registration if verifying a pending registration session,
+     * or updates phone_verified_at / email_verified_at for existing users.
      */
     public function verify(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'code' => ['required', 'string', 'min:4', 'max:10'],
+            'registration_token' => ['nullable', 'string'],
             'channel' => ['nullable', 'string', 'in:whatsapp,email'],
             'login' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:25'],
@@ -66,6 +98,31 @@ class OtpController extends Controller
             'device_name' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $identifier = $validated['registration_token']
+            ?? $validated['login']
+            ?? $validated['phone']
+            ?? $validated['email']
+            ?? null;
+
+        // 1. Verify pending registration session and create database records
+        if ($identifier && $this->otpService->hasPendingRegistration($identifier)) {
+            $result = $this->otpService->verifyPendingRegistration($identifier, $validated['code']);
+            $freshUser = $result['user'];
+            $deviceName = $validated['device_name'] ?? 'api-client';
+            $token = $freshUser->createToken($deviceName)->plainTextToken;
+
+            return response()->json([
+                'message' => 'Account registered and verified successfully.',
+                'verified' => true,
+                'token' => $token,
+                'channel' => $result['channel'],
+                'phone_verified' => $freshUser->hasVerifiedPhone(),
+                'email_verified' => ! is_null($freshUser->email_verified_at),
+                'user' => $this->formatUserResponse($freshUser),
+            ], 201);
+        }
+
+        // 2. Verify existing user
         $user = $this->resolveTenantUser($request, $validated);
 
         $result = $this->otpService->verifyOtp(
@@ -85,15 +142,7 @@ class OtpController extends Controller
             'channel' => $result['channel'],
             'phone_verified' => $freshUser->hasVerifiedPhone(),
             'email_verified' => ! is_null($freshUser->email_verified_at),
-            'user' => [
-                'id' => $freshUser->id,
-                'name' => $freshUser->name,
-                'email' => $freshUser->email,
-                'phone' => $freshUser->phone,
-                'phone_verified' => $freshUser->hasVerifiedPhone(),
-                'email_verified' => ! is_null($freshUser->email_verified_at),
-                'is_active' => $freshUser->is_active,
-            ],
+            'user' => $this->formatUserResponse($freshUser),
         ]);
     }
 
@@ -112,7 +161,7 @@ class OtpController extends Controller
 
             if (blank($identifier)) {
                 throw ValidationException::withMessages([
-                    'login' => ['Please provide your email or phone number, or authenticate with an API token.'],
+                    'login' => ['Please provide your email, phone number, or registration token.'],
                 ]);
             }
 
@@ -126,7 +175,7 @@ class OtpController extends Controller
 
             if (! $user) {
                 throw ValidationException::withMessages([
-                    'login' => ['No tenant account found matching these details.'],
+                    'login' => ['No account found with this email or phone number.'],
                 ]);
             }
         }
