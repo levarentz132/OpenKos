@@ -71,6 +71,12 @@ OpenKOS has a plugin system that lets you register navigation items, dashboard p
 
 See [docs/platform.md](docs/platform.md) for the full guide, including manifests, versioning, registries, and the example plugin.
 
+## API Documentation
+
+- **[Tenant Authentication & OTP API](docs/README-OTP-API.md)** — Staged tenant registration, dual-channel WhatsApp/Email OTP, login, and account deletion.
+- **[Tenant Portal API](docs/tenant-api.md)** — Leases, invoices, online payments, and maintenance tickets.
+- **[Available Rooms API](docs/available-rooms-api.md)** — Public room availability and property search.
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) for layer conventions, data flow, domain model, state machines, and testing patterns.
