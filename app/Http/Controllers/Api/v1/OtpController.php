@@ -43,13 +43,26 @@ class OtpController extends Controller
         if ($identifier && $this->otpService->hasPendingRegistration($identifier)) {
             $result = $this->otpService->resendPendingRegistrationOtp($identifier, $validated['channel']);
 
+            $message = $result['sent']
+                ? "Verification code sent successfully via {$result['channel']}."
+                : "Failed to send verification code via {$result['channel']} (" . ($result['delivery_error'] ?? 'delivery error') . ').';
+
             $response = [
-                'message' => "Verification code sent successfully via {$result['channel']}.",
+                'message' => $message,
                 'registration_token' => $result['registration_token'],
                 'channel' => $result['channel'],
                 'target' => $result['target'],
                 'sent' => $result['sent'],
+                'driver' => $result['driver'] ?? null,
             ];
+
+            if (! empty($result['delivery_warning'])) {
+                $response['delivery_warning'] = $result['delivery_warning'];
+            }
+
+            if (! empty($result['delivery_error'])) {
+                $response['delivery_error'] = $result['delivery_error'];
+            }
 
             if (config('app.debug') && isset($result['debug_otp'])) {
                 $response['debug_otp'] = $result['debug_otp'];
@@ -68,12 +81,25 @@ class OtpController extends Controller
 
         $result = $this->otpService->sendOtp($user, $channel, $target);
 
+        $message = $result['sent']
+            ? "Verification code sent successfully via {$channel}."
+            : "Failed to send verification code via {$channel} (" . ($result['delivery_error'] ?? 'delivery error') . ').';
+
         $response = [
-            'message' => "Verification code sent successfully via {$channel}.",
+            'message' => $message,
             'channel' => $result['channel'],
             'target' => $result['target'],
             'sent' => $result['sent'] ?? true,
+            'driver' => $result['driver'] ?? null,
         ];
+
+        if (! empty($result['delivery_warning'])) {
+            $response['delivery_warning'] = $result['delivery_warning'];
+        }
+
+        if (! empty($result['delivery_error'])) {
+            $response['delivery_error'] = $result['delivery_error'];
+        }
 
         if (config('app.debug') && isset($result['debug_otp'])) {
             $response['debug_otp'] = $result['debug_otp'];

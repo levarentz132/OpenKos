@@ -580,4 +580,41 @@ test('check-status returns unregistered for unknown credentials', function () {
         ->assertJsonPath('status', 'unregistered');
 });
 
+test('registration returns delivery_warning when whatsapp driver is log', function () {
+    \App\Models\Setting::set('whatsapp_driver', 'log');
 
+    $response = $this->postJson('/api/v1/auth/register', [
+        'name' => 'Log Test User',
+        'email' => 'loguser@example.com',
+        'phone' => '081299998888',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+        'otp_channel' => 'whatsapp',
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('otp_sent', true)
+        ->assertJsonPath('driver', 'log')
+        ->assertJsonStructure(['delivery_warning']);
+
+    expect($response->json('delivery_warning'))->toContain('WhatsApp driver is set to [log]');
+});
+
+test('registration gracefully reports delivery_error when dispatch fails', function () {
+    $this->mock(WhatsAppManager::class, function (MockInterface $mock) {
+        $mock->shouldReceive('send')->andThrow(new \RuntimeException('WABA connection timeout or invalid token'));
+    });
+
+    $response = $this->postJson('/api/v1/auth/register', [
+        'name' => 'Failing Test User',
+        'email' => 'failuser@example.com',
+        'phone' => '081277776666',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+        'otp_channel' => 'whatsapp',
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('otp_sent', false)
+        ->assertJsonPath('delivery_error', 'WABA connection timeout or invalid token');
+});

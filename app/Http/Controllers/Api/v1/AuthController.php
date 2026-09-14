@@ -34,13 +34,26 @@ class AuthController extends Controller
 
         $result = $this->otpService->createPendingRegistration($validated, $otpChannel);
 
+        $message = $result['sent']
+            ? 'Verification code sent. Please submit the OTP code to complete registration.'
+            : 'Registration session created, but OTP delivery failed (' . ($result['delivery_error'] ?? 'delivery error') . '). Check configuration or resend code.';
+
         $response = [
-            'message' => 'Verification code sent. Please submit the OTP code to complete registration.',
+            'message' => $message,
             'registration_token' => $result['registration_token'],
             'otp_sent' => $result['sent'],
             'otp_channel' => $result['channel'],
             'target' => $result['target'],
+            'driver' => $result['driver'] ?? null,
         ];
+
+        if (! empty($result['delivery_warning'])) {
+            $response['delivery_warning'] = $result['delivery_warning'];
+        }
+
+        if (! empty($result['delivery_error'])) {
+            $response['delivery_error'] = $result['delivery_error'];
+        }
 
         if (config('app.debug') && isset($result['debug_otp'])) {
             $response['debug_otp'] = $result['debug_otp'];

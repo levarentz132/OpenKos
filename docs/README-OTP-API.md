@@ -511,3 +511,67 @@ curl -X DELETE "https://dashboard.highlanderstay.com/api/v1/auth/me" \
   -H "Accept: application/json" \
   -H "Authorization: Bearer PASTE_BEARER_TOKEN_HERE"
 ```
+
+---
+
+## 8. Delivery Troubleshooting & Gateway Configuration
+
+If OTP codes are not arriving at your target WhatsApp phone or Email inbox, inspect the following:
+
+### 8.1 Diagnostics in API Responses
+
+Every `/register` and `/otp/send` response includes delivery diagnostic fields:
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `otp_sent` / `sent` | `boolean` | `true` if the message was accepted by the gateway/mailer. `false` if connection or API failed. |
+| `driver` | `string` | The active driver handling delivery (e.g. `log`, `fonnte`, `waba`, `smtp`). |
+| `delivery_warning` | `string\|null` | Present when driver is in mock/log mode (e.g., `WhatsApp driver is set to [log]. The message was written to server logs, not sent to a physical phone.`). |
+| `delivery_error` | `string\|null` | Contains the exact failure message if the mail server or WhatsApp API rejected the request. |
+| `debug_otp` | `string\|null` | Returned only when `APP_DEBUG=true` in `.env`, allowing instant verification during local development. |
+
+### 8.2 WhatsApp Delivery Configuration
+
+OpenKos supports three WhatsApp drivers in `.env`:
+
+```ini
+# .env
+
+# Option 1: Development / Mock (Writes to storage/logs/laravel.log)
+WHATSAPP_DRIVER=log
+
+# Option 2: Fonnte WhatsApp Gateway (Recommended for Indonesian numbers)
+WHATSAPP_DRIVER=fonnte
+FONNTE_TOKEN=your_fonnte_api_token_here
+
+# Option 3: Meta WhatsApp Cloud API (WABA)
+WHATSAPP_DRIVER=waba
+WABA_PHONE_NUMBER_ID=your_phone_number_id
+WABA_ACCESS_TOKEN=your_meta_system_user_token
+WABA_TEMPLATE_NAME=otp_verification
+WABA_TEMPLATE_LANGUAGE=id
+```
+
+> **Note**: If `WHATSAPP_DRIVER=log`, no actual WhatsApp message will be sent to the physical phone. Check `storage/logs/laravel.log` to view the dispatched code.
+
+### 8.3 Email (SMTP) Configuration
+
+Ensure `.env` contains valid SMTP credentials. If `MAIL_HOST=mailpit` is used without a running Mailpit instance, delivery will fail with connection timeout:
+
+```ini
+# .env
+
+# Local Development without external mail server (writes to storage/logs/laravel.log):
+MAIL_MAILER=log
+
+# Production / Real Delivery (e.g. Gmail, Brevo, Mailgun, SMTP2GO):
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_app_specific_password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS="no-reply@highlanderstay.com"
+MAIL_FROM_NAME="Highlander Stay"
+```
+

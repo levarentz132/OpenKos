@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Setting;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
@@ -84,13 +85,17 @@ class OtpVerificationService
         Cache::put($targetCooldownKey, time() + 60, now()->addSeconds(60));
 
         // Dispatch OTP code
-        $sent = $this->dispatchOtpCode($target, $channel, $otp);
+        $dispatch = $this->dispatchOtpCode($target, $channel, $otp);
 
         $result = [
             'registration_token' => $token,
             'channel' => $channel,
             'target' => $target,
-            'sent' => $sent,
+            'sent' => $dispatch['sent'],
+            'driver' => $dispatch['driver'],
+            'is_mock' => $dispatch['is_mock'],
+            'delivery_warning' => $dispatch['warning'],
+            'delivery_error' => $dispatch['error'],
         ];
 
         if (config('app.debug')) {
@@ -185,13 +190,17 @@ class OtpVerificationService
         Cache::put("pending_cooldown_{$token}", time() + 60, now()->addSeconds(60));
         Cache::put("pending_cooldown_target_{$pending['otp_channel']}_{$target}", time() + 60, now()->addSeconds(60));
 
-        $sent = $this->dispatchOtpCode($target, $pending['otp_channel'], $newOtp);
+        $dispatch = $this->dispatchOtpCode($target, $pending['otp_channel'], $newOtp);
 
         $result = [
             'registration_token' => $token,
             'channel' => $pending['otp_channel'],
             'target' => $target,
-            'sent' => $sent,
+            'sent' => $dispatch['sent'],
+            'driver' => $dispatch['driver'],
+            'is_mock' => $dispatch['is_mock'],
+            'delivery_warning' => $dispatch['warning'],
+            'delivery_error' => $dispatch['error'],
         ];
 
         if (config('app.debug')) {
@@ -300,20 +309,43 @@ class OtpVerificationService
 
     /**
      * Dispatch OTP code to target via channel.
+     *
+     * @return array{sent: bool, driver: string, is_mock: bool, warning: ?string, error: ?string}
      */
-    protected function dispatchOtpCode(string $target, string $channel, string $otp): bool
+    protected function dispatchOtpCode(string $target, string $channel, string $otp): array
     {
         if ($channel === 'whatsapp') {
             $message = "Your OpenKos verification code is: *{$otp}*. Valid for 10 minutes. Please do not share this code with anyone.";
+            $driverName = Setting::get('whatsapp_driver') ?? config('services.whatsapp.default', 'log');
+            $isMock = in_array($driverName, ['log', 'openkos/whatsapp-log'], true);
+
             try {
                 $this->whatsAppManager->send($target, $message);
-                return true;
+
+                return [
+                    'sent' => true,
+                    'driver' => $driverName,
+                    'is_mock' => $isMock,
+                    'warning' => $isMock
+                        ? 'WhatsApp driver is set to [log]. The message was written to server logs, not sent to a physical phone.'
+                        : null,
+                    'error' => null,
+                ];
             } catch (\Throwable $e) {
-                Log::warning("Failed to send WhatsApp OTP: {$e->getMessage()}");
-                return false;
+                Log::warning("Failed to send WhatsApp OTP to {$target}: {$e->getMessage()}");
+
+                return [
+                    'sent' => false,
+                    'driver' => $driverName,
+                    'is_mock' => false,
+                    'warning' => null,
+                    'error' => $e->getMessage(),
+                ];
             }
         }
 
+        $mailer = config('mail.default', 'smtp');
+        $isMock = in_array($mailer, ['log', 'array'], true);
         $html = "<div style='font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;'>
             <h2 style='color: #0f172a; margin-top: 0;'>OpenKos Verification Code</h2>
             <p style='color: #334155; font-size: 15px;'>Use the code below to verify and complete your registration:</p>
@@ -327,10 +359,26 @@ class OtpVerificationService
             Mail::html($html, function ($msg) use ($target) {
                 $msg->to($target)->subject('Your OpenKos Verification Code');
             });
-            return true;
+
+            return [
+                'sent' => true,
+                'driver' => $mailer,
+                'is_mock' => $isMock,
+                'warning' => $isMock
+                    ? "Mail driver is set to [{$mailer}]. The email was written to server logs/memory, not delivered to an inbox."
+                    : null,
+                'error' => null,
+            ];
         } catch (\Throwable $e) {
-            Log::warning("Failed to send Email OTP: {$e->getMessage()}");
-            return false;
+            Log::warning("Failed to send Email OTP to {$target}: {$e->getMessage()}");
+
+            return [
+                'sent' => false,
+                'driver' => $mailer,
+                'is_mock' => false,
+                'warning' => null,
+                'error' => $e->getMessage(),
+            ];
         }
     }
 
@@ -373,12 +421,16 @@ class OtpVerificationService
             Cache::put("phone_otp_{$user->id}", ['otp' => $otp, 'phone' => $targetPhone], now()->addMinutes(10));
             Cache::put($cooldownKey, time() + 60, now()->addSeconds(60));
 
-            $sent = $this->dispatchOtpCode($targetPhone, 'whatsapp', $otp);
+            $dispatch = $this->dispatchOtpCode($targetPhone, 'whatsapp', $otp);
 
             $result = [
                 'channel' => 'whatsapp',
                 'target' => $targetPhone,
-                'sent' => $sent,
+                'sent' => $dispatch['sent'],
+                'driver' => $dispatch['driver'],
+                'is_mock' => $dispatch['is_mock'],
+                'delivery_warning' => $dispatch['warning'],
+                'delivery_error' => $dispatch['error'],
             ];
 
             if (config('app.debug')) {
@@ -408,12 +460,16 @@ class OtpVerificationService
         Cache::put("otp_{$user->id}_email", ['otp' => $otp, 'email' => $targetEmail], now()->addMinutes(10));
         Cache::put($cooldownKey, time() + 60, now()->addSeconds(60));
 
-        $sent = $this->dispatchOtpCode($targetEmail, 'email', $otp);
+        $dispatch = $this->dispatchOtpCode($targetEmail, 'email', $otp);
 
         $result = [
             'channel' => 'email',
             'target' => $targetEmail,
-            'sent' => $sent,
+            'sent' => $dispatch['sent'],
+            'driver' => $dispatch['driver'],
+            'is_mock' => $dispatch['is_mock'],
+            'delivery_warning' => $dispatch['warning'],
+            'delivery_error' => $dispatch['error'],
         ];
 
         if (config('app.debug')) {
