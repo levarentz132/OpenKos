@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Setting;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\MailManager;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -12,12 +13,17 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use OpenKOS\Core\Data\Mail\MailAddress;
+use OpenKOS\Core\Data\Mail\MailMessage;
 
 class OtpVerificationService
 {
     public function __construct(
         protected WhatsAppManager $whatsAppManager,
-    ) {}
+        protected ?MailManager $mailManager = null,
+    ) {
+        $this->mailManager ??= app(MailManager::class);
+    }
 
     /**
      * Create a staged pending registration in cache.
@@ -344,8 +350,9 @@ class OtpVerificationService
             }
         }
 
-        $mailer = config('mail.default', 'smtp');
-        $isMock = in_array($mailer, ['log', 'array'], true);
+        $effectiveMailConfig = Setting::effectiveMailConfig();
+        $mailDriverName = $effectiveMailConfig['driver'] ?? config('mail.default', 'smtp');
+        $isMock = in_array($mailDriverName, ['log', 'openkos/log', 'array'], true);
         $html = "<div style='font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;'>
             <h2 style='color: #0f172a; margin-top: 0;'>OpenKos Verification Code</h2>
             <p style='color: #334155; font-size: 15px;'>Use the code below to verify and complete your registration:</p>
@@ -356,16 +363,26 @@ class OtpVerificationService
         </div>";
 
         try {
-            Mail::html($html, function ($msg) use ($target) {
-                $msg->to($target)->subject('Your OpenKos Verification Code');
-            });
+            if ($this->mailManager) {
+                $mailMessage = new MailMessage(
+                    to: [new MailAddress($target)],
+                    subject: 'Your OpenKos Verification Code',
+                    htmlBody: $html,
+                    plainTextBody: "Your OpenKos verification code is: {$otp}. Valid for 10 minutes.",
+                );
+                $this->mailManager->send($mailMessage);
+            } else {
+                Mail::html($html, function ($msg) use ($target) {
+                    $msg->to($target)->subject('Your OpenKos Verification Code');
+                });
+            }
 
             return [
                 'sent' => true,
-                'driver' => $mailer,
+                'driver' => $mailDriverName,
                 'is_mock' => $isMock,
                 'warning' => $isMock
-                    ? "Mail driver is set to [{$mailer}]. The email was written to server logs/memory, not delivered to an inbox."
+                    ? "Mail driver is set to [{$mailDriverName}]. The email was written to server logs/memory, not delivered to an inbox."
                     : null,
                 'error' => null,
             ];
@@ -374,7 +391,7 @@ class OtpVerificationService
 
             return [
                 'sent' => false,
-                'driver' => $mailer,
+                'driver' => $mailDriverName,
                 'is_mock' => false,
                 'warning' => null,
                 'error' => $e->getMessage(),

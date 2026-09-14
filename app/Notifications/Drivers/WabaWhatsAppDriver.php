@@ -126,6 +126,7 @@ class WabaWhatsAppDriver implements WhatsAppDriver
         }
 
         $response = Http::withToken($accessToken)
+            ->withOptions($this->resolveHttpOptions())
             ->acceptJson()
             ->post($url, $payload);
 
@@ -151,7 +152,10 @@ class WabaWhatsAppDriver implements WhatsAppDriver
 
         try {
             $url = "https://graph.facebook.com/" . self::API_VERSION . "/{$phoneNumberId}";
-            $response = Http::withToken($accessToken)->acceptJson()->get($url);
+            $response = Http::withToken($accessToken)
+                ->withOptions($this->resolveHttpOptions())
+                ->acceptJson()
+                ->get($url);
 
             if (! $response->successful()) {
                 $errorMsg = $response->json('error.message') ?? "HTTP {$response->status()}";
@@ -207,5 +211,26 @@ class WabaWhatsAppDriver implements WhatsAppDriver
             $cleaned = '62' . substr($cleaned, 1);
         }
         return $cleaned;
+    }
+
+    protected function resolveHttpOptions(): array
+    {
+        $options = [];
+
+        if (empty(ini_get('curl.cainfo')) && empty(ini_get('openssl.cafile'))) {
+            $candidates = [
+                'C:\xampp\phpMyAdmin\vendor\composer\ca-bundle\res\cacert.pem',
+                'C:\xampp\perl\vendor\lib\Mozilla\CA\cacert.pem',
+                base_path('cacert.pem'),
+            ];
+            foreach ($candidates as $candidate) {
+                if (file_exists($candidate)) {
+                    $options['verify'] = $candidate;
+                    break;
+                }
+            }
+        }
+
+        return $options;
     }
 }

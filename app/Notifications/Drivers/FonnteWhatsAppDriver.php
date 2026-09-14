@@ -39,7 +39,7 @@ class FonnteWhatsAppDriver implements WhatsAppDriver
 
         $response = Http::withHeaders([
             'Authorization' => $token,
-        ])->asForm()->post('https://api.fonnte.com/send', $payload);
+        ])->withOptions($this->resolveHttpOptions())->asForm()->post('https://api.fonnte.com/send', $payload);
 
         if (! $response->successful()) {
             throw new \RuntimeException("Fonnte API request failed with HTTP {$response->status()}: {$response->body()}");
@@ -68,7 +68,7 @@ class FonnteWhatsAppDriver implements WhatsAppDriver
         try {
             $response = Http::withHeaders([
                 'Authorization' => $token,
-            ])->post('https://api.fonnte.com/device');
+            ])->withOptions($this->resolveHttpOptions())->post('https://api.fonnte.com/device');
 
             if (! $response->successful()) {
                 return new DriverHealthResult(false, "Fonnte returned HTTP {$response->status()}");
@@ -108,5 +108,26 @@ class FonnteWhatsAppDriver implements WhatsAppDriver
         return $this->config['token']
             ?? config('services.whatsapp.drivers.fonnte.token')
             ?? env('FONNTE_TOKEN');
+    }
+
+    protected function resolveHttpOptions(): array
+    {
+        $options = [];
+
+        if (empty(ini_get('curl.cainfo')) && empty(ini_get('openssl.cafile'))) {
+            $candidates = [
+                'C:\xampp\phpMyAdmin\vendor\composer\ca-bundle\res\cacert.pem',
+                'C:\xampp\perl\vendor\lib\Mozilla\CA\cacert.pem',
+                base_path('cacert.pem'),
+            ];
+            foreach ($candidates as $candidate) {
+                if (file_exists($candidate)) {
+                    $options['verify'] = $candidate;
+                    break;
+                }
+            }
+        }
+
+        return $options;
     }
 }

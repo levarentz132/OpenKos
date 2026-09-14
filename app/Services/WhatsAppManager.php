@@ -121,15 +121,16 @@ class WhatsAppManager
 
     private function resolveCredentials(string $name, array $defaults): array
     {
-        $envDefaults = array_filter($defaults, fn ($value) => $value !== null);
+        $envDefaults = array_filter($defaults, fn ($value) => filled($value));
 
         try {
             $dbConfig = Setting::get('whatsapp_config');
             $dbConfig = is_array($dbConfig) ? ($dbConfig[$name] ?? []) : [];
+            $dbConfig = array_filter($dbConfig, fn ($value) => filled($value));
         } catch (QueryException) {
             $dbConfig = [];
         }
 
-        return array_merge($dbConfig, $envDefaults);
+        return array_merge($envDefaults, $dbConfig);
     }
 }

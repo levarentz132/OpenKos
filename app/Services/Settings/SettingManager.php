@@ -81,11 +81,17 @@ class SettingManager
         $fromAddress = filled(data_get($stored, 'from_address')) ? $stored['from_address'] : $envFromAddress;
         $fromName = filled(data_get($stored, 'from_name')) ? $stored['from_name'] : $envFromName;
 
-        $host = filled(data_get($stored, 'host')) ? (string) $stored['host'] : ($envHost ?: null);
-        $port = filled(data_get($stored, 'port')) ? (int) $stored['port'] : ($envPort ? (int) $envPort : 587);
-        $username = filled(data_get($stored, 'username')) ? (string) $stored['username'] : ($envUsername ?: null);
-        $password = filled(data_get($stored, 'password')) ? (string) $stored['password'] : ($envPassword ?: null);
-        $encryption = filled(data_get($stored, 'encryption')) ? (string) $stored['encryption'] : ($envEncryption ?: null);
+        $driverHost = data_get($stored, "drivers.{$driver}.host") ?? data_get($stored, 'drivers.openkos/smtp.host');
+        $driverPort = data_get($stored, "drivers.{$driver}.port") ?? data_get($stored, 'drivers.openkos/smtp.port');
+        $driverUsername = data_get($stored, "drivers.{$driver}.username") ?? data_get($stored, 'drivers.openkos/smtp.username');
+        $driverPassword = data_get($stored, "drivers.{$driver}.password") ?? data_get($stored, 'drivers.openkos/smtp.password');
+        $driverEncryption = data_get($stored, "drivers.{$driver}.encryption") ?? data_get($stored, 'drivers.openkos/smtp.encryption');
+
+        $host = filled(data_get($stored, 'host')) ? (string) $stored['host'] : (filled($driverHost) ? (string) $driverHost : ($envHost ?: null));
+        $port = filled(data_get($stored, 'port')) ? (int) $stored['port'] : (filled($driverPort) ? (int) $driverPort : ($envPort ? (int) $envPort : 587));
+        $username = filled(data_get($stored, 'username')) ? (string) $stored['username'] : (filled($driverUsername) ? (string) $driverUsername : ($envUsername ?: null));
+        $password = filled(data_get($stored, 'password')) ? (string) $stored['password'] : (filled($driverPassword) ? (string) $driverPassword : ($envPassword ?: null));
+        $encryption = filled(data_get($stored, 'encryption')) ? (string) $stored['encryption'] : (filled($driverEncryption) ? (string) $driverEncryption : ($envEncryption ?: null));
 
         if (isset($stored['drivers']) && is_array($stored['drivers'])) {
             $config = $stored;
