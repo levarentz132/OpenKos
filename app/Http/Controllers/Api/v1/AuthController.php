@@ -30,6 +30,40 @@ class AuthController extends Controller
     public function register(RegisterRequest $request): JsonResponse
     {
         $validated = $request->validated();
+
+        // 1. Direct Form-Level Registration (Submit with WhatsApp OTP)
+        if (! empty($validated['otp'])) {
+            $regResult = $this->otpService->registerWithPhoneOtp($validated);
+            /** @var Tenant $tenant */
+            $tenant = $regResult['user'];
+
+            $message = 'Pendaftaran berhasil! WhatsApp Anda telah diverifikasi. Tautan verifikasi telah dikirimkan ke alamat email Anda.';
+
+            $response = [
+                'message' => $message,
+                'token' => $regResult['token'],
+                'phone_verified' => true,
+                'email_verified' => false,
+                'email_verification_sent' => $regResult['email_verification_sent'],
+                'user' => $this->formatUserResponse($tenant),
+            ];
+
+            if (! empty($regResult['email_delivery_warning'])) {
+                $response['email_delivery_warning'] = $regResult['email_delivery_warning'];
+            }
+
+            if (! empty($regResult['email_delivery_error'])) {
+                $response['email_delivery_error'] = $regResult['email_delivery_error'];
+            }
+
+            if (config('app.debug') && ! empty($regResult['verification_url'])) {
+                $response['debug_verification_url'] = $regResult['verification_url'];
+            }
+
+            return response()->json($response, 201);
+        }
+
+        // 2. Staged Pending Registration (Pre-OTP generation)
         $otpChannel = $validated['otp_channel'] ?? (! empty($validated['phone']) ? 'whatsapp' : 'email');
 
         $result = $this->otpService->createPendingRegistration($validated, $otpChannel);
@@ -246,5 +280,143 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Logged out successfully.',
         ]);
+    }
+
+    /**
+     * Verify tenant email via signed verification link.
+     */
+    public function verifyEmail(Request $request)
+    {
+        if (! $request->hasValidSignature()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Tautan verifikasi email tidak valid atau telah kedaluwarsa.',
+                    'verified' => false,
+                ], 403);
+            }
+
+            return response("<div style='font-family: sans-serif; text-align: center; padding: 48px;'>
+                <h2 style='color: #ef4444;'>Tautan Kedaluwarsa</h2>
+                <p>Tautan verifikasi email ini tidak valid atau telah kedaluwarsa. Silakan minta tautan baru melalui aplikasi.</p>
+            </div>", 403)->header('Content-Type', 'text/html');
+        }
+
+        $id = (int) $request->route('id', $request->query('id'));
+        $hash = (string) $request->route('hash', $request->query('hash'));
+
+        try {
+            $tenant = $this->otpService->verifyEmailFromSignedLink($id, $hash);
+        } catch (ValidationException $e) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            return response("<div style='font-family: sans-serif; text-align: center; padding: 48px;'>
+                <h2 style='color: #ef4444;'>Verifikasi Gagal</h2>
+                <p>{$e->getMessage()}</p>
+            </div>", 422)->header('Content-Type', 'text/html');
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Alamat email berhasil diverifikasi!',
+                'verified' => true,
+                'email_verified' => true,
+                'user' => $this->formatUserResponse($tenant),
+            ]);
+        }
+
+        $html = "<!DOCTYPE html>
+        <html lang='id'>
+        <head>
+            <meta charset='utf-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>Email Berhasil Diverifikasi - OpenKos</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #1e293b; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 16px; box-sizing: border-box; }
+                .card { background: #ffffff; max-width: 480px; width: 100%; padding: 40px 32px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01); text-align: center; border: 1px solid #e2e8f0; }
+                .icon { width: 64px; height: 64px; background: #dcfce7; color: #16a34a; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 32px; }
+                h1 { font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 12px; }
+                p { font-size: 15px; color: #64748b; line-height: 1.6; margin: 0 0 24px; }
+                .badge { display: inline-block; background: #f1f5f9; color: #334155; padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; margin-bottom: 24px; }
+            </style>
+        </head>
+        <body>
+            <div class='card'>
+                <div class='icon'>✓</div>
+                <h1>Email Berhasil Diverifikasi!</h1>
+                <p>Halo <strong>" . e($tenant->name) . "</strong>, alamat email Anda (<strong>" . e($tenant->email) . "</strong>) telah terverifikasi. Akun Anda kini aktif sepenuhnya.</p>
+                <div class='badge'>Status Akun: Terverifikasi Penuh</div>
+                <p style='font-size: 13px; color: #94a3b8; margin: 0;'>Anda dapat kembali ke aplikasi OpenKos untuk melanjutkan.</p>
+            </div>
+        </body>
+        </html>";
+
+        return response($html)->header('Content-Type', 'text/html');
+    }
+
+    /**
+     * Resend email verification link.
+     */
+    public function resendVerificationEmail(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['nullable', 'string', 'email'],
+            'login' => ['nullable', 'string'],
+        ]);
+
+        /** @var Tenant|null $tenant */
+        $tenant = $request->user('sanctum') ?? $request->user();
+
+        if (! $tenant) {
+            $identifier = $validated['email'] ?? $validated['login'] ?? null;
+            if (blank($identifier)) {
+                throw ValidationException::withMessages([
+                    'email' => ['Mohon masukkan alamat email atau login identifier.'],
+                ]);
+            }
+
+            $tenant = Tenant::query()
+                ->where('email', strtolower(trim($identifier)))
+                ->orWhere('phone', $identifier)
+                ->first();
+
+            if (! $tenant) {
+                throw ValidationException::withMessages([
+                    'email' => ['Akun penyewa tidak ditemukan.'],
+                ]);
+            }
+        }
+
+        if ($tenant->hasVerifiedEmail()) {
+            return response()->json([
+                'message' => 'Alamat email ini sudah terverifikasi sebelumnya.',
+                'email_verified' => true,
+            ]);
+        }
+
+        $emailResult = $this->otpService->sendEmailVerificationLink($tenant);
+
+        $response = [
+            'message' => $emailResult['sent']
+                ? 'Tautan verifikasi telah dikirimkan ke email Anda.'
+                : 'Gagal mengirimkan email verifikasi (' . ($emailResult['error'] ?? 'delivery error') . ').',
+            'sent' => $emailResult['sent'],
+            'email' => $tenant->email,
+        ];
+
+        if (! empty($emailResult['warning'])) {
+            $response['delivery_warning'] = $emailResult['warning'];
+        }
+
+        if (! empty($emailResult['error'])) {
+            $response['delivery_error'] = $emailResult['error'];
+        }
+
+        if (config('app.debug') && ! empty($emailResult['url'])) {
+            $response['debug_verification_url'] = $emailResult['url'];
+        }
+
+        return response()->json($response);
     }
 }

@@ -27,48 +27,87 @@ https://dashboard.highlanderstay.com/api/v1/auth
 
 | # | Action | Method | Endpoint | Auth Required | Description |
 | :-: | :--- | :---: | :--- | :---: | :--- |
-| 1 | **Register Tenant** | `POST` | `/register` | No | Starts staged registration & sends OTP |
-| 2 | **Check Status** | `POST` | `/check-status` | No | Checks dual-channel verification status (WhatsApp & Email) |
-| 3 | **Send / Resend OTP** | `POST` | `/otp/send` | Optional | Dispatches OTP via WhatsApp or Email |
-| 4 | **Verify OTP** | `POST` | `/otp/verify` | Optional | Verifies code, creates `Tenant` row if pending, returns token |
-| 5 | **Login Tenant** | `POST` | `/login` | No | Login via Email or Phone Number + Password |
-| 6 | **Get Profile** | `GET` | `/me` | Bearer Token | Returns authenticated tenant profile |
-| 7 | **Delete My Account** | `DELETE` | `/me` | Bearer Token | Permanently deletes authenticated account & revokes tokens |
-| 8 | **Delete User (Admin)**| `DELETE` | `/users/{user_id}` | Bearer Token (Admin) | Deletes target user and associated tenant data |
-| 9 | **Logout** | `POST` | `/logout` | Bearer Token | Revokes active Sanctum API token |
+| 1 | **Request Form WA OTP**| `POST` | `/otp/send` | No | Sends 6-digit WhatsApp OTP while filling form |
+| 2 | **Register Tenant** | `POST` | `/register` | No | Submits form with WA OTP & dispatches email link |
+| 3 | **Verify Email Link** | `GET` | `/verify-email` | No (Signed) | Verifies email address when clicking link in email |
+| 4 | **Resend Email Link** | `POST` | `/email/resend` | Optional | Resends email verification link |
+| 5 | **Check Status** | `POST` | `/check-status` | No | Checks dual-channel verification status (WhatsApp & Email) |
+| 6 | **Verify Staged OTP** | `POST` | `/otp/verify` | Optional | Verifies staged code & returns Sanctum token |
+| 7 | **Login Tenant** | `POST` | `/login` | No | Login via Email or Phone Number + Password |
+| 8 | **Get Profile** | `GET` | `/me` | Bearer Token | Returns authenticated tenant profile |
+| 9 | **Delete My Account** | `DELETE` | `/me` | Bearer Token | Permanently deletes authenticated account & revokes tokens |
+| 10| **Delete User (Admin)**| `DELETE` | `/users/{user_id}` | Bearer Token (Admin) | Deletes target user and associated tenant data |
+| 11| **Logout** | `POST` | `/logout` | Bearer Token | Revokes active Sanctum API token |
 
 ---
 
-## 3. Step-by-Step Flow: Tenant Registration & OTP Verification
+## 3. Step-by-Step Flow: Form-Level WhatsApp OTP & Email Verification Link
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Tenant as Mobile App / User
+    actor Tenant as Mobile App / Form
     participant API as OpenKos Auth API
-    participant Cache as Cache / In-Memory
+    participant Cache as Redis / Cache
     participant WA as WhatsApp (Meta WABA / Fonnte)
-    participant DB as MySQL (tenants table)
+    participant Mail as Mail Server (SMTP)
+    participant DB as Database (tenants)
 
-    Tenant->>API: POST /api/v1/auth/register (name, email, phone, password, otp_channel)
-    API->>Cache: Store pending registration payload (TTL: 10m)
-    API->>WA: Dispatch 6-digit OTP to phone
-    API-->>Tenant: 201 Created (registration_token: "reg_xxx", target: "628xxx")
-    Note over DB: No database row inserted yet (Anti-Spam)
+    Note over Tenant: Step 1: User fills registration form & requests WhatsApp OTP
+    Tenant->>API: POST /api/v1/auth/otp/send { channel: "whatsapp", phone: "081234567890" }
+    API->>Cache: Save 6-digit OTP (TTL: 10m)
+    API->>WA: Send WhatsApp verification code to phone
+    API-->>Tenant: 200 OK { sent: true, target: "6281234567890" }
 
-    Tenant->>API: POST /api/v1/auth/otp/verify (registration_token: "reg_xxx", code: "123456")
-    API->>Cache: Verify OTP match & get cached registration data
-    API->>DB: INSERT into tenants (name, email, phone, password, phone_verified_at)
-    API->>API: Generate Sanctum Personal Access Token
-    API-->>Tenant: 201 Created (verified: true, token: "1|xxx", user: {...})
-    Tenant->>API: GET /api/v1/tenant/dashboard (Authorization: Bearer 1|xxx)
+    Note over Tenant: Step 2: User enters OTP code into form and clicks Submit
+    Tenant->>API: POST /api/v1/auth/register { name, email, phone, password, otp: "123456" }
+    API->>Cache: Verify OTP match for phone
+    API->>DB: INSERT into tenants (phone_verified_at = now, email_verified_at = null)
+    API->>API: Generate Sanctum Bearer Token
+    API->>Mail: Dispatch email containing Signed Verification Link
+    API-->>Tenant: 201 Created { verified: true, token: "1|xxx", phone_verified: true, email_verified: false }
+
+    Note over Tenant: Step 3: User opens email and clicks Verification Link
+    Tenant->>API: GET /api/v1/auth/verify-email?id=1&hash=xxx&signature=xxx
+    API->>DB: UPDATE tenants SET email_verified_at = now()
+    API-->>Tenant: HTML Confirmation Page / JSON { email_verified: true }
 ```
 
 ---
 
 ## 4. Endpoint Specifications
 
-### 4.1 Register Tenant (Staged)
+### 4.1 Request WhatsApp OTP on Registration Form
+Used directly from the registration form before submitting account creation:
+
+- **URL**: `POST /api/v1/auth/otp/send`
+- **Headers**:
+  ```http
+  Accept: application/json
+  Content-Type: application/json
+  ```
+- **Request Body**:
+  ```json
+  {
+    "channel": "whatsapp",
+    "phone": "081234567890"
+  }
+  ```
+- **Response (`200 OK`)**:
+  ```json
+  {
+    "message": "Verification code sent successfully via whatsapp.",
+    "channel": "whatsapp",
+    "target": "6281234567890",
+    "sent": true,
+    "driver": "openkos/waba"
+  }
+  ```
+
+---
+
+### 4.2 Submit Registration with WhatsApp OTP
+Submits the completed registration form with the WhatsApp OTP code. Creates the account immediately, marks WhatsApp verified, and dispatches the email verification link:
 
 - **URL**: `POST /api/v1/auth/register`
 - **Headers**:
@@ -84,20 +123,79 @@ sequenceDiagram
     "phone": "081234567890",
     "password": "password123",
     "password_confirmation": "password123",
-    "otp_channel": "whatsapp",
+    "otp": "123456",
     "device_name": "iPhone-15"
   }
   ```
-  *(Set `"otp_channel": "email"` if email verification is preferred).*
 
 - **Response (`201 Created`)**:
   ```json
   {
-    "message": "Verification code sent. Please submit the OTP code to complete registration.",
-    "registration_token": "reg_7b8a1c9e2f...",
-    "otp_sent": true,
-    "otp_channel": "whatsapp",
-    "target": "6281234567890"
+    "message": "Pendaftaran berhasil! WhatsApp Anda telah diverifikasi. Tautan verifikasi telah dikirimkan ke alamat email Anda.",
+    "token": "1|7b8a1c9e2f4a5b6c...",
+    "phone_verified": true,
+    "email_verified": false,
+    "email_verification_sent": true,
+    "user": {
+      "id": 12,
+      "name": "Jane Doe",
+      "email": "jane@example.com",
+      "phone": "6281234567890",
+      "role": "tenant",
+      "is_active": true
+    }
+  }
+  ```
+
+---
+
+### 4.3 Verify Email Address (Click from Email)
+Triggered when the user clicks the verification link in their email:
+
+- **URL**: `GET /api/v1/auth/verify-email?id={id}&hash={hash}&expires={expires}&signature={signature}`
+- **Headers**:
+  - Browser visit (`Accept: text/html`): Renders a beautiful confirmation webpage.
+  - API call (`Accept: application/json`): Returns JSON verification status.
+
+- **JSON Response (`200 OK`)**:
+  ```json
+  {
+    "message": "Alamat email berhasil diverifikasi!",
+    "verified": true,
+    "email_verified": true,
+    "user": {
+      "id": 12,
+      "name": "Jane Doe",
+      "email": "jane@example.com",
+      "phone": "6281234567890"
+    }
+  }
+  ```
+
+---
+
+### 4.4 Resend Email Verification Link
+If the user did not receive the verification email or the link expired:
+
+- **URL**: `POST /api/v1/auth/email/resend`
+- **Headers**:
+  ```http
+  Accept: application/json
+  Content-Type: application/json
+  Authorization: Bearer <optional_sanctum_token>
+  ```
+- **Request Body** (optional if Bearer token provided):
+  ```json
+  {
+    "email": "jane@example.com"
+  }
+  ```
+- **Response (`200 OK`)**:
+  ```json
+  {
+    "message": "Tautan verifikasi telah dikirimkan ke email Anda.",
+    "sent": true,
+    "email": "jane@example.com"
   }
   ```
 

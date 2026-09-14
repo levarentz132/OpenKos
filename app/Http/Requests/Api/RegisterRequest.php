@@ -20,6 +20,7 @@ class RegisterRequest extends FormRequest
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'device_name' => ['nullable', 'string', 'max:255'],
             'otp_channel' => ['nullable', 'string', 'in:whatsapp,email'],
+            'otp' => ['nullable', 'string', 'max:10'],
         ];
     }
 
@@ -48,14 +49,15 @@ class RegisterRequest extends FormRequest
                 );
             }
 
-            // Validate phone requirement when WhatsApp channel is chosen
+            // Validate phone requirement when WhatsApp channel is chosen or OTP is submitted
             $otpChannel = $this->input('otp_channel');
+            $otpCode = $this->input('otp');
             $phone = (string) $this->input('phone');
 
-            if ($otpChannel === 'whatsapp' && blank($phone)) {
+            if (($otpChannel === 'whatsapp' || ! blank($otpCode)) && blank($phone)) {
                 $validator->errors()->add(
                     'phone',
-                    'A phone number is required when selecting WhatsApp as the OTP verification channel.'
+                    'A phone number is required when registering with a WhatsApp verification code.'
                 );
             }
 

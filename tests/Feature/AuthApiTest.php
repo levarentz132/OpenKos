@@ -618,3 +618,145 @@ test('registration gracefully reports delivery_error when dispatch fails', funct
         ->assertJsonPath('otp_sent', false)
         ->assertJsonPath('delivery_error', 'WABA connection timeout or invalid token');
 });
+
+test('user can request WhatsApp OTP on registration form prior to account creation', function () {
+    $response = $this->postJson('/api/v1/auth/otp/send', [
+        'channel' => 'whatsapp',
+        'phone' => '081234567899',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('sent', true)
+        ->assertJsonPath('channel', 'whatsapp')
+        ->assertJsonPath('target', '6281234567899');
+
+    // Code is stored in cache for registration
+    $cached = \Illuminate\Support\Facades\Cache::get('reg_phone_otp_6281234567899');
+    expect($cached)->not->toBeNull();
+    expect($cached['otp'])->toMatch('/^\d{6}$/');
+});
+
+test('submitting registration with valid WhatsApp OTP creates tenant, marks phone verified, and sends email link', function () {
+    // 1. Request OTP on form
+    $this->postJson('/api/v1/auth/otp/send', [
+        'channel' => 'whatsapp',
+        'phone' => '081288889999',
+    ])->assertOk();
+
+    $cached = \Illuminate\Support\Facades\Cache::get('reg_phone_otp_6281288889999');
+    $otpCode = $cached['otp'];
+
+    // 2. Submit registration form with the received OTP code
+    $response = $this->postJson('/api/v1/auth/register', [
+        'name' => 'Form Registered User',
+        'email' => 'formuser@example.com',
+        'phone' => '081288889999',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+        'otp' => $otpCode,
+        'device_name' => 'test-device',
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('phone_verified', true)
+        ->assertJsonPath('email_verified', false)
+        ->assertJsonPath('email_verification_sent', true)
+        ->assertJsonStructure(['token', 'user']);
+
+    // Check database
+    $tenant = \App\Models\Tenant::where('email', 'formuser@example.com')->first();
+    expect($tenant)->not->toBeNull();
+    expect($tenant->hasVerifiedPhone())->toBeTrue();
+    expect($tenant->hasVerifiedEmail())->toBeFalse();
+});
+
+test('submitting registration with invalid WhatsApp OTP fails with 422 and creates no database records', function () {
+    $this->postJson('/api/v1/auth/otp/send', [
+        'channel' => 'whatsapp',
+        'phone' => '081255554444',
+    ])->assertOk();
+
+    $response = $this->postJson('/api/v1/auth/register', [
+        'name' => 'Invalid OTP User',
+        'email' => 'invalidotp@example.com',
+        'phone' => '081255554444',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+        'otp' => '000000',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['otp']);
+
+    $this->assertDatabaseMissing('tenants', [
+        'email' => 'invalidotp@example.com',
+    ]);
+});
+
+test('clicking signed email verification link verifies tenant email', function () {
+    $tenant = \App\Models\Tenant::create([
+        'name' => 'Email Verify User',
+        'email' => 'verifytenant@example.com',
+        'phone' => '6281233334444',
+        'password' => \Illuminate\Support\Facades\Hash::make('password123'),
+        'phone_verified_at' => now(),
+        'email_verified_at' => null,
+        'is_active' => true,
+    ]);
+
+    $signedUrl = \Illuminate\Support\Facades\URL::temporarySignedRoute(
+        'api.v1.auth.verify-email',
+        now()->addHours(24),
+        [
+            'id' => $tenant->id,
+            'hash' => sha1($tenant->email),
+        ]
+    );
+
+    // Call signed URL with Accept: application/json
+    $response = $this->getJson($signedUrl);
+    $response->assertOk()
+        ->assertJsonPath('verified', true)
+        ->assertJsonPath('email_verified', true);
+
+    expect($tenant->fresh()->hasVerifiedEmail())->toBeTrue();
+});
+
+test('accessing email verification link with invalid signature returns 403', function () {
+    $tenant = \App\Models\Tenant::create([
+        'name' => 'Tamper Test User',
+        'email' => 'tamper@example.com',
+        'phone' => '6281211112222',
+        'password' => \Illuminate\Support\Facades\Hash::make('password123'),
+        'phone_verified_at' => now(),
+        'email_verified_at' => null,
+        'is_active' => true,
+    ]);
+
+    $tamperedUrl = "/api/v1/auth/verify-email?id={$tenant->id}&hash=" . sha1($tenant->email) . "&signature=invalid_sig";
+
+    $response = $this->getJson($tamperedUrl);
+    $response->assertStatus(403);
+
+    expect($tenant->fresh()->hasVerifiedEmail())->toBeFalse();
+});
+
+test('tenant can resend email verification link', function () {
+    $tenant = \App\Models\Tenant::create([
+        'name' => 'Resend Email User',
+        'email' => 'resendmail@example.com',
+        'phone' => '6281277778888',
+        'password' => \Illuminate\Support\Facades\Hash::make('password123'),
+        'phone_verified_at' => now(),
+        'email_verified_at' => null,
+        'is_active' => true,
+    ]);
+
+    $response = $this->postJson('/api/v1/auth/email/resend', [
+        'email' => 'resendmail@example.com',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('sent', true)
+        ->assertJsonPath('email', 'resendmail@example.com');
+});

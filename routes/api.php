@@ -25,6 +25,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('login', [AuthController::class, 'login'])->name('login');
         Route::post('check-status', [AuthController::class, 'checkStatus'])->name('check-status');
 
+        // Email Verification Link
+        Route::get('verify-email', [AuthController::class, 'verifyEmail'])->name('verify-email');
+        Route::post('email/resend', [AuthController::class, 'resendVerificationEmail'])->name('email.resend');
+
         // Dual-Channel OTP (WhatsApp or Email) - Supports Bearer Token OR email/phone
         Route::prefix('otp')->name('otp.')->group(function () {
             Route::post('send', [OtpController::class, 'send'])->name('send');

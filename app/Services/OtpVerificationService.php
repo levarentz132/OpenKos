@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use OpenKOS\Core\Data\Mail\MailAddress;
@@ -729,5 +730,267 @@ class OtpVerificationService
         }
 
         return $cleaned;
+    }
+
+    /**
+     * Send WhatsApp OTP to a phone number directly from the registration form.
+     *
+     * @throws ValidationException
+     */
+    public function sendRegistrationPhoneOtp(string $phone): array
+    {
+        $normalizedPhone = $this->normalizePhoneNumber($phone);
+
+        if (blank($normalizedPhone)) {
+            throw ValidationException::withMessages([
+                'phone' => ['A valid phone number is required to receive the WhatsApp verification code.'],
+            ]);
+        }
+
+        // Ensure not already registered in tenants table
+        $existing = Tenant::query()
+            ->where('phone', $phone)
+            ->orWhere('phone', $normalizedPhone)
+            ->first();
+
+        if ($existing) {
+            throw ValidationException::withMessages([
+                'phone' => ['A tenant account with this phone number already exists. Please log in directly.'],
+            ]);
+        }
+
+        $cooldownKey = "reg_phone_otp_cooldown_{$normalizedPhone}";
+        if (Cache::has($cooldownKey)) {
+            $secondsRemaining = max(1, Cache::get($cooldownKey) - time());
+            throw ValidationException::withMessages([
+                'otp' => ["Please wait {$secondsRemaining} seconds before requesting a new WhatsApp code."],
+            ]);
+        }
+
+        $otp = (string) random_int(100000, 999999);
+        Cache::put("reg_phone_otp_{$normalizedPhone}", ['otp' => $otp, 'phone' => $normalizedPhone], now()->addMinutes(10));
+        Cache::put("reg_phone_otp_{$phone}", ['otp' => $otp, 'phone' => $normalizedPhone], now()->addMinutes(10));
+        Cache::put($cooldownKey, time() + 60, now()->addSeconds(60));
+
+        $dispatch = $this->dispatchOtpCode($normalizedPhone, 'whatsapp', $otp);
+
+        $result = [
+            'channel' => 'whatsapp',
+            'target' => $normalizedPhone,
+            'sent' => $dispatch['sent'],
+            'driver' => $dispatch['driver'],
+            'is_mock' => $dispatch['is_mock'],
+            'delivery_warning' => $dispatch['warning'],
+            'delivery_error' => $dispatch['error'],
+        ];
+
+        if (config('app.debug')) {
+            $result['debug_otp'] = $otp;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Complete registration using the WhatsApp OTP entered directly in the registration form.
+     * Creates Tenant record with phone_verified_at = now() and dispatches the email verification link.
+     *
+     * @throws ValidationException
+     */
+    public function registerWithPhoneOtp(array $data): array
+    {
+        $phone = trim((string) ($data['phone'] ?? ''));
+        $normalizedPhone = $this->normalizePhoneNumber($phone);
+        $code = trim((string) ($data['otp'] ?? ''));
+
+        if (blank($code)) {
+            throw ValidationException::withMessages([
+                'otp' => ['The WhatsApp verification code is required to complete registration.'],
+            ]);
+        }
+
+        // 1. Verify OTP code against cached registration phone OTP
+        $cached = Cache::get("reg_phone_otp_{$normalizedPhone}") ?? Cache::get("reg_phone_otp_{$phone}");
+        $isValid = false;
+
+        if ($cached && isset($cached['otp']) && hash_equals((string) $cached['otp'], $code)) {
+            $isValid = true;
+        } else {
+            // Check if staged pending registration session exists for this phone
+            $pendingToken = Cache::get("pending_reg_phone_{$normalizedPhone}") ?? Cache::get("pending_reg_phone_{$phone}");
+            if ($pendingToken) {
+                $pending = $this->getPendingRegistration($pendingToken);
+                if ($pending && (hash_equals((string) ($pending['whatsapp_otp'] ?? ''), $code) || hash_equals((string) ($pending['otp'] ?? ''), $code))) {
+                    $isValid = true;
+                }
+            }
+        }
+
+        if (! $isValid) {
+            throw ValidationException::withMessages([
+                'otp' => ['The WhatsApp verification code is invalid or has expired. Please request a new code.'],
+            ]);
+        }
+
+        $email = strtolower(trim((string) $data['email']));
+
+        // 2. Concurrency safeguard: ensure email or phone was not created
+        $existing = Tenant::query()
+            ->where('email', $email)
+            ->orWhere('phone', $normalizedPhone)
+            ->orWhere('phone', $phone)
+            ->first();
+
+        if ($existing) {
+            throw ValidationException::withMessages([
+                'email' => ['A tenant account with this email or phone number already exists.'],
+            ]);
+        }
+
+        // 3. Create Tenant in database (phone verified, email unverified)
+        /** @var Tenant $tenant */
+        $tenant = DB::transaction(function () use ($data, $email, $normalizedPhone) {
+            return Tenant::create([
+                'name' => trim((string) $data['name']),
+                'email' => $email,
+                'phone' => $normalizedPhone,
+                'password' => Hash::make($data['password']),
+                'phone_verified_at' => now(),
+                'email_verified_at' => null,
+                'is_active' => true,
+            ]);
+        });
+
+        // 4. Clear cached OTP
+        Cache::forget("reg_phone_otp_{$normalizedPhone}");
+        Cache::forget("reg_phone_otp_{$phone}");
+        Cache::forget("reg_phone_otp_cooldown_{$normalizedPhone}");
+
+        $pendingToken = Cache::get("pending_reg_phone_{$normalizedPhone}");
+        if ($pendingToken) {
+            $pending = $this->getPendingRegistration($pendingToken);
+            if ($pending) {
+                $this->clearPendingRegistration($pending);
+            }
+        }
+
+        // 5. Generate Sanctum Personal Access Token
+        $deviceName = $data['device_name'] ?? 'api-client';
+        $token = $tenant->createToken($deviceName)->plainTextToken;
+
+        // 6. Send Email Verification Link
+        $emailResult = $this->sendEmailVerificationLink($tenant);
+
+        return [
+            'user' => $tenant,
+            'token' => $token,
+            'phone_verified' => true,
+            'email_verified' => false,
+            'email_verification_sent' => $emailResult['sent'],
+            'email_delivery_warning' => $emailResult['warning'] ?? null,
+            'email_delivery_error' => $emailResult['error'] ?? null,
+            'verification_url' => config('app.debug') ? ($emailResult['url'] ?? null) : null,
+        ];
+    }
+
+    /**
+     * Dispatch an email containing a signed verification link to the tenant.
+     */
+    public function sendEmailVerificationLink(Tenant $tenant): array
+    {
+        $verificationUrl = URL::temporarySignedRoute(
+            'api.v1.auth.verify-email',
+            now()->addHours(24),
+            [
+                'id' => $tenant->id,
+                'hash' => sha1($tenant->email),
+            ]
+        );
+
+        $effectiveMailConfig = Setting::effectiveMailConfig();
+        $mailDriverName = $effectiveMailConfig['driver'] ?? config('mail.default', 'smtp');
+        $isMock = in_array($mailDriverName, ['log', 'openkos/log', 'array'], true);
+
+        $html = "<div style='font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;'>
+            <div style='text-align: center; margin-bottom: 24px;'>
+                <h2 style='color: #0f172a; margin: 0 0 8px; font-size: 22px; font-weight: 700;'>Verifikasi Alamat Email Anda</h2>
+                <p style='color: #64748b; font-size: 14px; margin: 0;'>Halo <strong>" . e($tenant->name) . "</strong>, terima kasih telah mendaftar di OpenKos.</p>
+            </div>
+            <p style='color: #334155; font-size: 15px; line-height: 1.6;'>Nomor WhatsApp Anda telah berhasil diverifikasi. Untuk menyelesaikan proses pendaftaran akun Anda, silakan klik tombol di bawah ini untuk memverifikasi email Anda:</p>
+            <div style='text-align: center; margin: 32px 0;'>
+                <a href='{$verificationUrl}' style='background-color: #2563eb; color: #ffffff; padding: 14px 28px; text-decoration: none; font-size: 15px; font-weight: 600; border-radius: 8px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);'>Verifikasi Email Saya</a>
+            </div>
+            <p style='color: #64748b; font-size: 13px; line-height: 1.5; margin-bottom: 8px;'>Jika tombol di atas tidak berfungsi, salin dan buka tautan berikut di peramban (browser) Anda:</p>
+            <p style='word-break: break-all; font-size: 12px; color: #2563eb; background: #f8fafc; padding: 10px; border-radius: 6px; margin-bottom: 24px;'>{$verificationUrl}</p>
+            <hr style='border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;' />
+            <p style='color: #94a3b8; font-size: 12px; margin: 0;'>Tautan verifikasi ini berlaku selama 24 jam. Jika Anda tidak merasa mendaftar di OpenKos, Anda dapat mengabaikan email ini.</p>
+        </div>";
+
+        try {
+            if ($this->mailManager) {
+                $mailMessage = new MailMessage(
+                    to: [new MailAddress($tenant->email, $tenant->name)],
+                    subject: 'Verifikasi Alamat Email Anda - OpenKos',
+                    htmlBody: $html,
+                    plainTextBody: "Halo {$tenant->name},\n\nSilakan verifikasi email Anda dengan mengunjungi tautan berikut:\n{$verificationUrl}\n\nTautan ini berlaku selama 24 jam.",
+                );
+                $this->mailManager->send($mailMessage);
+            } else {
+                Mail::html($html, function ($msg) use ($tenant) {
+                    $msg->to($tenant->email, $tenant->name)->subject('Verifikasi Alamat Email Anda - OpenKos');
+                });
+            }
+
+            return [
+                'sent' => true,
+                'driver' => $mailDriverName,
+                'is_mock' => $isMock,
+                'url' => $verificationUrl,
+                'warning' => $isMock
+                    ? "Mail driver is set to [{$mailDriverName}]. The verification link was written to server logs."
+                    : null,
+                'error' => null,
+            ];
+        } catch (\Throwable $e) {
+            Log::warning("Failed to send Email Verification link to {$tenant->email}: {$e->getMessage()}");
+
+            return [
+                'sent' => false,
+                'driver' => $mailDriverName,
+                'is_mock' => false,
+                'url' => $verificationUrl,
+                'warning' => null,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Verify email from signed link.
+     *
+     * @throws ValidationException
+     */
+    public function verifyEmailFromSignedLink(int $tenantId, string $hash): Tenant
+    {
+        /** @var Tenant|null $tenant */
+        $tenant = Tenant::query()->find($tenantId);
+
+        if (! $tenant) {
+            throw ValidationException::withMessages([
+                'email' => ['Akun penyewa tidak ditemukan.'],
+            ]);
+        }
+
+        if (! hash_equals(sha1($tenant->email), $hash)) {
+            throw ValidationException::withMessages([
+                'email' => ['Tautan verifikasi email tidak valid untuk akun ini.'],
+            ]);
+        }
+
+        if (! $tenant->hasVerifiedEmail()) {
+            $tenant->forceFill(['email_verified_at' => now()])->save();
+        }
+
+        return $tenant->fresh();
     }
 }

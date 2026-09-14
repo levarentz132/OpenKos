@@ -71,7 +71,46 @@ class OtpController extends Controller
             return response()->json($response);
         }
 
-        // 2. Resend for existing tenant account
+        // 2. Direct registration form OTP request for WhatsApp (prior to account creation)
+        if ($validated['channel'] === 'whatsapp' && ! empty($validated['phone']) && ! $request->user('sanctum') && ! $request->user()) {
+            $normalizedPhone = $this->otpService->normalizePhoneNumber($validated['phone']);
+            $existingTenant = Tenant::query()
+                ->where('phone', $validated['phone'])
+                ->orWhere('phone', $normalizedPhone)
+                ->first();
+
+            if (! $existingTenant) {
+                $result = $this->otpService->sendRegistrationPhoneOtp($validated['phone']);
+
+                $message = $result['sent']
+                    ? 'Verification code sent successfully via whatsapp.'
+                    : 'Failed to send verification code via whatsapp (' . ($result['delivery_error'] ?? 'delivery error') . ').';
+
+                $response = [
+                    'message' => $message,
+                    'channel' => 'whatsapp',
+                    'target' => $result['target'],
+                    'sent' => $result['sent'],
+                    'driver' => $result['driver'] ?? null,
+                ];
+
+                if (! empty($result['delivery_warning'])) {
+                    $response['delivery_warning'] = $result['delivery_warning'];
+                }
+
+                if (! empty($result['delivery_error'])) {
+                    $response['delivery_error'] = $result['delivery_error'];
+                }
+
+                if (config('app.debug') && isset($result['debug_otp'])) {
+                    $response['debug_otp'] = $result['debug_otp'];
+                }
+
+                return response()->json($response);
+            }
+        }
+
+        // 3. Resend for existing tenant account
         $user = $this->resolveTenantUser($request, $validated);
 
         $channel = $validated['channel'];
