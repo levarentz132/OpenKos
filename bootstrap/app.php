@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\MailDeliveryException;
+use App\Http\Middleware\EnsurePhoneIsVerified;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -48,6 +49,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
+            'phone.verified' => EnsurePhoneIsVerified::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

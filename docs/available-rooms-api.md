@@ -32,7 +32,7 @@ Returns clean, lightweight property information including location, contact, pri
 ### Example Request
 
 ```bash
-curl -X GET "http://localhost:8080/api/v1/available-rooms?kecamatan=Grogol" \
+curl -X GET "https://dashboard.highlanderstay.com/api/v1/available-rooms?kecamatan=Grogol" \
   -H "Accept: application/json"
 ```
 
@@ -75,7 +75,7 @@ curl -X GET "http://localhost:8080/api/v1/available-rooms?kecamatan=Grogol" \
 ### Example Request
 
 ```bash
-curl -X GET "http://localhost:8080/api/v1/properties/alpukat/available-rooms" \
+curl -X GET "https://dashboard.highlanderstay.com/api/v1/properties/alpukat/available-rooms" \
   -H "Accept: application/json"
 ```
 

@@ -16,14 +16,15 @@ use Illuminate\Support\Collection;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
+use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'is_active', 'invited_at', 'last_login_at'])]
+#[Fillable(['name', 'email', 'phone', 'phone_verified_at', 'password', 'is_active', 'invited_at', 'last_login_at'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable {
+    use HasApiTokens, HasFactory, HasRoles, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable {
         HasRoles::hasRole as protected traitHasRole;
     }
 
@@ -34,6 +35,7 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
             'invited_at' => 'datetime',
@@ -78,6 +80,11 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     public function hasTenantProfile(): bool
     {
         return $this->tenant()->exists();
+    }
+
+    public function hasVerifiedPhone(): bool
+    {
+        return ! is_null($this->phone_verified_at);
     }
 
     public function canAccessProperty(Property|int $property): bool
