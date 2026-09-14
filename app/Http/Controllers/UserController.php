@@ -185,14 +185,27 @@ class UserController extends Controller
             return back()->withErrors(['user' => __('At least one active owner must remain.')]);
         }
 
-        User::query()->whereKey($user->id)->update([
-            'is_active' => false,
-            'invited_at' => null,
-        ]);
+        $isSelf = auth()->id() === $user->id;
 
-        DB::table('sessions')->where('user_id', $user->id)->delete();
+        DB::transaction(function () use ($user) {
+            DB::table('sessions')->where('user_id', $user->id)->delete();
+            $user->tokens()->delete();
+            $user->roles()->detach();
+            $user->permissions()->detach();
+            $user->properties()->detach();
+            $user->tenant?->delete();
+            $user->delete();
+        });
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('User access disabled.')]);
+        if ($isSelf) {
+            auth()->logout();
+            request()->session()->invalidate();
+            request()->session()->regenerateToken();
+
+            return to_route('login')->with('status', __('Your account has been deleted.'));
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('User deleted.')]);
 
         return to_route('users.index');
     }

@@ -4,7 +4,7 @@ import {
     Eye,
     KeyRound,
     Pencil,
-    ShieldOff,
+    Trash2,
     UserPlus,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -111,7 +111,7 @@ export default function Index({
     const [viewingUser, setViewingUser] = useState<ManagedUser | null>(null);
     const [confirmState, setConfirmState] = useState<{
         user: ManagedUser;
-        action: 'disable' | 'reset' | 'resend';
+        action: 'delete' | 'reset' | 'resend';
     } | null>(null);
 
     const table = useTable({
@@ -144,8 +144,8 @@ export default function Index({
         setDetailOpen(true);
     }
 
-    function disableAccess(user: ManagedUser) {
-        setConfirmState({ user, action: 'disable' });
+    function deleteUser(user: ManagedUser) {
+        setConfirmState({ user, action: 'delete' });
     }
 
     function sendReset(user: ManagedUser) {
@@ -163,7 +163,7 @@ export default function Index({
 
         const { user, action } = confirmState;
 
-        if (action === 'disable') {
+        if (action === 'delete') {
             router.delete(destroy.url(user));
         } else if (action === 'reset') {
             router.post(resetPassword.url(user));
@@ -267,15 +267,13 @@ export default function Index({
                                 Resend Invite Link
                             </DropdownMenuItem>
                         )}
-                        {u.status !== 'disabled' && (
-                            <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => disableAccess(u)}
-                            >
-                                <ShieldOff className="size-4" />
-                                Disable Access
-                            </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => deleteUser(u)}
+                        >
+                            <Trash2 className="size-4" />
+                            Delete User
+                        </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             ),
@@ -350,7 +348,7 @@ export default function Index({
                     setDetailOpen(false);
                     openEdit(user);
                 }}
-                onDisable={disableAccess}
+                onDelete={deleteUser}
                 onResetPassword={sendReset}
                 onResendInvitation={resendInvite}
             />
@@ -361,20 +359,20 @@ export default function Index({
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>
-                            {confirmState?.action === 'disable'
-                                ? 'Disable access'
+                            {confirmState?.action === 'delete'
+                                ? 'Delete user'
                                 : confirmState?.action === 'reset'
                                   ? 'Reset password'
                                   : 'Resend invitation'}
                         </DialogTitle>
                         <DialogDescription>
-                            {confirmState?.action === 'disable' && (
+                            {confirmState?.action === 'delete' && (
                                 <>
-                                    Disable access for{' '}
+                                    Are you sure you want to delete{' '}
                                     <span className="font-medium">
                                         {confirmState.user.name}
                                     </span>
-                                    ?
+                                    ? This action cannot be undone.
                                 </>
                             )}
                             {confirmState?.action === 'reset' && (
@@ -406,14 +404,14 @@ export default function Index({
                         </Button>
                         <Button
                             variant={
-                                confirmState?.action === 'disable'
+                                confirmState?.action === 'delete'
                                     ? 'destructive'
                                     : 'default'
                             }
                             onClick={executeConfirmed}
                         >
-                            {confirmState?.action === 'disable'
-                                ? 'Disable'
+                            {confirmState?.action === 'delete'
+                                ? 'Delete'
                                 : confirmState?.action === 'reset'
                                   ? 'Send Reset'
                                   : 'Resend'}
@@ -610,7 +608,7 @@ function UserDetailSheet({
     open,
     onOpenChange,
     onEdit,
-    onDisable,
+    onDelete,
     onResetPassword,
     onResendInvitation,
 }: {
@@ -618,7 +616,7 @@ function UserDetailSheet({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onEdit: (user: ManagedUser) => void;
-    onDisable: (user: ManagedUser) => void;
+    onDelete: (user: ManagedUser) => void;
     onResetPassword: (user: ManagedUser) => void;
     onResendInvitation: (user: ManagedUser) => void;
 }) {
@@ -753,15 +751,13 @@ function UserDetailSheet({
                                 </Button>
                             )}
 
-                            {user.status !== 'disabled' && (
-                                <Button
-                                    variant="destructive"
-                                    onClick={() => onDisable(user)}
-                                >
-                                    <ShieldOff className="size-4" />
-                                    Disable Access
-                                </Button>
-                            )}
+                            <Button
+                                variant="destructive"
+                                onClick={() => onDelete(user)}
+                            >
+                                <Trash2 className="size-4" />
+                                Delete User
+                            </Button>
                         </div>
                     </div>
                 )}
