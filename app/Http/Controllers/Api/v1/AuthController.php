@@ -7,7 +7,7 @@ use App\Http\Requests\Api\LoginRequest;
 use App\Http\Requests\Api\RegisterRequest;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Services\PhoneVerificationService;
+use App\Services\OtpVerificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -16,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 class AuthController extends Controller
 {
     public function __construct(
-        protected PhoneVerificationService $phoneVerificationService,
+        protected OtpVerificationService $otpService,
     ) {}
 
     /**
@@ -27,7 +27,7 @@ class AuthController extends Controller
         $validated = $request->validated();
 
         $phone = ! empty($validated['phone'])
-            ? $this->phoneVerificationService->normalizePhoneNumber($validated['phone'])
+            ? $this->otpService->normalizePhoneNumber($validated['phone'])
             : null;
 
         $user = User::create([
@@ -49,23 +49,30 @@ class AuthController extends Controller
         $deviceName = $validated['device_name'] ?? 'api-client';
         $token = $user->createToken($deviceName)->plainTextToken;
 
+        $otpChannel = $validated['otp_channel'] ?? (! empty($phone) ? 'whatsapp' : 'email');
         $otpSent = false;
-        if (! empty($phone)) {
-            try {
-                $this->phoneVerificationService->sendOtp($user, $phone);
-                $otpSent = true;
-            } catch (\Throwable) {
-                // If notification fails in dev/test, registration still succeeds
-                $otpSent = false;
-            }
+        $otpResult = null;
+        try {
+            $otpResult = $this->otpService->sendOtp($user, $otpChannel);
+            $otpSent = $otpResult['sent'] ?? true;
+        } catch (\Throwable) {
+            // If notification fails in dev/test, registration still succeeds
+            $otpSent = false;
         }
 
-        return response()->json([
-            'message' => 'Account registered successfully.',
+        $response = [
+            'message' => 'Account registered successfully. Please verify your OTP code to complete registration.',
             'token' => $token,
             'otp_sent' => $otpSent,
+            'otp_channel' => $otpChannel,
             'user' => $this->formatUserResponse($user),
-        ], 201);
+        ];
+
+        if (config('app.debug') && isset($otpResult['debug_otp'])) {
+            $response['debug_otp'] = $otpResult['debug_otp'];
+        }
+
+        return response()->json($response, 201);
     }
 
     /**
@@ -77,7 +84,7 @@ class AuthController extends Controller
         $login = trim($validated['login']);
 
         // Check if login identifier is email or phone
-        $normalizedPhone = $this->phoneVerificationService->normalizePhoneNumber($login);
+        $normalizedPhone = $this->otpService->normalizePhoneNumber($login);
 
         $user = User::query()
             ->where('email', strtolower($login))
@@ -142,7 +149,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Format consistent user response with phone verification metadata.
+     * Format consistent user response with phone and email verification metadata.
      */
     protected function formatUserResponse(User $user): array
     {
@@ -150,6 +157,8 @@ class AuthController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'email_verified' => ! is_null($user->email_verified_at),
+            'email_verified_at' => $user->email_verified_at?->toIso8601String(),
             'phone' => $user->phone,
             'phone_verified' => $user->hasVerifiedPhone(),
             'phone_verified_at' => $user->phone_verified_at?->toIso8601String(),

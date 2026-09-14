@@ -37,6 +37,10 @@ const normalizeDriver = (name: string | null | undefined): string => {
         return 'openkos/fonnte';
     }
 
+    if (name === 'waba') {
+        return 'openkos/waba';
+    }
+
     return name;
 };
 

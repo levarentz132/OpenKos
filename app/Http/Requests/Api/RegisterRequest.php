@@ -16,15 +16,17 @@ class RegisterRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:25', 'unique:users,phone'],
+            'phone' => ['nullable', 'string', 'max:25'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'device_name' => ['nullable', 'string', 'max:255'],
+            'otp_channel' => ['nullable', 'string', 'in:whatsapp,email'],
         ];
     }
 
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
+            // Validate email uniqueness with specific context
             $email = strtolower(trim((string) $this->input('email')));
             $existingUser = \App\Models\User::where('email', $email)->first();
 
@@ -44,6 +46,48 @@ class RegisterRequest extends FormRequest
                         'email',
                         'The email has already been taken.'
                     );
+                }
+            }
+
+            // Validate phone requirement when WhatsApp channel is chosen
+            $otpChannel = $this->input('otp_channel');
+            $phone = (string) $this->input('phone');
+
+            if ($otpChannel === 'whatsapp' && blank($phone)) {
+                $validator->errors()->add(
+                    'phone',
+                    'A phone number is required when selecting WhatsApp as the OTP verification channel.'
+                );
+            }
+
+            // Validate phone uniqueness if provided
+            if (! blank($phone)) {
+                $cleaned = preg_replace('/[^0-9]/', '', $phone);
+                if (str_starts_with($cleaned, '0')) {
+                    $cleaned = '62' . substr($cleaned, 1);
+                }
+
+                $existingPhoneUser = \App\Models\User::where('phone', $phone)
+                    ->orWhere('phone', $cleaned)
+                    ->first();
+
+                if ($existingPhoneUser) {
+                    if ($existingPhoneUser->isOwner()) {
+                        $validator->errors()->add(
+                            'phone',
+                            'This phone number belongs to an administrator account. Tenant accounts must use a separate phone number.'
+                        );
+                    } elseif ($existingPhoneUser->hasTenantProfile()) {
+                        $validator->errors()->add(
+                            'phone',
+                            'A tenant account with this phone number already exists. Please log in directly.'
+                        );
+                    } else {
+                        $validator->errors()->add(
+                            'phone',
+                            'The phone number has already been taken.'
+                        );
+                    }
                 }
             }
         });

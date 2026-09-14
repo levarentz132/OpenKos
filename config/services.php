@@ -1,5 +1,7 @@
 <?php
 
+use App\Notifications\Drivers\FonnteWhatsAppDriver;
+use App\Notifications\Drivers\WabaWhatsAppDriver;
 use App\Notifications\Drivers\WhatsappLogDriver;
 
 return [
@@ -29,7 +31,20 @@ return [
         'drivers' => [
             'log' => [
                 'class' => WhatsappLogDriver::class,
-                'label' => 'Log',
+                'label' => 'Log (Development)',
+            ],
+            'fonnte' => [
+                'class' => FonnteWhatsAppDriver::class,
+                'label' => 'Fonnte (WhatsApp Gateway)',
+                'token' => env('FONNTE_TOKEN'),
+            ],
+            'waba' => [
+                'class' => WabaWhatsAppDriver::class,
+                'label' => 'WhatsApp Business Cloud API (WABA)',
+                'phone_number_id' => env('WABA_PHONE_NUMBER_ID'),
+                'access_token' => env('WABA_ACCESS_TOKEN'),
+                'template_name' => env('WABA_TEMPLATE_NAME'),
+                'template_language' => env('WABA_TEMPLATE_LANGUAGE', 'id'),
             ],
         ],
     ],

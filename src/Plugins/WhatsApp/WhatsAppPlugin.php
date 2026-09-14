@@ -33,6 +33,8 @@ class WhatsAppPlugin extends Plugin
     {
         $map = [
             'log' => 'openkos/whatsapp-log',
+            'fonnte' => 'openkos/fonnte',
+            'waba' => 'openkos/waba',
         ];
 
         foreach (config('services.whatsapp.drivers', []) as $name => $definition) {

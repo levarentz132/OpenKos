@@ -70,6 +70,9 @@ class WhatsAppController extends Controller
         if ($this->registry->has('openkos/fonnte')) {
             $aliases[] = 'fonnte';
         }
+        if ($this->registry->has('openkos/waba')) {
+            $aliases[] = 'waba';
+        }
         $allowedDrivers = array_unique(array_merge($registeredDrivers, $aliases));
 
         $validated = $request->validate([

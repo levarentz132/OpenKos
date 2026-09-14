@@ -26,6 +26,7 @@ describe('WhatsAppManager', function () {
         expect($manager->normalizeDriverId('log'))->toBe('openkos/whatsapp-log');
         expect($manager->normalizeDriverId('openkos/log'))->toBe('openkos/whatsapp-log');
         expect($manager->normalizeDriverId('fonnte'))->toBe('openkos/fonnte');
+        expect($manager->normalizeDriverId('waba'))->toBe('openkos/waba');
         expect($manager->normalizeDriverId('custom/driver'))->toBe('custom/driver');
     });
 

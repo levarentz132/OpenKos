@@ -105,6 +105,7 @@ class WhatsAppManager
         return match ($name) {
             'log', 'openkos/log' => 'openkos/whatsapp-log',
             'fonnte' => 'openkos/fonnte',
+            'waba' => 'openkos/waba',
             default => $name,
         };
     }

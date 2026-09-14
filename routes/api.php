@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AvailableRoomsController;
 use App\Http\Controllers\Api\v1\AuthController;
+use App\Http\Controllers\Api\v1\OtpController;
 use App\Http\Controllers\Api\v1\PhoneVerificationController;
 use App\Http\Controllers\Api\v1\Tenant\TenantDashboardController;
 use App\Http\Controllers\Api\v1\Tenant\TenantInvoiceController;
@@ -23,10 +24,17 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('register', [AuthController::class, 'register'])->name('register');
         Route::post('login', [AuthController::class, 'login'])->name('login');
 
+        // Dual-Channel OTP (WhatsApp or Email) - Supports Bearer Token OR email/phone
+        Route::prefix('otp')->name('otp.')->group(function () {
+            Route::post('send', [OtpController::class, 'send'])->name('send');
+            Route::post('verify', [OtpController::class, 'verify'])->name('verify');
+        });
+
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('me', [AuthController::class, 'me'])->name('me');
             Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 
+            // Backward-compatible phone aliases
             Route::prefix('phone')->name('phone.')->group(function () {
                 Route::post('send-otp', [PhoneVerificationController::class, 'sendOtp'])->name('send-otp');
                 Route::post('verify-otp', [PhoneVerificationController::class, 'verifyOtp'])->name('verify-otp');
