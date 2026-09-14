@@ -13,7 +13,13 @@ abstract class TenantBaseController extends Controller
      */
     protected function getTenant(Request $request): ?Tenant
     {
-        return $request->user()->tenant()->first();
+        $user = $request->user();
+
+        if ($user instanceof Tenant) {
+            return $user;
+        }
+
+        return $user?->tenant()->first();
     }
 
     /**

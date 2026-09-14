@@ -6,10 +6,12 @@ use App\Http\Controllers\Api\v1\Concerns\FormatsUserResponse;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\LoginRequest;
 use App\Http\Requests\Api\RegisterRequest;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\OtpVerificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -23,7 +25,7 @@ class AuthController extends Controller
 
     /**
      * Staged registration via API.
-     * The User and Tenant accounts are NOT created in the database until the OTP is verified.
+     * Database records are NOT created until the OTP code is verified.
      */
     public function register(RegisterRequest $request): JsonResponse
     {
@@ -48,50 +50,62 @@ class AuthController extends Controller
     }
 
     /**
-     * Authenticate user and issue personal access token.
+     * Authenticate tenant and issue personal access token.
      */
     public function login(LoginRequest $request): JsonResponse
     {
         $validated = $request->validated();
         $login = trim($validated['login']);
-
-        // Check if login identifier is email or phone
         $normalizedPhone = $this->otpService->normalizePhoneNumber($login);
 
-        $user = User::query()
+        // 1. First check tenants table directly
+        /** @var Tenant|null $tenant */
+        $tenant = Tenant::query()
             ->where('email', strtolower($login))
             ->orWhere('phone', $login)
             ->orWhere('phone', $normalizedPhone)
             ->first();
 
-        if (! $user || ! Hash::check($validated['password'], $user->password)) {
+        // 2. Fallback check on users table for legacy tenant records
+        if (! $tenant) {
+            $user = User::query()
+                ->where('email', strtolower($login))
+                ->orWhere('phone', $login)
+                ->orWhere('phone', $normalizedPhone)
+                ->first();
+
+            if ($user && $user->isOwner()) {
+                throw ValidationException::withMessages([
+                    'login' => ['This login portal is reserved for tenants only. Administrator accounts must log in via the web dashboard.'],
+                ]);
+            }
+
+            if ($user && $user->hasTenantProfile()) {
+                $tenant = $user->tenant;
+            }
+        }
+
+        if (! $tenant || ! Hash::check($validated['password'], $tenant->password ?? $tenant->user?->password)) {
             throw ValidationException::withMessages([
                 'login' => ['These credentials do not match our records.'],
             ]);
         }
 
-        if (! $user->is_active) {
+        if (! $tenant->is_active) {
             throw ValidationException::withMessages([
                 'login' => ['Your account has been deactivated. Please contact support.'],
             ]);
         }
 
-        // Restrict API login to tenants only (reject owners/admins)
-        if ($user->isOwner() || ! $user->hasTenantProfile()) {
-            throw ValidationException::withMessages([
-                'login' => ['This login portal is reserved for tenants only. Administrator accounts must log in via the web dashboard.'],
-            ]);
-        }
-
-        $user->forceFill(['last_login_at' => now()])->saveQuietly();
+        $tenant->forceFill(['last_login_at' => now()])->saveQuietly();
 
         $deviceName = $validated['device_name'] ?? 'api-client';
-        $token = $user->createToken($deviceName)->plainTextToken;
+        $token = $tenant->createToken($deviceName)->plainTextToken;
 
         return response()->json([
             'message' => 'Login successful.',
             'token' => $token,
-            'user' => $this->formatUserResponse($user),
+            'user' => $this->formatUserResponse($tenant),
         ]);
     }
 
@@ -100,11 +114,81 @@ class AuthController extends Controller
      */
     public function me(Request $request): JsonResponse
     {
-        /** @var User $user */
         $user = $request->user();
 
         return response()->json([
-            'user' => $this->formatUserResponse($user->fresh(['tenant'])),
+            'user' => $this->formatUserResponse($user),
+        ]);
+    }
+
+    /**
+     * Delete the authenticated tenant or user account.
+     */
+    public function destroy(Request $request): JsonResponse
+    {
+        /** @var User|Tenant $user */
+        $user = $request->user();
+
+        if (! $user) {
+            abort(401);
+        }
+
+        if ($user instanceof User && $user->isOwner()) {
+            $activeOwners = User::role(\App\Enums\Role::Owner->value)->where('is_active', true)->count();
+            if ($activeOwners <= 1) {
+                throw ValidationException::withMessages([
+                    'account' => ['The last remaining administrator account cannot be deleted.'],
+                ]);
+            }
+        }
+
+        DB::transaction(function () use ($user) {
+            if (method_exists($user, 'tokens')) {
+                $user->tokens()->delete();
+            }
+
+            if ($user instanceof Tenant) {
+                $user->delete();
+            } elseif ($user instanceof User) {
+                $user->tenant?->delete();
+                $user->delete();
+            }
+        });
+
+        return response()->json([
+            'message' => 'Account deleted successfully.',
+        ]);
+    }
+
+    /**
+     * Delete any user account by ID (Administrator only).
+     */
+    public function deleteUser(Request $request, User $user): JsonResponse
+    {
+        /** @var User $currentUser */
+        $currentUser = $request->user();
+
+        if (! $currentUser instanceof User || ! $currentUser->isOwner()) {
+            abort(403, 'Only administrators can delete user accounts.');
+        }
+
+        if ($user->isOwner()) {
+            $activeOwners = User::role(\App\Enums\Role::Owner->value)->where('is_active', true)->count();
+            if ($activeOwners <= 1) {
+                throw ValidationException::withMessages([
+                    'user' => ['The last remaining administrator account cannot be deleted.'],
+                ]);
+            }
+        }
+
+        DB::transaction(function () use ($user) {
+            $user->tokens()->delete();
+            $user->tenant?->delete();
+            $user->delete();
+        });
+
+        return response()->json([
+            'message' => 'User deleted successfully.',
         ]);
     }
 

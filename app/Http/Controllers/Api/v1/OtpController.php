@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\v1;
 
 use App\Http\Controllers\Api\v1\Concerns\FormatsUserResponse;
 use App\Http\Controllers\Controller;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\OtpVerificationService;
 use Illuminate\Http\JsonResponse;
@@ -84,7 +85,7 @@ class OtpController extends Controller
     /**
      * Verify OTP code submitted by the tenant.
      * Completes registration if verifying a pending registration session,
-     * or updates phone_verified_at / email_verified_at for existing users.
+     * or updates phone_verified_at / email_verified_at for existing accounts.
      */
     public function verify(Request $request): JsonResponse
     {
@@ -104,25 +105,26 @@ class OtpController extends Controller
             ?? $validated['email']
             ?? null;
 
-        // 1. Verify pending registration session and create database records
+        // 1. Verify pending registration session and create ONLY Tenant database record
         if ($identifier && $this->otpService->hasPendingRegistration($identifier)) {
             $result = $this->otpService->verifyPendingRegistration($identifier, $validated['code']);
-            $freshUser = $result['user'];
+            /** @var Tenant $tenant */
+            $tenant = $result['user'];
             $deviceName = $validated['device_name'] ?? 'api-client';
-            $token = $freshUser->createToken($deviceName)->plainTextToken;
+            $token = $tenant->createToken($deviceName)->plainTextToken;
 
             return response()->json([
                 'message' => 'Account registered and verified successfully.',
                 'verified' => true,
                 'token' => $token,
                 'channel' => $result['channel'],
-                'phone_verified' => $freshUser->hasVerifiedPhone(),
-                'email_verified' => ! is_null($freshUser->email_verified_at),
-                'user' => $this->formatUserResponse($freshUser),
+                'phone_verified' => $tenant->hasVerifiedPhone(),
+                'email_verified' => ! is_null($tenant->email_verified_at),
+                'user' => $this->formatUserResponse($tenant),
             ], 201);
         }
 
-        // 2. Verify existing user
+        // 2. Verify existing user or tenant
         $user = $this->resolveTenantUser($request, $validated);
 
         $result = $this->otpService->verifyOtp(
@@ -151,9 +153,9 @@ class OtpController extends Controller
      *
      * @throws ValidationException
      */
-    protected function resolveTenantUser(Request $request, array $validated): User
+    protected function resolveTenantUser(Request $request, array $validated): User|Tenant
     {
-        /** @var User|null $user */
+        /** @var User|Tenant|null $user */
         $user = $request->user('sanctum') ?? $request->user();
 
         if (! $user) {
@@ -167,6 +169,18 @@ class OtpController extends Controller
 
             $normalizedPhone = $this->otpService->normalizePhoneNumber($identifier);
 
+            // Check Tenant table directly first
+            $tenant = Tenant::query()
+                ->where('email', strtolower(trim($identifier)))
+                ->orWhere('phone', $identifier)
+                ->orWhere('phone', $normalizedPhone)
+                ->first();
+
+            if ($tenant) {
+                return $tenant;
+            }
+
+            // Fallback to User table for legacy users
             $user = User::query()
                 ->where('email', strtolower(trim($identifier)))
                 ->orWhere('phone', $identifier)
@@ -175,13 +189,12 @@ class OtpController extends Controller
 
             if (! $user) {
                 throw ValidationException::withMessages([
-                    'login' => ['No account found with this email or phone number.'],
+                    'login' => ['No tenant account found matching these details.'],
                 ]);
             }
         }
 
-        // Restrict OTP access strictly to tenants
-        if ($user->isOwner() || ! $user->hasTenantProfile()) {
+        if ($user instanceof User && ($user->isOwner() || ! $user->hasTenantProfile())) {
             throw ValidationException::withMessages([
                 'login' => ['This OTP verification portal is reserved for tenant accounts only.'],
             ]);

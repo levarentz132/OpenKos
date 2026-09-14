@@ -4,6 +4,7 @@ namespace App\Concerns;
 
 use App\Models\AuditLog;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 
@@ -111,12 +112,12 @@ trait Auditable
         return property_exists($this, 'auditableMask') ? $this->auditableMask : [];
     }
 
-    protected function resolveAuditActor(): ?User
+    protected function resolveAuditActor(): ?Model
     {
-        /** @var User|null $user */
+        /** @var Model|null $user */
         $user = Auth::user();
 
-        return $user;
+        return $user instanceof Model ? $user : null;
     }
 
     protected function resolveAuditSource(): string

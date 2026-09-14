@@ -69,15 +69,17 @@ test('api registration sends OTP and does not create database records until veri
 
     expect($verifyResponse->json('token'))->not->toBeNull();
 
-    // Now records exist in the database!
-    $this->assertDatabaseHas('users', [
+    // Now records exist in the database only in tenants table!
+    $this->assertDatabaseMissing('users', [
+        'email' => 'john@example.com',
+    ]);
+    $this->assertDatabaseHas('tenants', [
         'email' => 'john@example.com',
         'phone' => '6281234567890',
     ]);
 
-    $user = User::where('email', 'john@example.com')->first();
-    expect($user->hasTenantProfile())->toBeTrue();
-    expect($user->hasVerifiedPhone())->toBeTrue();
+    $tenant = \App\Models\Tenant::where('email', 'john@example.com')->first();
+    expect($tenant->hasVerifiedPhone())->toBeTrue();
 });
 
 test('registration fails if email belongs to an admin account', function () {
@@ -262,9 +264,10 @@ test('user can register and choose email otp channel and verify to create accoun
         ->assertJsonPath('verified', true)
         ->assertJsonPath('email_verified', true);
 
-    $this->assertDatabaseHas('users', ['email' => 'sarah@example.com']);
-    $user = User::where('email', 'sarah@example.com')->first();
-    expect($user->email_verified_at)->not->toBeNull();
+    $this->assertDatabaseMissing('users', ['email' => 'sarah@example.com']);
+    $this->assertDatabaseHas('tenants', ['email' => 'sarah@example.com']);
+    $tenant = \App\Models\Tenant::where('email', 'sarah@example.com')->first();
+    expect($tenant->email_verified_at)->not->toBeNull();
 });
 
 test('user can send and verify email OTP via dual-channel endpoint', function () {
@@ -422,3 +425,85 @@ test('authenticated user can log out and invalidate token', function () {
 
     expect($user->tokens()->count())->toBe(0);
 });
+
+test('authenticated tenant can delete their account via delete me endpoint', function () {
+    $tenant = \App\Models\Tenant::create([
+        'name' => 'Tenant To Delete',
+        'email' => 'tenantdelete@example.com',
+        'phone' => '6281999888777',
+        'password' => Hash::make('secret123'),
+        'is_active' => true,
+    ]);
+
+    $token = $tenant->createToken('delete-test')->plainTextToken;
+
+    $response = $this->withHeader('Authorization', "Bearer {$token}")
+        ->deleteJson('/api/v1/auth/me');
+
+    $response->assertOk()
+        ->assertJsonPath('message', 'Account deleted successfully.');
+
+    $this->assertDatabaseMissing('tenants', [
+        'id' => $tenant->id,
+        'deleted_at' => null,
+    ]);
+});
+
+test('administrator can delete a user account via delete users endpoint', function () {
+    $admin = User::factory()->owner()->create([
+        'email' => 'adminowner@example.com',
+    ]);
+    // Create another owner so the last owner constraint is satisfied
+    User::factory()->owner()->create([
+        'email' => 'secondowner@example.com',
+    ]);
+
+    $targetUser = User::factory()->create([
+        'email' => 'targetuser@example.com',
+    ]);
+
+    $adminToken = $admin->createToken('admin-token')->plainTextToken;
+
+    $response = $this->withHeader('Authorization', "Bearer {$adminToken}")
+        ->deleteJson("/api/v1/auth/users/{$targetUser->id}");
+
+    $response->assertOk()
+        ->assertJsonPath('message', 'User deleted successfully.');
+
+    $this->assertDatabaseMissing('users', [
+        'id' => $targetUser->id,
+    ]);
+});
+
+test('non-admin tenant cannot delete another user account', function () {
+    $tenant = \App\Models\Tenant::create([
+        'name' => 'Regular Tenant',
+        'email' => 'regular@example.com',
+        'password' => Hash::make('secret123'),
+        'is_active' => true,
+    ]);
+
+    $targetUser = User::factory()->create();
+    $tenantToken = $tenant->createToken('tenant-token')->plainTextToken;
+
+    $response = $this->withHeader('Authorization', "Bearer {$tenantToken}")
+        ->deleteJson("/api/v1/auth/users/{$targetUser->id}");
+
+    $response->assertStatus(403);
+});
+
+test('cannot delete the last remaining owner account', function () {
+    $admin = User::factory()->owner()->create([
+        'email' => 'soleowner@example.com',
+    ]);
+
+    $adminToken = $admin->createToken('admin-token')->plainTextToken;
+
+    // Admin tries to self-delete via /me
+    $response = $this->withHeader('Authorization', "Bearer {$adminToken}")
+        ->deleteJson('/api/v1/auth/me');
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['account']);
+});
+

@@ -20,7 +20,7 @@ class OtpVerificationService
 
     /**
      * Create a staged pending registration in cache.
-     * The User and Tenant records are NOT created in the database until OTP is verified.
+     * Database records are NOT created until OTP is verified.
      *
      * @throws ValidationException
      */
@@ -42,7 +42,7 @@ class OtpVerificationService
 
         $target = $channel === 'whatsapp' ? $phone : $email;
 
-        // Rate limit: Cooldown per target to prevent spamming WhatsApp or Email
+        // Rate limit: Cooldown per target to prevent spamming
         $targetCooldownKey = "pending_cooldown_target_{$channel}_{$target}";
         if (Cache::has($targetCooldownKey)) {
             $secondsRemaining = max(1, Cache::get($targetCooldownKey) - time());
@@ -191,7 +191,8 @@ class OtpVerificationService
     }
 
     /**
-     * Verify OTP and atomically create User and Tenant records in the database.
+     * Verify OTP and create ONLY Tenant record in the database.
+     * Users table is completely untouched!
      *
      * @throws ValidationException
      */
@@ -212,7 +213,7 @@ class OtpVerificationService
         }
 
         // Concurrency safeguard: ensure email or phone was not created while pending
-        $existing = User::query()
+        $existing = Tenant::query()
             ->where('email', $pending['email'])
             ->when(! empty($pending['phone']), fn ($q) => $q->orWhere('phone', $pending['phone']))
             ->first();
@@ -220,13 +221,13 @@ class OtpVerificationService
         if ($existing) {
             $this->clearPendingRegistration($pending);
             throw ValidationException::withMessages([
-                'email' => ['An account with this email or phone number already exists.'],
+                'email' => ['A tenant account with this email or phone number already exists.'],
             ]);
         }
 
-        /** @var User $user */
-        $user = DB::transaction(function () use ($pending) {
-            $user = User::create([
+        /** @var Tenant $tenant */
+        $tenant = DB::transaction(function () use ($pending) {
+            return Tenant::create([
                 'name' => $pending['name'],
                 'email' => $pending['email'],
                 'phone' => $pending['phone'],
@@ -235,21 +236,12 @@ class OtpVerificationService
                 'phone_verified_at' => $pending['otp_channel'] === 'whatsapp' ? now() : null,
                 'is_active' => true,
             ]);
-
-            Tenant::create([
-                'user_id' => $user->id,
-                'name' => $user->name,
-                'phone' => $pending['phone'] ?? '',
-                'is_active' => true,
-            ]);
-
-            return $user;
         });
 
         $this->clearPendingRegistration($pending);
 
         return [
-            'user' => $user->fresh(['tenant']),
+            'user' => $tenant,
             'channel' => $pending['otp_channel'],
         ];
     }
@@ -305,11 +297,11 @@ class OtpVerificationService
     }
 
     /**
-     * Send or resend an OTP code for an existing user via either WhatsApp or Email.
+     * Send or resend an OTP code for an existing user or tenant via WhatsApp or Email.
      *
      * @throws ValidationException
      */
-    public function sendOtp(User $user, string $channel = 'whatsapp', ?string $target = null): array
+    public function sendOtp(User|Tenant $user, string $channel = 'whatsapp', ?string $target = null): array
     {
         $channel = strtolower(trim($channel));
 
@@ -319,6 +311,8 @@ class OtpVerificationService
             ]);
         }
 
+        $typePrefix = $user instanceof Tenant ? 'tenant' : 'user';
+
         if ($channel === 'whatsapp') {
             $targetPhone = $this->normalizePhoneNumber($target ?? $user->phone ?? '');
             if (blank($targetPhone)) {
@@ -327,7 +321,7 @@ class OtpVerificationService
                 ]);
             }
 
-            $cooldownKey = "otp_cooldown_{$user->id}_whatsapp";
+            $cooldownKey = "otp_cooldown_{$typePrefix}_{$user->id}_whatsapp";
             if (Cache::has($cooldownKey)) {
                 $secondsRemaining = max(1, Cache::get($cooldownKey) - time());
                 throw ValidationException::withMessages([
@@ -336,7 +330,9 @@ class OtpVerificationService
             }
 
             $otp = (string) random_int(100000, 999999);
+            Cache::put("otp_{$typePrefix}_{$user->id}_whatsapp", ['otp' => $otp, 'phone' => $targetPhone], now()->addMinutes(10));
             Cache::put("otp_{$user->id}_whatsapp", ['otp' => $otp, 'phone' => $targetPhone], now()->addMinutes(10));
+            Cache::put("phone_otp_{$user->id}", ['otp' => $otp, 'phone' => $targetPhone], now()->addMinutes(10));
             Cache::put($cooldownKey, time() + 60, now()->addSeconds(60));
 
             $sent = $this->dispatchOtpCode($targetPhone, 'whatsapp', $otp);
@@ -361,7 +357,7 @@ class OtpVerificationService
             ]);
         }
 
-        $cooldownKey = "otp_cooldown_{$user->id}_email";
+        $cooldownKey = "otp_cooldown_{$typePrefix}_{$user->id}_email";
         if (Cache::has($cooldownKey)) {
             $secondsRemaining = max(1, Cache::get($cooldownKey) - time());
             throw ValidationException::withMessages([
@@ -370,6 +366,7 @@ class OtpVerificationService
         }
 
         $otp = (string) random_int(100000, 999999);
+        Cache::put("otp_{$typePrefix}_{$user->id}_email", ['otp' => $otp, 'email' => $targetEmail], now()->addMinutes(10));
         Cache::put("otp_{$user->id}_email", ['otp' => $otp, 'email' => $targetEmail], now()->addMinutes(10));
         Cache::put($cooldownKey, time() + 60, now()->addSeconds(60));
 
@@ -389,21 +386,26 @@ class OtpVerificationService
     }
 
     /**
-     * Verify OTP code for an existing user against either WhatsApp or Email channel.
+     * Verify OTP code for an existing user or tenant against WhatsApp or Email.
      *
      * @throws ValidationException
      */
-    public function verifyOtp(User $user, string $code, ?string $channel = null): array
+    public function verifyOtp(User|Tenant $user, string $code, ?string $channel = null): array
     {
         $code = trim($code);
         $channelsToCheck = $channel ? [strtolower(trim($channel))] : ['whatsapp', 'email'];
         $matchedChannel = null;
         $cachedPayload = null;
+        $typePrefix = $user instanceof Tenant ? 'tenant' : 'user';
 
         foreach ($channelsToCheck as $ch) {
-            $key = "otp_{$user->id}_{$ch}";
+            $key = "otp_{$typePrefix}_{$user->id}_{$ch}";
             $cached = Cache::get($key);
 
+            // Backward compatibility checks
+            if (! $cached) {
+                $cached = Cache::get("otp_{$user->id}_{$ch}");
+            }
             if (! $cached && $ch === 'whatsapp') {
                 $cached = Cache::get("phone_otp_{$user->id}");
             }
@@ -428,10 +430,12 @@ class OtpVerificationService
                 'phone_verified_at' => now(),
             ])->save();
 
-            if ($user->tenant) {
+            if ($user instanceof User && $user->tenant) {
                 $user->tenant->update(['phone' => $verifiedPhone]);
             }
 
+            Cache::forget("otp_{$typePrefix}_{$user->id}_whatsapp");
+            Cache::forget("otp_cooldown_{$typePrefix}_{$user->id}_whatsapp");
             Cache::forget("otp_{$user->id}_whatsapp");
             Cache::forget("otp_cooldown_{$user->id}_whatsapp");
             Cache::forget("phone_otp_{$user->id}");
@@ -443,6 +447,8 @@ class OtpVerificationService
                 'email_verified_at' => now(),
             ])->save();
 
+            Cache::forget("otp_{$typePrefix}_{$user->id}_email");
+            Cache::forget("otp_cooldown_{$typePrefix}_{$user->id}_email");
             Cache::forget("otp_{$user->id}_email");
             Cache::forget("otp_cooldown_{$user->id}_email");
         }

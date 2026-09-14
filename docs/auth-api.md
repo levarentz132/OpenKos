@@ -11,16 +11,26 @@ https://dashboard.highlanderstay.com/api/v1/auth
 
 ## 1. Overview & Security Architecture
 
-1. **Strict Tenant Separation**: The registration and login APIs are reserved exclusively for **Tenants**. Administrator and property owner accounts are prevented from logging into or registering via the tenant API.
-2. **Dual-Channel OTP Delivery**: Supports sending 6-digit verification codes via:
-   - **WhatsApp**: Dispatched using the configured WhatsApp provider (Fonnte/Wablas) to Indonesian (`08...` or `628...`) and international mobile numbers.
+1. **Strict Tenant Separation (Direct `tenants` Table Architecture)**:
+   - Registration creates records **exclusively in the `tenants` table**. The administrative `users` table is never written to.
+   - `Tenant` models implement Laravel's `Authenticatable` contract and issue Sanctum personal access tokens directly (`App\Models\Tenant`).
+   - Administrator and property owner accounts in `users` are strictly prevented from registering or logging in through the tenant API.
+2. **Anti-Spam Staged Registration**:
+   - Calling `/api/v1/auth/register` creates **zero** database rows. Registration payloads are held in memory/cache with a 10-minute TTL.
+   - Database records are created **only** when the applicant verifies the 6-digit OTP code via `/api/v1/auth/otp/verify`.
+3. **Dual-Channel OTP Delivery**:
+   - **WhatsApp**: Dispatched using the configured WhatsApp provider (Fonnte/Wablas/WABA) to Indonesian (`08...` or `628...`) and international mobile numbers.
    - **Email**: Dispatched via standard SMTP mail driver with an HTML verification card.
-3. **Flexible Verification Methods**:
-   - **Authenticated Session**: Pass `Authorization: Bearer <token>` returned from `/register` or `/login`.
-   - **Public Identifier**: Pass `login` (phone number or email) directly along with the `code`. When verified this way, the endpoint automatically returns an API Bearer token for instant login!
-4. **Rate Limiting & Expiry**:
+4. **Flexible Verification Methods**:
+   - **Staged Registration**: Pass `registration_token` and `code` to `/api/v1/auth/otp/verify` to complete registration and obtain an API token.
+   - **Authenticated Session**: Pass `Authorization: Bearer <token>` for existing accounts.
+   - **Public Identifier**: Pass `login` (phone number or email) directly along with the `code`.
+5. **Account Lifecycle & Deletion**:
+   - Authenticated tenants can delete their own account and revoke tokens via `DELETE /api/v1/auth/me`.
+   - Administrators can delete user accounts via `DELETE /api/v1/auth/users/{user}`.
+6. **Rate Limiting & Expiry**:
    - OTP codes are 6 digits and expire in **10 minutes**.
-   - Cooldown period of **60 seconds** per user per channel prevents spam and abuse.
+   - Cooldown period of **60 seconds** per target per channel prevents spam and abuse.
 
 ---
 
@@ -28,11 +38,13 @@ https://dashboard.highlanderstay.com/api/v1/auth
 
 | Action | Method | URL | Authentication | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **Register Tenant** | `POST` | `/api/v1/auth/register` | Public | Creates tenant account & sends OTP |
+| **Register Tenant** | `POST` | `/api/v1/auth/register` | Public | Initiates staged registration (creates tenant only upon OTP verification) |
 | **Login Tenant** | `POST` | `/api/v1/auth/login` | Public | Login via Email or Phone Number |
 | **Send / Resend OTP** | `POST` | `/api/v1/auth/otp/send` | Optional (Bearer or login) | Dispatches OTP via WhatsApp or Email |
-| **Verify OTP** | `POST` | `/api/v1/auth/otp/verify` | Optional (Bearer or login) | Verifies code, updates status & returns token |
-| **Get My Profile** | `GET` | `/api/v1/auth/me` | Bearer Token Required | Gets user & tenant profile data |
+| **Verify OTP** | `POST` | `/api/v1/auth/otp/verify` | Optional (Bearer or login) | Verifies code, creates `Tenant` row if pending, returns token |
+| **Get My Profile** | `GET` | `/api/v1/auth/me` | Bearer Token Required | Gets tenant profile data & verification status |
+| **Delete My Account** | `DELETE` | `/api/v1/auth/me` | Bearer Token Required | Deletes authenticated tenant/user account & revokes tokens |
+| **Delete User (Admin)** | `DELETE` | `/api/v1/auth/users/{user}` | Bearer Token (Admin) | Deletes target user and associated tenant data |
 | **Logout** | `POST` | `/api/v1/auth/logout` | Bearer Token Required | Revokes current API access token |
 
 ---
@@ -301,6 +313,67 @@ Revokes and deletes the current access token.
   Accept: application/json
   Authorization: Bearer <token>
   ```
+
+---
+
+### 3.7 Delete My Account (Self-Deletion)
+
+Allows the authenticated tenant (or user) to delete their own account. All active API tokens are revoked, audit logs are recorded, and the tenant record is deleted from the database.
+
+- **Method**: `DELETE`
+- **URL**: `https://dashboard.highlanderstay.com/api/v1/auth/me`
+- **Headers**:
+  ```http
+  Accept: application/json
+  Authorization: Bearer <token>
+  ```
+
+#### Successful Response (`200 OK`)
+```json
+{
+  "message": "Account deleted successfully."
+}
+```
+
+#### Restriction on Last Administrator (`422 Unprocessable Entity`)
+If the account being deleted is the last remaining administrator/owner of the property, deletion is blocked:
+```json
+{
+  "message": "The last remaining administrator account cannot be deleted.",
+  "errors": {
+    "account": ["The last remaining administrator account cannot be deleted."]
+  }
+}
+```
+
+---
+
+### 3.8 Delete User Account (Administrator Only)
+
+Allows property administrators/owners to permanently delete any user account and any associated tenant record.
+
+- **Method**: `DELETE`
+- **URL**: `https://dashboard.highlanderstay.com/api/v1/auth/users/{user_id}`
+- **Headers**:
+  ```http
+  Accept: application/json
+  Authorization: Bearer <admin_token>
+  ```
+
+#### Successful Response (`200 OK`)
+```json
+{
+  "message": "User deleted successfully."
+}
+```
+
+#### Forbidden for Non-Administrators (`403 Forbidden`)
+If called with a tenant token:
+```json
+{
+  "message": "Only administrators can delete user accounts."
+}
+```
 
 ---
 

@@ -32,6 +32,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('me', [AuthController::class, 'me'])->name('me');
+            Route::delete('me', [AuthController::class, 'destroy'])->name('delete-account');
+            Route::delete('users/{user}', [AuthController::class, 'deleteUser'])->name('users.destroy');
             Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 
             // Backward-compatible phone aliases
