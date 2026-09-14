@@ -28,13 +28,14 @@ https://dashboard.highlanderstay.com/api/v1/auth
 | # | Action | Method | Endpoint | Auth Required | Description |
 | :-: | :--- | :---: | :--- | :---: | :--- |
 | 1 | **Register Tenant** | `POST` | `/register` | No | Starts staged registration & sends OTP |
-| 2 | **Send / Resend OTP** | `POST` | `/otp/send` | Optional | Dispatches OTP via WhatsApp or Email |
-| 3 | **Verify OTP** | `POST` | `/otp/verify` | Optional | Verifies code, creates `Tenant` row if pending, returns token |
-| 4 | **Login Tenant** | `POST` | `/login` | No | Login via Email or Phone Number + Password |
-| 5 | **Get Profile** | `GET` | `/me` | Bearer Token | Returns authenticated tenant profile |
-| 6 | **Delete My Account** | `DELETE` | `/me` | Bearer Token | Permanently deletes authenticated account & revokes tokens |
-| 7 | **Delete User (Admin)**| `DELETE` | `/users/{user_id}` | Bearer Token (Admin) | Deletes target user and associated tenant data |
-| 8 | **Logout** | `POST` | `/logout` | Bearer Token | Revokes active Sanctum API token |
+| 2 | **Check Status** | `POST` | `/check-status` | No | Checks dual-channel verification status (WhatsApp & Email) |
+| 3 | **Send / Resend OTP** | `POST` | `/otp/send` | Optional | Dispatches OTP via WhatsApp or Email |
+| 4 | **Verify OTP** | `POST` | `/otp/verify` | Optional | Verifies code, creates `Tenant` row if pending, returns token |
+| 5 | **Login Tenant** | `POST` | `/login` | No | Login via Email or Phone Number + Password |
+| 6 | **Get Profile** | `GET` | `/me` | Bearer Token | Returns authenticated tenant profile |
+| 7 | **Delete My Account** | `DELETE` | `/me` | Bearer Token | Permanently deletes authenticated account & revokes tokens |
+| 8 | **Delete User (Admin)**| `DELETE` | `/users/{user_id}` | Bearer Token (Admin) | Deletes target user and associated tenant data |
+| 9 | **Logout** | `POST` | `/logout` | Bearer Token | Revokes active Sanctum API token |
 
 ---
 
@@ -102,7 +103,102 @@ sequenceDiagram
 
 ---
 
-### 4.2 Send / Resend OTP
+### 4.2 Check Account & Dual Verification Status
+
+Allows external projects (mobile apps, n8n, CRM, bots) to check the state of an account and inspect both **WhatsApp OTP** and **Email OTP** verification statuses.
+
+- **URL**: `POST /api/v1/auth/check-status`
+- **Headers**:
+  ```http
+  Accept: application/json
+  Content-Type: application/json
+  ```
+- **Request Body**:
+  ```json
+  {
+    "login": "081234567890"
+  }
+  ```
+  *(Can also pass `"email": "jane@example.com"` or `"registration_token": "reg_xxx"` or `Authorization: Bearer <token>`)*.
+
+#### 1. Pending Registration Response
+Returned when the user has called `/register` but has not verified their OTP code:
+```json
+{
+  "status": "pending_registration",
+  "registered": false,
+  "pending_registration": true,
+  "registration_token": "reg_7b8a1c9e2f...",
+  "user": {
+    "name": "Jane Doe",
+    "email": "jane@example.com",
+    "phone": "6281234567890"
+  },
+  "verifications": {
+    "whatsapp": {
+      "available": true,
+      "target": "6281234567890",
+      "verified": false,
+      "verified_at": null,
+      "status": "pending"
+    },
+    "email": {
+      "available": true,
+      "target": "jane@example.com",
+      "verified": false,
+      "verified_at": null,
+      "status": "pending"
+    }
+  },
+  "is_fully_verified": false
+}
+```
+
+#### 2. Fully Registered Tenant Response
+Returned when the tenant is active in the database:
+```json
+{
+  "status": "registered",
+  "registered": true,
+  "pending_registration": false,
+  "id": 12,
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "phone": "6281234567890",
+  "is_active": true,
+  "verifications": {
+    "whatsapp": {
+      "available": true,
+      "target": "6281234567890",
+      "verified": true,
+      "verified_at": "2026-09-14T16:35:00+07:00",
+      "status": "verified"
+    },
+    "email": {
+      "available": true,
+      "target": "jane@example.com",
+      "verified": true,
+      "verified_at": "2026-09-14T16:40:00+07:00",
+      "status": "verified"
+    }
+  },
+  "is_fully_verified": true
+}
+```
+
+#### 3. Unregistered Response
+```json
+{
+  "status": "unregistered",
+  "registered": false,
+  "pending_registration": false,
+  "message": "No account or pending registration found for this identifier."
+}
+```
+
+---
+
+### 4.3 Send / Resend OTP
 
 Dispatches a new OTP code to an applicant or existing tenant. Can be invoked in 3 ways:
 1. With `registration_token` from `/register`
@@ -150,7 +246,7 @@ Dispatches a new OTP code to an applicant or existing tenant. Can be invoked in 
 
 ---
 
-### 4.3 Verify OTP
+### 4.4 Verify OTP
 
 Verifies the 6-digit code.
 - If verifying a **pending registration**, it inserts the record into `tenants`, deletes the temporary session, and returns a fresh Bearer token.
@@ -209,7 +305,7 @@ Verifies the 6-digit code.
 
 ---
 
-### 4.4 Tenant Login
+### 4.5 Tenant Login
 
 Authenticates using either **phone number** (automatically normalized from `08...` to `628...`) or **email address** along with password.
 
@@ -240,7 +336,7 @@ Authenticates using either **phone number** (automatically normalized from `08..
 
 ---
 
-### 4.5 Self-Delete Account
+### 4.6 Self-Delete Account
 
 Allows authenticated tenants to permanently delete their account and invalidate all issued tokens.
 
@@ -259,7 +355,7 @@ Allows authenticated tenants to permanently delete their account and invalidate 
 
 ---
 
-### 4.6 Delete User (Admin Only)
+### 4.7 Delete User (Admin Only)
 
 Allows property administrators to delete any user account and associated tenant record by ID.
 

@@ -50,6 +50,37 @@ class AuthController extends Controller
     }
 
     /**
+     * Check comprehensive registration & dual-channel OTP verification status (WhatsApp & Email).
+     */
+    public function checkStatus(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'login' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'string', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:25'],
+            'registration_token' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $identifier = $request->user('sanctum')
+            ?? $request->user()
+            ?? $validated['registration_token']
+            ?? $validated['login']
+            ?? $validated['email']
+            ?? $validated['phone']
+            ?? null;
+
+        if (blank($identifier)) {
+            throw ValidationException::withMessages([
+                'login' => ['Please provide an email, phone number, registration token, or Bearer token.'],
+            ]);
+        }
+
+        $result = $this->otpService->checkStatus($identifier);
+
+        return response()->json($result);
+    }
+
+    /**
      * Authenticate tenant and issue personal access token.
      */
     public function login(LoginRequest $request): JsonResponse

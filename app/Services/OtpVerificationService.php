@@ -63,6 +63,12 @@ class OtpVerificationService
             'otp' => $otp,
             'otp_channel' => $channel,
             'target' => $target,
+            'whatsapp_otp' => $channel === 'whatsapp' ? $otp : null,
+            'email_otp' => $channel === 'email' ? $otp : null,
+            'whatsapp_verified' => false,
+            'whatsapp_verified_at' => null,
+            'email_verified' => false,
+            'email_verified_at' => null,
             'device_name' => $data['device_name'] ?? 'api-client',
             'created_at' => now()->timestamp,
         ];
@@ -169,6 +175,11 @@ class OtpVerificationService
 
         $newOtp = (string) random_int(100000, 999999);
         $pending['otp'] = $newOtp;
+        if ($pending['otp_channel'] === 'whatsapp') {
+            $pending['whatsapp_otp'] = $newOtp;
+        } elseif ($pending['otp_channel'] === 'email') {
+            $pending['email_otp'] = $newOtp;
+        }
 
         Cache::put("pending_reg_{$token}", $pending, now()->addMinutes(10));
         Cache::put("pending_cooldown_{$token}", time() + 60, now()->addSeconds(60));
@@ -192,11 +203,11 @@ class OtpVerificationService
 
     /**
      * Verify OTP and create ONLY Tenant record in the database.
-     * Users table is completely untouched!
+     * Users table is completely untouched! Supports both WhatsApp and Email verification.
      *
      * @throws ValidationException
      */
-    public function verifyPendingRegistration(string $identifier, string $code): array
+    public function verifyPendingRegistration(string $identifier, string $code, ?string $channel = null): array
     {
         $pending = $this->getPendingRegistration($identifier);
 
@@ -206,10 +217,34 @@ class OtpVerificationService
             ]);
         }
 
-        if (! hash_equals((string) $pending['otp'], trim($code))) {
+        $code = trim($code);
+        $channelToCheck = $channel ? strtolower(trim($channel)) : null;
+
+        $matchedChannel = null;
+        if ($channelToCheck === 'whatsapp' && isset($pending['whatsapp_otp']) && hash_equals((string) $pending['whatsapp_otp'], $code)) {
+            $matchedChannel = 'whatsapp';
+        } elseif ($channelToCheck === 'email' && isset($pending['email_otp']) && hash_equals((string) $pending['email_otp'], $code)) {
+            $matchedChannel = 'email';
+        } elseif (hash_equals((string) $pending['otp'], $code)) {
+            $matchedChannel = $pending['otp_channel'];
+        } elseif (isset($pending['whatsapp_otp']) && hash_equals((string) $pending['whatsapp_otp'], $code)) {
+            $matchedChannel = 'whatsapp';
+        } elseif (isset($pending['email_otp']) && hash_equals((string) $pending['email_otp'], $code)) {
+            $matchedChannel = 'email';
+        }
+
+        if (! $matchedChannel) {
             throw ValidationException::withMessages([
                 'code' => ['The verification code is invalid.'],
             ]);
+        }
+
+        if ($matchedChannel === 'whatsapp') {
+            $pending['whatsapp_verified'] = true;
+            $pending['whatsapp_verified_at'] = now()->toIso8601String();
+        } elseif ($matchedChannel === 'email') {
+            $pending['email_verified'] = true;
+            $pending['email_verified_at'] = now()->toIso8601String();
         }
 
         // Concurrency safeguard: ensure email or phone was not created while pending
@@ -225,15 +260,18 @@ class OtpVerificationService
             ]);
         }
 
+        $isPhoneVerified = ! empty($pending['whatsapp_verified']) || $matchedChannel === 'whatsapp';
+        $isEmailVerified = ! empty($pending['email_verified']) || $matchedChannel === 'email';
+
         /** @var Tenant $tenant */
-        $tenant = DB::transaction(function () use ($pending) {
+        $tenant = DB::transaction(function () use ($pending, $isPhoneVerified, $isEmailVerified) {
             return Tenant::create([
                 'name' => $pending['name'],
                 'email' => $pending['email'],
                 'phone' => $pending['phone'],
                 'password' => $pending['password'], // Pre-hashed
-                'email_verified_at' => $pending['otp_channel'] === 'email' ? now() : null,
-                'phone_verified_at' => $pending['otp_channel'] === 'whatsapp' ? now() : null,
+                'email_verified_at' => $isEmailVerified ? now() : null,
+                'phone_verified_at' => $isPhoneVerified ? now() : null,
                 'is_active' => true,
             ]);
         });
@@ -242,7 +280,7 @@ class OtpVerificationService
 
         return [
             'user' => $tenant,
-            'channel' => $pending['otp_channel'],
+            'channel' => $matchedChannel,
         ];
     }
 
@@ -457,6 +495,152 @@ class OtpVerificationService
             'verified' => true,
             'channel' => $matchedChannel,
             'user' => $user->fresh(),
+        ];
+    }
+
+    /**
+     * Check comprehensive registration and dual-channel verification status (WhatsApp & Email).
+     */
+    public function checkStatus(string|User|Tenant $identifier): array
+    {
+        if ($identifier instanceof Tenant || $identifier instanceof User) {
+            return $this->formatModelStatus($identifier);
+        }
+
+        $cleanIdentifier = trim((string) $identifier);
+
+        // 1. Check pending registration in cache
+        $pending = $this->getPendingRegistration($cleanIdentifier);
+        if ($pending) {
+            $hasPhone = ! empty($pending['phone']);
+            $hasEmail = ! empty($pending['email']);
+            $whatsappVerified = ! empty($pending['whatsapp_verified']);
+            $emailVerified = ! empty($pending['email_verified']);
+
+            return [
+                'status' => 'pending_registration',
+                'registered' => false,
+                'pending_registration' => true,
+                'registration_token' => $pending['token'],
+                'user' => [
+                    'name' => $pending['name'],
+                    'email' => $pending['email'],
+                    'phone' => $pending['phone'],
+                ],
+                'verifications' => [
+                    'whatsapp' => [
+                        'available' => $hasPhone,
+                        'target' => $pending['phone'],
+                        'verified' => $whatsappVerified,
+                        'verified_at' => $pending['whatsapp_verified_at'] ?? null,
+                        'status' => $whatsappVerified ? 'verified' : ($hasPhone ? 'pending' : 'unconfigured'),
+                    ],
+                    'email' => [
+                        'available' => $hasEmail,
+                        'target' => $pending['email'],
+                        'verified' => $emailVerified,
+                        'verified_at' => $pending['email_verified_at'] ?? null,
+                        'status' => $emailVerified ? 'verified' : 'pending',
+                    ],
+                ],
+                'is_fully_verified' => ($whatsappVerified || ! $hasPhone) && $emailVerified,
+            ];
+        }
+
+        // 2. Search in tenants table
+        $normalized = $this->normalizePhoneNumber($cleanIdentifier);
+        /** @var Tenant|null $tenant */
+        $tenant = Tenant::query()
+            ->where('email', strtolower($cleanIdentifier))
+            ->orWhere('phone', $cleanIdentifier)
+            ->orWhere('phone', $normalized)
+            ->first();
+
+        if ($tenant) {
+            return $this->formatModelStatus($tenant);
+        }
+
+        // 3. Fallback search in users table
+        /** @var User|null $user */
+        $user = User::query()
+            ->where('email', strtolower($cleanIdentifier))
+            ->orWhere('phone', $cleanIdentifier)
+            ->orWhere('phone', $normalized)
+            ->first();
+
+        if ($user) {
+            if ($user->hasTenantProfile()) {
+                return $this->formatModelStatus($user->tenant);
+            }
+
+            if ($user->isOwner()) {
+                return [
+                    'status' => 'admin_account',
+                    'registered' => true,
+                    'pending_registration' => false,
+                    'message' => 'This account is an administrator account, not a tenant.',
+                ];
+            }
+
+            return $this->formatModelStatus($user);
+        }
+
+        // 4. Not found
+        return [
+            'status' => 'unregistered',
+            'registered' => false,
+            'pending_registration' => false,
+            'message' => 'No account or pending registration found for this identifier.',
+        ];
+    }
+
+    /**
+     * Format verification status from Tenant or User model.
+     */
+    protected function formatModelStatus(Tenant|User $subject): array
+    {
+        $phone = $subject instanceof Tenant ? ($subject->phone ?? $subject->user?->phone) : $subject->phone;
+        $email = $subject instanceof Tenant ? ($subject->email ?? $subject->user?->email) : $subject->email;
+        $hasPhone = ! empty($phone);
+        $hasEmail = ! empty($email);
+
+        $phoneVerified = $subject->hasVerifiedPhone();
+        $emailVerified = $subject->hasVerifiedEmail();
+
+        $phoneVerifiedAt = $subject instanceof Tenant
+            ? ($subject->phone_verified_at ?? $subject->user?->phone_verified_at)
+            : $subject->phone_verified_at;
+
+        $emailVerifiedAt = $subject instanceof Tenant
+            ? ($subject->email_verified_at ?? $subject->user?->email_verified_at)
+            : $subject->email_verified_at;
+
+        return [
+            'status' => 'registered',
+            'registered' => true,
+            'pending_registration' => false,
+            'id' => $subject->id,
+            'name' => $subject->name,
+            'email' => $email,
+            'phone' => $phone,
+            'is_active' => (bool) $subject->is_active,
+            'verifications' => [
+                'whatsapp' => [
+                    'available' => $hasPhone,
+                    'target' => $phone,
+                    'verified' => $phoneVerified,
+                    'verified_at' => $phoneVerifiedAt?->toIso8601String(),
+                    'status' => $phoneVerified ? 'verified' : ($hasPhone ? 'unverified' : 'unconfigured'),
+                ],
+                'email' => [
+                    'available' => $hasEmail,
+                    'target' => $email,
+                    'verified' => $emailVerified,
+                    'verified_at' => $emailVerifiedAt?->toIso8601String(),
+                    'status' => $emailVerified ? 'verified' : ($hasEmail ? 'unverified' : 'unconfigured'),
+                ],
+            ],
+            'is_fully_verified' => ($phoneVerified || ! $hasPhone) && $emailVerified,
         ];
     }
 

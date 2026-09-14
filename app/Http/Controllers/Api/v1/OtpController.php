@@ -107,7 +107,7 @@ class OtpController extends Controller
 
         // 1. Verify pending registration session and create ONLY Tenant database record
         if ($identifier && $this->otpService->hasPendingRegistration($identifier)) {
-            $result = $this->otpService->verifyPendingRegistration($identifier, $validated['code']);
+            $result = $this->otpService->verifyPendingRegistration($identifier, $validated['code'], $validated['channel'] ?? null);
             /** @var Tenant $tenant */
             $tenant = $result['user'];
             $deviceName = $validated['device_name'] ?? 'api-client';

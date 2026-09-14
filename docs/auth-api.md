@@ -39,6 +39,7 @@ https://dashboard.highlanderstay.com/api/v1/auth
 | Action | Method | URL | Authentication | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **Register Tenant** | `POST` | `/api/v1/auth/register` | Public | Initiates staged registration (creates tenant only upon OTP verification) |
+| **Check Status** | `POST` | `/api/v1/auth/check-status` | Public | Inspects dual-channel verification status (WhatsApp & Email) |
 | **Login Tenant** | `POST` | `/api/v1/auth/login` | Public | Login via Email or Phone Number |
 | **Send / Resend OTP** | `POST` | `/api/v1/auth/otp/send` | Optional (Bearer or login) | Dispatches OTP via WhatsApp or Email |
 | **Verify OTP** | `POST` | `/api/v1/auth/otp/verify` | Optional (Bearer or login) | Verifies code, creates `Tenant` row if pending, returns token |

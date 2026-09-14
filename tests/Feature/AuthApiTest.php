@@ -507,3 +507,77 @@ test('cannot delete the last remaining owner account', function () {
         ->assertJsonValidationErrors(['account']);
 });
 
+test('check-status detects pending registration and shows dual verification details', function () {
+    $response = $this->postJson('/api/v1/auth/register', [
+        'name' => 'Pending Tenant',
+        'email' => 'pending@example.com',
+        'phone' => '08777888999',
+        'password' => 'secret1234',
+        'password_confirmation' => 'secret1234',
+        'otp_channel' => 'whatsapp',
+    ]);
+
+    $response->assertCreated();
+    $regToken = $response->json('registration_token');
+
+    // Check status via phone
+    $statusRes = $this->postJson('/api/v1/auth/check-status', [
+        'login' => '08777888999',
+    ]);
+
+    $statusRes->assertOk()
+        ->assertJsonPath('registered', false)
+        ->assertJsonPath('pending_registration', true)
+        ->assertJsonPath('status', 'pending_registration')
+        ->assertJsonPath('registration_token', $regToken)
+        ->assertJsonPath('verifications.whatsapp.status', 'pending')
+        ->assertJsonPath('verifications.whatsapp.verified', false)
+        ->assertJsonPath('verifications.email.status', 'pending')
+        ->assertJsonPath('verifications.email.verified', false);
+
+    // Check status via email
+    $emailCheck = $this->postJson('/api/v1/auth/check-status', [
+        'login' => 'pending@example.com',
+    ]);
+    $emailCheck->assertOk()
+        ->assertJsonPath('registration_token', $regToken);
+});
+
+test('check-status returns registered and dual verification status for existing tenant', function () {
+    $tenant = \App\Models\Tenant::create([
+        'name' => 'Verified Tenant',
+        'email' => 'verified@example.com',
+        'phone' => '62811223344',
+        'password' => Hash::make('secret123'),
+        'phone_verified_at' => now(),
+        'email_verified_at' => null,
+        'is_active' => true,
+    ]);
+
+    $response = $this->postJson('/api/v1/auth/check-status', [
+        'login' => '0811223344',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('registered', true)
+        ->assertJsonPath('pending_registration', false)
+        ->assertJsonPath('status', 'registered')
+        ->assertJsonPath('verifications.whatsapp.verified', true)
+        ->assertJsonPath('verifications.whatsapp.status', 'verified')
+        ->assertJsonPath('verifications.email.verified', false)
+        ->assertJsonPath('verifications.email.status', 'unverified')
+        ->assertJsonPath('is_fully_verified', false);
+});
+
+test('check-status returns unregistered for unknown credentials', function () {
+    $response = $this->postJson('/api/v1/auth/check-status', [
+        'login' => 'nonexistent@example.com',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('registered', false)
+        ->assertJsonPath('pending_registration', false)
+        ->assertJsonPath('status', 'unregistered');
+});
+
+
