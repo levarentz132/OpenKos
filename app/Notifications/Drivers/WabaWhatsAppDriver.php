@@ -130,10 +130,66 @@ class WabaWhatsAppDriver implements WhatsAppDriver
             ->acceptJson()
             ->post($url, $payload);
 
+        // Self-healing fallback for template mismatches (language or button type)
+        if (! $response->successful() && filled($templateName)) {
+            $errorBody = $response->body();
+
+            // Case 1: Template requires URL button parameter
+            if (str_contains($errorBody, 'type Url requires a parameter') && ! $this->hasButtonComponent($components, 'url')) {
+                $components[] = [
+                    'type' => 'button',
+                    'sub_type' => 'url',
+                    'index' => '0',
+                    'parameters' => [
+                        ['type' => 'text', 'text' => $otpCode],
+                    ],
+                ];
+                $payload['template']['components'] = $components;
+                $response = Http::withToken($accessToken)->withOptions($this->resolveHttpOptions())->acceptJson()->post($url, $payload);
+            }
+            // Case 2: Template requires Copy Code button parameter
+            elseif (str_contains($errorBody, 'type Copy Code requires a parameter') && ! $this->hasButtonComponent($components, 'copy_code')) {
+                $components[] = [
+                    'type' => 'button',
+                    'sub_type' => 'copy_code',
+                    'index' => '0',
+                    'parameters' => [
+                        ['type' => 'coupon_code', 'coupon_code' => $otpCode],
+                    ],
+                ];
+                $payload['template']['components'] = $components;
+                $response = Http::withToken($accessToken)->withOptions($this->resolveHttpOptions())->acceptJson()->post($url, $payload);
+            }
+
+            // Case 3: Language code mismatch (e.g. template was created in 'en' but setting was 'id', or vice versa)
+            if (! $response->successful() && str_contains($response->body(), 'does not exist in')) {
+                $fallbackLanguages = array_diff(['en', 'id', 'en_US'], [$lang]);
+                foreach ($fallbackLanguages as $fallbackLang) {
+                    $payload['template']['language']['code'] = $fallbackLang;
+                    $retryResponse = Http::withToken($accessToken)->withOptions($this->resolveHttpOptions())->acceptJson()->post($url, $payload);
+                    if ($retryResponse->successful()) {
+                        $response = $retryResponse;
+                        break;
+                    }
+                }
+            }
+        }
+
         if (! $response->successful()) {
             $error = $response->json('error.message') ?? $response->body();
             throw new \RuntimeException("WABA delivery failed (HTTP {$response->status()}): {$error}");
         }
+    }
+
+    protected function hasButtonComponent(array $components, string $subType): bool
+    {
+        foreach ($components as $component) {
+            if (($component['type'] ?? '') === 'button' && ($component['sub_type'] ?? '') === $subType) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function supportsAttachments(): bool
