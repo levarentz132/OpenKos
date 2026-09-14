@@ -135,6 +135,17 @@ Authenticates an existing user and returns a Sanctum Bearer token. The `login` f
 }
 ```
 
+> [!NOTE]
+> **Tenant Access Only**: This login endpoint is specifically restricted to tenants. If an owner or administrator account attempts to log in here, the API will reject the request with `422 Unprocessable Entity`:
+> ```json
+> {
+>   "message": "This login portal is reserved for tenants only. Administrator accounts must log in via the web dashboard.",
+>   "errors": {
+>     "login": ["This login portal is reserved for tenants only. Administrator accounts must log in via the web dashboard."]
+>   }
+> }
+> ```
+
 ---
 
 ### 4.3 Send / Resend Phone OTP

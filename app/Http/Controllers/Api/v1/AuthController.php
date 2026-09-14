@@ -97,6 +97,13 @@ class AuthController extends Controller
             ]);
         }
 
+        // Restrict API login to tenants only (reject owners/admins)
+        if ($user->isOwner() || ! $user->hasTenantProfile()) {
+            throw ValidationException::withMessages([
+                'login' => ['This login portal is reserved for tenants only. Administrator accounts must log in via the web dashboard.'],
+            ]);
+        }
+
         $user->forceFill(['last_login_at' => now()])->saveQuietly();
 
         $deviceName = $validated['device_name'] ?? 'api-client';

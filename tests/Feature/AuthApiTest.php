@@ -50,6 +50,25 @@ test('api user can register with name, email, phone, and password', function () 
     expect($user->hasVerifiedPhone())->toBeFalse();
 });
 
+test('registration fails if email belongs to an admin account', function () {
+    $admin = User::factory()->owner()->create([
+        'email' => 'existingadmin@example.com',
+    ]);
+
+    $response = $this->postJson('/api/v1/auth/register', [
+        'name' => 'New Tenant',
+        'email' => 'existingadmin@example.com',
+        'password' => 'secret1234',
+        'password_confirmation' => 'secret1234',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['email']);
+
+    $error = $response->json('errors.email.0');
+    expect($error)->toContain('administrator account');
+});
+
 test('api user can log in with email and password', function () {
     $user = User::factory()->create([
         'email' => 'jane@example.com',
@@ -57,6 +76,7 @@ test('api user can log in with email and password', function () {
         'password' => Hash::make('secret123'),
         'is_active' => true,
     ]);
+    \App\Models\Tenant::factory()->create(['user_id' => $user->id]);
 
     $response = $this->postJson('/api/v1/auth/login', [
         'login' => 'jane@example.com',
@@ -78,6 +98,7 @@ test('api user can log in with phone number and password', function () {
         'password' => Hash::make('secret123'),
         'is_active' => true,
     ]);
+    \App\Models\Tenant::factory()->create(['user_id' => $user->id]);
 
     $response = $this->postJson('/api/v1/auth/login', [
         'login' => '08999888777', // Will normalize to 628999888777
@@ -86,6 +107,21 @@ test('api user can log in with phone number and password', function () {
 
     $response->assertOk()
         ->assertJsonPath('user.email', 'phoneuser@example.com');
+});
+
+test('admin or owner is rejected from logging in via tenant api', function () {
+    $admin = User::factory()->owner()->create([
+        'email' => 'admin@example.com',
+        'password' => Hash::make('adminpassword'),
+    ]);
+
+    $response = $this->postJson('/api/v1/auth/login', [
+        'login' => 'admin@example.com',
+        'password' => 'adminpassword',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['login']);
 });
 
 test('api login fails with incorrect credentials', function () {
