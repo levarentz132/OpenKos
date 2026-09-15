@@ -73,44 +73,79 @@ class OtpController extends Controller
 
         // 2. Direct registration form OTP request for WhatsApp (prior to account creation)
         if ($validated['channel'] === 'whatsapp' && ! empty($validated['phone']) && ! $request->user('sanctum') && ! $request->user()) {
-            $normalizedPhone = $this->otpService->normalizePhoneNumber($validated['phone']);
-            $existingTenant = Tenant::query()
-                ->where('phone', $validated['phone'])
-                ->orWhere('phone', $normalizedPhone)
-                ->first();
+            $result = $this->otpService->sendRegistrationPhoneOtp($validated['phone']);
 
-            if (! $existingTenant) {
-                $result = $this->otpService->sendRegistrationPhoneOtp($validated['phone']);
+            $message = $result['sent']
+                ? 'Verification code sent successfully via whatsapp.'
+                : 'Failed to send verification code via whatsapp (' . ($result['delivery_error'] ?? 'delivery error') . ').';
 
-                $message = $result['sent']
-                    ? 'Verification code sent successfully via whatsapp.'
-                    : 'Failed to send verification code via whatsapp (' . ($result['delivery_error'] ?? 'delivery error') . ').';
+            $response = [
+                'message' => $message,
+                'channel' => 'whatsapp',
+                'target' => $result['target'],
+                'sent' => $result['sent'],
+                'driver' => $result['driver'] ?? null,
+            ];
+
+            if (! empty($result['delivery_warning'])) {
+                $response['delivery_warning'] = $result['delivery_warning'];
+            }
+
+            if (! empty($result['delivery_error'])) {
+                $response['delivery_error'] = $result['delivery_error'];
+            }
+
+            if (config('app.debug') && isset($result['debug_otp'])) {
+                $response['debug_otp'] = $result['debug_otp'];
+            }
+
+            return response()->json($response);
+        }
+
+        // 3. Email verification link dispatch for tenant accounts (verification link instead of OTP)
+        if ($validated['channel'] === 'email') {
+            $user = $this->resolveTenantUser($request, $validated);
+
+            if ($user instanceof Tenant) {
+                if ($user->hasVerifiedEmail()) {
+                    return response()->json([
+                        'message' => 'Alamat email ini sudah terverifikasi.',
+                        'channel' => 'email',
+                        'target' => $user->email,
+                        'sent' => false,
+                        'email_verified' => true,
+                    ]);
+                }
+
+                $emailResult = $this->otpService->sendEmailVerificationLink($user);
 
                 $response = [
-                    'message' => $message,
-                    'channel' => 'whatsapp',
-                    'target' => $result['target'],
-                    'sent' => $result['sent'],
-                    'driver' => $result['driver'] ?? null,
+                    'message' => $emailResult['sent']
+                        ? 'Tautan verifikasi telah dikirimkan ke email Anda.'
+                        : 'Gagal mengirimkan email verifikasi (' . ($emailResult['error'] ?? 'delivery error') . ').',
+                    'channel' => 'email',
+                    'target' => $user->email,
+                    'sent' => $emailResult['sent'],
+                    'driver' => $emailResult['driver'] ?? null,
                 ];
 
-                if (! empty($result['delivery_warning'])) {
-                    $response['delivery_warning'] = $result['delivery_warning'];
+                if (! empty($emailResult['warning'])) {
+                    $response['delivery_warning'] = $emailResult['warning'];
                 }
 
-                if (! empty($result['delivery_error'])) {
-                    $response['delivery_error'] = $result['delivery_error'];
+                if (! empty($emailResult['error'])) {
+                    $response['delivery_error'] = $emailResult['error'];
                 }
 
-                if (config('app.debug') && isset($result['debug_otp'])) {
-                    $response['debug_otp'] = $result['debug_otp'];
+                if (config('app.debug') && ! empty($emailResult['url'])) {
+                    $response['debug_verification_url'] = $emailResult['url'];
                 }
 
                 return response()->json($response);
             }
         }
 
-        // 3. Resend for existing tenant account
+        // 4. Resend for existing tenant account
         $user = $this->resolveTenantUser($request, $validated);
 
         $channel = $validated['channel'];

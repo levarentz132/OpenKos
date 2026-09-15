@@ -760,3 +760,48 @@ test('tenant can resend email verification link', function () {
         ->assertJsonPath('sent', true)
         ->assertJsonPath('email', 'resendmail@example.com');
 });
+
+test('requesting otp with channel email for existing tenant dispatches verification link instead of numeric otp', function () {
+    $tenant = \App\Models\Tenant::create([
+        'name' => 'Email Channel User',
+        'email' => 'emailchannel@example.com',
+        'phone' => '6281233335555',
+        'password' => \Illuminate\Support\Facades\Hash::make('password123'),
+        'phone_verified_at' => now(),
+        'email_verified_at' => null,
+        'is_active' => true,
+    ]);
+
+    $response = $this->postJson('/api/v1/auth/otp/send', [
+        'channel' => 'email',
+        'email' => 'emailchannel@example.com',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('sent', true)
+        ->assertJsonPath('channel', 'email')
+        ->assertJsonPath('target', 'emailchannel@example.com');
+
+    // Ensure no numeric OTP code was saved in cache for email
+    expect(\Illuminate\Support\Facades\Cache::has("otp_tenant_{$tenant->id}_email"))->toBeFalse();
+});
+
+test('requesting registration phone otp for already registered number is rejected', function () {
+    \App\Models\Tenant::create([
+        'name' => 'Existing Number User',
+        'email' => 'existingnum@example.com',
+        'phone' => '6281299990000',
+        'password' => \Illuminate\Support\Facades\Hash::make('password123'),
+        'phone_verified_at' => now(),
+        'email_verified_at' => null,
+        'is_active' => true,
+    ]);
+
+    $response = $this->postJson('/api/v1/auth/otp/send', [
+        'channel' => 'whatsapp',
+        'phone' => '081299990000',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['phone']);
+});

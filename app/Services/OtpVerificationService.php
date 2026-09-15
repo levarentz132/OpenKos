@@ -465,6 +465,29 @@ class OtpVerificationService
             ]);
         }
 
+        if ($user instanceof Tenant) {
+            $cooldownKey = "otp_cooldown_{$typePrefix}_{$user->id}_email";
+            if (Cache::has($cooldownKey)) {
+                $secondsRemaining = max(1, Cache::get($cooldownKey) - time());
+                throw ValidationException::withMessages([
+                    'otp' => ["Please wait {$secondsRemaining} seconds before requesting a new email verification link."],
+                ]);
+            }
+            Cache::put($cooldownKey, time() + 60, now()->addSeconds(60));
+
+            $emailResult = $this->sendEmailVerificationLink($user);
+
+            return [
+                'channel' => 'email',
+                'target' => $targetEmail,
+                'sent' => $emailResult['sent'],
+                'driver' => $emailResult['driver'] ?? null,
+                'is_mock' => $emailResult['is_mock'] ?? false,
+                'delivery_warning' => $emailResult['warning'] ?? null,
+                'delivery_error' => $emailResult['error'] ?? null,
+            ];
+        }
+
         $cooldownKey = "otp_cooldown_{$typePrefix}_{$user->id}_email";
         if (Cache::has($cooldownKey)) {
             $secondsRemaining = max(1, Cache::get($cooldownKey) - time());
