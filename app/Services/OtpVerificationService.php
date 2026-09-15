@@ -737,7 +737,8 @@ class OtpVerificationService
                     'status' => $emailVerified ? 'verified' : ($hasEmail ? 'unverified' : 'unconfigured'),
                 ],
             ],
-            'is_fully_verified' => ($phoneVerified || ! $hasPhone) && $emailVerified,
+            'phone_verified' => $phoneVerified,
+            'is_fully_verified' => $phoneVerified,
         ];
     }
 
@@ -757,6 +758,7 @@ class OtpVerificationService
 
     /**
      * Send WhatsApp OTP to a phone number directly from the registration form.
+     * Allows unverified existing tenants to receive OTP to complete verification.
      *
      * @throws ValidationException
      */
@@ -770,15 +772,15 @@ class OtpVerificationService
             ]);
         }
 
-        // Ensure not already registered in tenants table
+        // Check existing in tenants table
         $existing = Tenant::query()
             ->where('phone', $phone)
             ->orWhere('phone', $normalizedPhone)
             ->first();
 
-        if ($existing) {
+        if ($existing && $existing->hasVerifiedPhone()) {
             throw ValidationException::withMessages([
-                'phone' => ['A tenant account with this phone number already exists. Please log in directly.'],
+                'phone' => ['A tenant account with this phone number is already verified. Please log in directly.'],
             ]);
         }
 
@@ -805,6 +807,7 @@ class OtpVerificationService
             'is_mock' => $dispatch['is_mock'],
             'delivery_warning' => $dispatch['warning'],
             'delivery_error' => $dispatch['error'],
+            'existing_account' => (bool) $existing,
         ];
 
         if (config('app.debug')) {
@@ -816,7 +819,7 @@ class OtpVerificationService
 
     /**
      * Complete registration using the WhatsApp OTP entered directly in the registration form.
-     * Creates Tenant record with phone_verified_at = now() and dispatches the email verification link.
+     * Creates new Tenant record or converts unverified existing Tenant with phone_verified_at = now().
      *
      * @throws ValidationException
      */
@@ -855,24 +858,41 @@ class OtpVerificationService
             ]);
         }
 
-        $email = strtolower(trim((string) $data['email']));
+        $email = ! empty($data['email']) ? strtolower(trim((string) $data['email'])) : null;
 
-        // 2. Concurrency safeguard: ensure email or phone was not created
-        $existing = Tenant::query()
-            ->where('email', $email)
-            ->orWhere('phone', $normalizedPhone)
-            ->orWhere('phone', $phone)
-            ->first();
+        // 2. Check existing tenant
+        $existingQuery = Tenant::query()
+            ->where(function ($q) use ($normalizedPhone, $phone) {
+                $q->where('phone', $normalizedPhone)
+                  ->orWhere('phone', $phone);
+            });
+        if (! empty($email)) {
+            $existingQuery->orWhere('email', $email);
+        }
+        $existing = $existingQuery->first();
 
-        if ($existing) {
+        if ($existing && $existing->hasVerifiedPhone()) {
             throw ValidationException::withMessages([
-                'email' => ['A tenant account with this email or phone number already exists.'],
+                'phone' => ['A tenant account with this phone number or email is already verified. Please log in directly.'],
             ]);
         }
 
-        // 3. Create Tenant in database (phone verified, email unverified)
+        // 3. Create new or convert unverified Tenant in database (phone verified)
         /** @var Tenant $tenant */
-        $tenant = DB::transaction(function () use ($data, $email, $normalizedPhone) {
+        $tenant = DB::transaction(function () use ($data, $email, $normalizedPhone, $existing) {
+            if ($existing) {
+                $existing->forceFill([
+                    'name' => trim((string) $data['name']) ?: $existing->name,
+                    'email' => $email,
+                    'phone' => $normalizedPhone,
+                    'password' => Hash::make($data['password']),
+                    'phone_verified_at' => now(),
+                    'is_active' => true,
+                ])->save();
+
+                return $existing->fresh();
+            }
+
             return Tenant::create([
                 'name' => trim((string) $data['name']),
                 'email' => $email,
@@ -901,18 +921,11 @@ class OtpVerificationService
         $deviceName = $data['device_name'] ?? 'api-client';
         $token = $tenant->createToken($deviceName)->plainTextToken;
 
-        // 6. Send Email Verification Link
-        $emailResult = $this->sendEmailVerificationLink($tenant);
-
         return [
             'user' => $tenant,
             'token' => $token,
             'phone_verified' => true,
-            'email_verified' => false,
-            'email_verification_sent' => $emailResult['sent'],
-            'email_delivery_warning' => $emailResult['warning'] ?? null,
-            'email_delivery_error' => $emailResult['error'] ?? null,
-            'verification_url' => config('app.debug') ? ($emailResult['url'] ?? null) : null,
+            'was_converted' => (bool) $existing,
         ];
     }
 

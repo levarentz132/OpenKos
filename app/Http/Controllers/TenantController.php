@@ -151,6 +151,15 @@ class TenantController extends Controller
                             ->whereNull('email_verified_at')),
                         default => $q,
                     }),
+                Filter::select('phone_verification', 'Phone Verification', [
+                    ['value' => 'verified', 'label' => 'Verified'],
+                    ['value' => 'unverified', 'label' => 'Unverified'],
+                ])
+                    ->query(fn (Builder $q, string $value) => match ($value) {
+                        'verified' => $q->whereNotNull('phone_verified_at'),
+                        'unverified' => $q->whereNull('phone_verified_at'),
+                        default => $q,
+                    }),
             ])
             ->defaultSort('name');
 

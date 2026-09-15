@@ -28,20 +28,18 @@ https://dashboard.highlanderstay.com/api/v1/auth
 | # | Action | Method | Endpoint | Auth Required | Description |
 | :-: | :--- | :---: | :--- | :---: | :--- |
 | 1 | **Request Form WA OTP**| `POST` | `/otp/send` | No | Sends 6-digit WhatsApp OTP while filling form |
-| 2 | **Register Tenant** | `POST` | `/register` | No | Submits form with WA OTP & dispatches email link |
-| 3 | **Verify Email Link** | `GET` | `/verify-email` | No (Signed) | Verifies email address when clicking link in email |
-| 4 | **Resend Email Link** | `POST` | `/email/resend` | Optional | Resends email verification link |
-| 5 | **Check Status** | `POST` | `/check-status` | No | Checks dual-channel verification status (WhatsApp & Email) |
-| 6 | **Verify Staged OTP** | `POST` | `/otp/verify` | Optional | Verifies staged code & returns Sanctum token |
-| 7 | **Login Tenant** | `POST` | `/login` | No | Login via Email or Phone Number + Password |
-| 8 | **Get Profile** | `GET` | `/me` | Bearer Token | Returns authenticated tenant profile |
-| 9 | **Delete My Account** | `DELETE` | `/me` | Bearer Token | Permanently deletes authenticated account & revokes tokens |
-| 10| **Delete User (Admin)**| `DELETE` | `/users/{user_id}` | Bearer Token (Admin) | Deletes target user and associated tenant data |
-| 11| **Logout** | `POST` | `/logout` | Bearer Token | Revokes active Sanctum API token |
+| 2 | **Register Tenant** | `POST` | `/register` | No | Submits form with WA OTP, verifies & activates tenant |
+| 3 | **Check Status** | `POST` | `/check-status` | No | Checks verification status |
+| 4 | **Verify Staged OTP** | `POST` | `/otp/verify` | Optional | Verifies staged code & returns Sanctum token |
+| 5 | **Login Tenant** | `POST` | `/login` | No | Login via Email or Phone Number + Password |
+| 6 | **Get Profile** | `GET` | `/me` | Bearer Token | Returns authenticated tenant profile |
+| 7 | **Delete My Account** | `DELETE` | `/me` | Bearer Token | Permanently deletes authenticated account & revokes tokens |
+| 8 | **Delete User (Admin)**| `DELETE` | `/users/{user_id}` | Bearer Token (Admin) | Deletes target user and associated tenant data |
+| 9 | **Logout** | `POST` | `/logout` | Bearer Token | Revokes active Sanctum API token |
 
 ---
 
-## 3. Step-by-Step Flow: Form-Level WhatsApp OTP & Email Verification Link
+## 3. Step-by-Step Flow: Form-Level WhatsApp OTP Verification
 
 ```mermaid
 sequenceDiagram
@@ -50,7 +48,6 @@ sequenceDiagram
     participant API as OpenKos Auth API
     participant Cache as Redis / Cache
     participant WA as WhatsApp (Meta WABA / Fonnte)
-    participant Mail as Mail Server (SMTP)
     participant DB as Database (tenants)
 
     Note over Tenant: Step 1: User fills registration form & requests WhatsApp OTP
@@ -62,15 +59,9 @@ sequenceDiagram
     Note over Tenant: Step 2: User enters OTP code into form and clicks Submit
     Tenant->>API: POST /api/v1/auth/register { name, email, phone, password, otp: "123456" }
     API->>Cache: Verify OTP match for phone
-    API->>DB: INSERT into tenants (phone_verified_at = now, email_verified_at = null)
+    API->>DB: INSERT / UPDATE tenants (phone_verified_at = now, is_active = true)
     API->>API: Generate Sanctum Bearer Token
-    API->>Mail: Dispatch email containing Signed Verification Link
-    API-->>Tenant: 201 Created { verified: true, token: "1|xxx", phone_verified: true, email_verified: false }
-
-    Note over Tenant: Step 3: User opens email and clicks Verification Link
-    Tenant->>API: GET /api/v1/auth/verify-email?id=1&hash=xxx&signature=xxx
-    API->>DB: UPDATE tenants SET email_verified_at = now()
-    API-->>Tenant: HTML Confirmation Page / JSON { email_verified: true }
+    API-->>Tenant: 201 Created { token: "1|xxx", phone_verified: true, user: {...} }
 ```
 
 ---

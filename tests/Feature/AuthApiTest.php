@@ -108,7 +108,7 @@ test('api user can log in with email and password', function () {
         'password' => Hash::make('secret123'),
         'is_active' => true,
     ]);
-    \App\Models\Tenant::factory()->create(['user_id' => $user->id]);
+    \App\Models\Tenant::factory()->create(['user_id' => $user->id, 'phone_verified_at' => now()]);
 
     $response = $this->postJson('/api/v1/auth/login', [
         'login' => 'jane@example.com',
@@ -130,7 +130,7 @@ test('api user can log in with phone number and password', function () {
         'password' => Hash::make('secret123'),
         'is_active' => true,
     ]);
-    \App\Models\Tenant::factory()->create(['user_id' => $user->id]);
+    \App\Models\Tenant::factory()->create(['user_id' => $user->id, 'phone_verified_at' => now()]);
 
     $response = $this->postJson('/api/v1/auth/login', [
         'login' => '08999888777', // Will normalize to 628999888777
@@ -231,20 +231,18 @@ test('user can send and verify phone OTP', function () {
     expect($user->phone_verified_at)->not->toBeNull();
 });
 
-test('user can register and choose email otp channel and verify to create account', function () {
-    \Illuminate\Support\Facades\Mail::fake();
-
+test('user can register and staged registration uses whatsapp otp channel', function () {
     $response = $this->postJson('/api/v1/auth/register', [
         'name' => 'Sarah Connor',
         'email' => 'sarah@example.com',
+        'phone' => '081234567888',
         'password' => 'secret1234',
         'password_confirmation' => 'secret1234',
-        'otp_channel' => 'email',
     ]);
 
     $response->assertCreated()
         ->assertJsonPath('otp_sent', true)
-        ->assertJsonPath('otp_channel', 'email');
+        ->assertJsonPath('otp_channel', 'whatsapp');
 
     // Database is empty before verification
     $this->assertDatabaseMissing('users', ['email' => 'sarah@example.com']);
@@ -254,7 +252,7 @@ test('user can register and choose email otp channel and verify to create accoun
     expect($pending)->not->toBeNull();
     $code = $pending['otp'];
 
-    // Verify OTP creates the user with email_verified_at set
+    // Verify OTP creates the user with phone_verified_at set
     $verifyResponse = $this->postJson('/api/v1/auth/otp/verify', [
         'registration_token' => $regToken,
         'code' => $code,
@@ -262,12 +260,12 @@ test('user can register and choose email otp channel and verify to create accoun
 
     $verifyResponse->assertCreated()
         ->assertJsonPath('verified', true)
-        ->assertJsonPath('email_verified', true);
+        ->assertJsonPath('phone_verified', true);
 
     $this->assertDatabaseMissing('users', ['email' => 'sarah@example.com']);
     $this->assertDatabaseHas('tenants', ['email' => 'sarah@example.com']);
     $tenant = \App\Models\Tenant::where('email', 'sarah@example.com')->first();
-    expect($tenant->email_verified_at)->not->toBeNull();
+    expect($tenant->hasVerifiedPhone())->toBeTrue();
 });
 
 test('user can send and verify email OTP via dual-channel endpoint', function () {
@@ -566,7 +564,7 @@ test('check-status returns registered and dual verification status for existing 
         ->assertJsonPath('verifications.whatsapp.status', 'verified')
         ->assertJsonPath('verifications.email.verified', false)
         ->assertJsonPath('verifications.email.status', 'unverified')
-        ->assertJsonPath('is_fully_verified', false);
+        ->assertJsonPath('is_fully_verified', true);
 });
 
 test('check-status returns unregistered for unknown credentials', function () {
@@ -636,7 +634,7 @@ test('user can request WhatsApp OTP on registration form prior to account creati
     expect($cached['otp'])->toMatch('/^\d{6}$/');
 });
 
-test('submitting registration with valid WhatsApp OTP creates tenant, marks phone verified, and sends email link', function () {
+test('submitting registration with valid WhatsApp OTP creates tenant and marks phone verified', function () {
     // 1. Request OTP on form
     $this->postJson('/api/v1/auth/otp/send', [
         'channel' => 'whatsapp',
@@ -659,15 +657,12 @@ test('submitting registration with valid WhatsApp OTP creates tenant, marks phon
 
     $response->assertCreated()
         ->assertJsonPath('phone_verified', true)
-        ->assertJsonPath('email_verified', false)
-        ->assertJsonPath('email_verification_sent', true)
         ->assertJsonStructure(['token', 'user']);
 
     // Check database
     $tenant = \App\Models\Tenant::where('email', 'formuser@example.com')->first();
     expect($tenant)->not->toBeNull();
     expect($tenant->hasVerifiedPhone())->toBeTrue();
-    expect($tenant->hasVerifiedEmail())->toBeFalse();
 });
 
 test('submitting registration with invalid WhatsApp OTP fails with 422 and creates no database records', function () {
@@ -804,4 +799,67 @@ test('requesting registration phone otp for already registered number is rejecte
 
     $response->assertStatus(422)
         ->assertJsonValidationErrors(['phone']);
+});
+
+test('existing unverified tenant can request otp and register to convert to verified', function () {
+    $unverifiedTenant = \App\Models\Tenant::create([
+        'name' => 'Pending Tenant',
+        'email' => 'pending@example.com',
+        'phone' => '6281211119999',
+        'phone_verified_at' => null,
+        'is_active' => true,
+    ]);
+
+    // 1. Request OTP on form succeeds for unverified tenant
+    $sendResponse = $this->postJson('/api/v1/auth/otp/send', [
+        'channel' => 'whatsapp',
+        'phone' => '081211119999',
+    ]);
+
+    $sendResponse->assertOk()
+        ->assertJsonPath('sent', true);
+
+    $cached = \Illuminate\Support\Facades\Cache::get('reg_phone_otp_6281211119999');
+    $otpCode = $cached['otp'];
+
+    // 2. Submit registration to claim/convert the account
+    $regResponse = $this->postJson('/api/v1/auth/register', [
+        'name' => 'Pending Tenant Active',
+        'email' => 'pending@example.com',
+        'phone' => '081211119999',
+        'password' => 'secret1234',
+        'password_confirmation' => 'secret1234',
+        'otp' => $otpCode,
+        'device_name' => 'mobile-test',
+    ]);
+
+    $regResponse->assertCreated()
+        ->assertJsonPath('phone_verified', true)
+        ->assertJsonStructure(['token', 'user']);
+
+    // Ensure it updated the same tenant record rather than duplicating
+    expect(\App\Models\Tenant::where('phone', '6281211119999')->count())->toBe(1);
+    $unverifiedTenant->refresh();
+    expect($unverifiedTenant->hasVerifiedPhone())->toBeTrue();
+    expect($unverifiedTenant->name)->toBe('Pending Tenant Active');
+});
+
+test('tenant login is blocked with 403 if phone number is not verified', function () {
+    \App\Models\Tenant::create([
+        'name' => 'Unverified Login User',
+        'email' => 'unverifiedlogin@example.com',
+        'phone' => '6281255556666',
+        'password' => \Illuminate\Support\Facades\Hash::make('password123'),
+        'phone_verified_at' => null,
+        'is_active' => true,
+    ]);
+
+    $response = $this->postJson('/api/v1/auth/login', [
+        'login' => '081255556666',
+        'password' => 'password123',
+    ]);
+
+    $response->assertStatus(403)
+        ->assertJsonPath('phone_verified', false)
+        ->assertJsonPath('requires_verification', true);
 });

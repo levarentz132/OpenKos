@@ -1,6 +1,6 @@
 # Panduan Integrasi Cepat (Mobile / Web App ke API Highlanderstay)
 
-Panduan praktis dan sederhana untuk mengintegrasikan alur **Pendaftaran Tenant (WhatsApp OTP + Verifikasi Email)** ke dalam aplikasi Anda (Flutter, React Native, React, Vue, atau aplikasi lainnya).
+Panduan praktis dan sederhana untuk mengintegrasikan alur **Pendaftaran & Autentikasi Tenant (WhatsApp OTP Saja)** ke dalam aplikasi Anda (Flutter, React Native, React, Vue, atau aplikasi lainnya).
 
 ---
 
@@ -15,14 +15,14 @@ Panduan praktis dan sederhana untuk mengintegrasikan alur **Pendaftaran Tenant (
 
 ---
 
-## 🚀 Alur 3 Langkah di Halaman Daftar
+## 🚀 Alur Kerja di Halaman Daftar
 
 ```text
 [ Form Pendaftaran ]
-1. User mengisi: Nama, Email, No. HP, Password.
-2. User klik tombol "Kirim OTP WhatsApp" ──> API kirim 6 digit kode ke WhatsApp.
+1. User mengisi: Nama, Email, No. WhatsApp, Password.
+2. User klik tombol "Kirim OTP WhatsApp" ──> API kirim 6 digit kode ke WhatsApp user.
 3. User memasukkan 6 digit kode OTP WhatsApp ke form.
-4. User klik tombol "Daftar" ───────────────> Akun terbuat, token login didapat, & link verifikasi terkirim otomatis ke email.
+4. User klik tombol "Daftar" ───────────────> Akun terverifikasi penuh & token login didapat!
 ```
 
 ---
@@ -30,6 +30,9 @@ Panduan praktis dan sederhana untuk mengintegrasikan alur **Pendaftaran Tenant (
 ## 1. Langkah 1: Minta OTP WhatsApp di Form Daftar
 
 Panggil endpoint ini ketika user menekan tombol **"Kirim OTP"** di sebelah kolom nomor WhatsApp.
+* **Jika user baru**: Kode OTP dikirimkan untuk mendaftar akun baru.
+* **Jika nomor sudah ada tetapi belum diverifikasi**: Kode OTP dikirimkan untuk mengonversi & memverifikasi akun penyewa tersebut.
+* **Jika nomor sudah terverifikasi sebelumnya**: API mengembalikan error 422 agar user langsung login.
 
 * **Method**: `POST`
 * **URL**: `/otp/send`
@@ -60,7 +63,7 @@ Panggil endpoint ini ketika user menekan tombol **"Kirim OTP"** di sebelah kolom
 
 ## 2. Langkah 2: Submit Form Pendaftaran (Beserta Kode OTP)
 
-Setelah user melengkapi semua data dan mengisi kode OTP dari WhatsApp, kirim semua data sekaligus dalam 1 request.
+Setelah user melengkapi semua data dan mengisi kode OTP dari WhatsApp, kirim semua data sekaligus dalam 1 request:
 
 * **Method**: `POST`
 * **URL**: `/register`
@@ -80,11 +83,9 @@ Setelah user melengkapi semua data dan mengisi kode OTP dari WhatsApp, kirim sem
 * **Response Sukses (`201 Created`)**:
   ```json
   {
-    "message": "Pendaftaran berhasil! WhatsApp Anda telah diverifikasi. Tautan verifikasi telah dikirimkan ke alamat email Anda.",
+    "message": "Pendaftaran berhasil! Nomor WhatsApp Anda telah diverifikasi.",
     "token": "1|7b8a1c9e2f4a5b6c...",
     "phone_verified": true,
-    "email_verified": false,
-    "email_verification_sent": true,
     "user": {
       "id": 15,
       "name": "Budi Santoso",
@@ -96,52 +97,40 @@ Setelah user melengkapi semua data dan mengisi kode OTP dari WhatsApp, kirim sem
   ```
 
 * **Apa yang terjadi di sini?**
-  1. No. WhatsApp langsung terverifikasi (`phone_verified: true`).
-  2. Anda langsung mendapatkan `token` login (Sanctum Bearer Token). Simpan token ini di penyimpanan lokal (*SecureStorage* / *AsyncStorage* / *LocalStorage*).
-  3. Sistem backend secara otomatis mengirim email berisi **Link Verifikasi** ke inbox email penyewa.
+  1. No. WhatsApp langsung terverifikasi (`phone_verified: true`, `phone_verified_at = now()`).
+  2. Jika sebelumnya data penyewa sudah dimasukkan oleh admin di dashboard tetapi belum diverifikasi, statusnya otomatis dikonversi menjadi **Verified** dan password aktif.
+  3. Anda langsung mendapatkan `token` login (Sanctum Bearer Token). Simpan token ini di penyimpanan lokal (*SecureStorage* / *AsyncStorage* / *LocalStorage*). User langsung login!
 
 ---
 
-## 3. Langkah 3: Tampilkan Halaman Sukses / Banner Email
+## 3. Langkah 3: Selesai (Langsung Masuk Dashboard)
 
-Arahkan user ke Dashboard atau tampilkan modal konfirmasi:
+Arahkan user langsung ke Halaman Utama / Dashboard aplikasi:
 
 > **"Pendaftaran Berhasil! 🎉"**  
-> *"WhatsApp Anda telah terverifikasi. Kami telah mengirimkan tautan verifikasi ke email **budi@example.com**. Silakan periksa inbox atau spam email Anda."*
-
-### Bagaimana jika user belum menerima email?
-Sediakan tombol **"Kirim Ulang Email Verifikasi"**:
-
-* **Method**: `POST`
-* **URL**: `/email/resend`
-* **Request Body**:
-  ```json
-  {
-    "email": "budi@example.com"
-  }
-  ```
+> *"Selamat datang di Highlanderstay! Akun dan WhatsApp Anda telah terverifikasi."*
 
 ---
 
-## 4. Cara Aplikasi Mengetahui Apakah Email Sudah Diverifikasi
+## 4. Cara Aplikasi Mengetahui Status Akun
 
-Aplikasi Anda bisa mengecek status verifikasi user kapan saja dengan 2 cara:
+Aplikasi Anda bisa mengecek status verifikasi user kapan saja:
 
-### Cara A: Cek Berdasarkan Email/No. HP (Tanpa Butuh Token)
+### Cara A: Cek Berdasarkan No. WhatsApp atau Email (Tanpa Butuh Token)
 * **Method**: `POST`
 * **URL**: `/check-status`
 * **Request Body**:
   ```json
   {
-    "identifier": "budi@example.com"
+    "identifier": "081234567890"
   }
   ```
 * **Response**:
   ```json
   {
-    "found": true,
+    "status": "registered",
+    "registered": true,
     "phone_verified": true,
-    "email_verified": true,
     "is_fully_verified": true
   }
   ```

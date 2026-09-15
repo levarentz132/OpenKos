@@ -220,8 +220,34 @@ export default function Index({
             key: 'phone',
             label: 'Phone',
             sortable: true,
-            className: 'text-muted-foreground',
-            render: (t) => t.phone ?? '\u2014',
+            render: (t) => {
+                if (!t.phone) {
+                    return <span className="text-muted-foreground">—</span>;
+                }
+
+                const isVerified = Boolean(t.phone_verified_at);
+
+                return (
+                    <div className="flex flex-col gap-1 items-start sm:flex-row sm:items-center sm:gap-2">
+                        <span className="text-muted-foreground">{t.phone}</span>
+                        {isVerified ? (
+                            <Badge
+                                variant="outline"
+                                className="h-5 px-1.5 text-[11px] font-medium bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
+                            >
+                                Verified
+                            </Badge>
+                        ) : (
+                            <Badge
+                                variant="outline"
+                                className="h-5 px-1.5 text-[11px] font-medium bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
+                            >
+                                Unverified
+                            </Badge>
+                        )}
+                    </div>
+                );
+            },
         },
         {
             key: '_lease',

@@ -3,6 +3,9 @@ export type Tenant = {
     user_id: number | null;
     name: string;
     phone: string | null;
+    email?: string | null;
+    phone_verified_at?: string | null;
+    email_verified_at?: string | null;
     id_card_number: string | null;
     emergency_contact_name: string | null;
     emergency_contact_phone: string | null;

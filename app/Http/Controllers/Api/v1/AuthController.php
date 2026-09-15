@@ -37,28 +37,16 @@ class AuthController extends Controller
             /** @var Tenant $tenant */
             $tenant = $regResult['user'];
 
-            $message = 'Pendaftaran berhasil! WhatsApp Anda telah diverifikasi. Tautan verifikasi telah dikirimkan ke alamat email Anda.';
+            $message = ! empty($regResult['was_converted'])
+                ? 'Akun penyewa berhasil diverifikasi dan diaktifkan!'
+                : 'Pendaftaran berhasil! Nomor WhatsApp Anda telah diverifikasi.';
 
             $response = [
                 'message' => $message,
                 'token' => $regResult['token'],
                 'phone_verified' => true,
-                'email_verified' => false,
-                'email_verification_sent' => $regResult['email_verification_sent'],
                 'user' => $this->formatUserResponse($tenant),
             ];
-
-            if (! empty($regResult['email_delivery_warning'])) {
-                $response['email_delivery_warning'] = $regResult['email_delivery_warning'];
-            }
-
-            if (! empty($regResult['email_delivery_error'])) {
-                $response['email_delivery_error'] = $regResult['email_delivery_error'];
-            }
-
-            if (config('app.debug') && ! empty($regResult['verification_url'])) {
-                $response['debug_verification_url'] = $regResult['verification_url'];
-            }
 
             return response()->json($response, 201);
         }
@@ -102,6 +90,7 @@ class AuthController extends Controller
     public function checkStatus(Request $request): JsonResponse
     {
         $validated = $request->validate([
+            'identifier' => ['nullable', 'string', 'max:255'],
             'login' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'string', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:25'],
@@ -111,6 +100,7 @@ class AuthController extends Controller
         $identifier = $request->user('sanctum')
             ?? $request->user()
             ?? $validated['registration_token']
+            ?? $validated['identifier']
             ?? $validated['login']
             ?? $validated['email']
             ?? $validated['phone']
@@ -173,6 +163,15 @@ class AuthController extends Controller
             throw ValidationException::withMessages([
                 'login' => ['Your account has been deactivated. Please contact support.'],
             ]);
+        }
+
+        if (! $tenant->hasVerifiedPhone()) {
+            return response()->json([
+                'message' => 'Nomor WhatsApp Anda belum diverifikasi. Silakan verifikasi nomor WhatsApp Anda terlebih dahulu.',
+                'phone_verified' => false,
+                'phone' => $tenant->phone,
+                'requires_verification' => true,
+            ], 403);
         }
 
         $tenant->forceFill(['last_login_at' => now()])->saveQuietly();
