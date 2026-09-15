@@ -33,37 +33,38 @@ class RegisterRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            $email = strtolower(trim((string) $this->input('email')));
+            $email = trim((string) $this->input('email'));
+            $email = ! empty($email) ? strtolower($email) : null;
             $phone = (string) $this->input('phone');
             $cleaned = preg_replace('/[^0-9]/', '', $phone);
             if (str_starts_with($cleaned, '0')) {
                 $cleaned = '62' . substr($cleaned, 1);
             }
 
-            if (! empty($email)) {
-            $existingTenantEmail = \App\Models\Tenant::where('email', $email)->first();
-            
-        }
             $existingTenantPhone = \App\Models\Tenant::where('phone', $phone)->orWhere('phone', $cleaned)->first();
-            $existingUser = \App\Models\User::where('email', $email)->first();
             $existingPhoneUser = \App\Models\User::where('phone', $phone)->orWhere('phone', $cleaned)->first();
 
-            // Prevent hijacking admin/owner accounts
-            if ($existingUser && $existingUser->isOwner()) {
-                $validator->errors()->add(
-                    'email',
-                    'This email belongs to an administrator account. Tenant accounts must use a separate email address.'
-                );
-            } elseif ($existingTenantEmail && $existingTenantEmail->hasVerifiedPhone() && (! $existingTenantPhone || $existingTenantPhone->id !== $existingTenantEmail->id)) {
-                $validator->errors()->add(
-                    'email',
-                    'A tenant account with this email already exists and is verified. Please log in directly.'
-                );
-            } elseif ($existingUser && ! $existingUser->hasTenantProfile()) {
-                $validator->errors()->add(
-                    'email',
-                    'The email has already been taken.'
-                );
+            if (! empty($email)) {
+                $existingTenantEmail = \App\Models\Tenant::where('email', $email)->first();
+                $existingUser = \App\Models\User::where('email', $email)->first();
+
+                // Prevent hijacking admin/owner accounts
+                if ($existingUser && $existingUser->isOwner()) {
+                    $validator->errors()->add(
+                        'email',
+                        'This email belongs to an administrator account. Tenant accounts must use a separate email address.'
+                    );
+                } elseif ($existingTenantEmail && $existingTenantEmail->hasVerifiedPhone() && (! $existingTenantPhone || $existingTenantPhone->id !== $existingTenantEmail->id)) {
+                    $validator->errors()->add(
+                        'email',
+                        'A tenant account with this email already exists and is verified. Please log in directly.'
+                    );
+                } elseif ($existingUser && ! $existingUser->hasTenantProfile()) {
+                    $validator->errors()->add(
+                        'email',
+                        'The email has already been taken.'
+                    );
+                }
             }
 
             if ($existingPhoneUser && $existingPhoneUser->isOwner()) {

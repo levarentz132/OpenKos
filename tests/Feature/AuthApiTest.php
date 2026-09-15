@@ -863,3 +863,31 @@ test('tenant login is blocked with 403 if phone number is not verified', functio
         ->assertJsonPath('phone_verified', false)
         ->assertJsonPath('requires_verification', true);
 });
+
+test('new user can register with only phone number and whatsapp otp without email', function () {
+    $otpRes = $this->postJson('/api/v1/auth/otp/send', [
+        'channel' => 'whatsapp',
+        'phone' => '081299887766',
+    ]);
+    $otpRes->assertOk();
+
+    $cached = \Illuminate\Support\Facades\Cache::get('reg_phone_otp_6281299887766');
+    $otp = $cached['otp'];
+
+    $regRes = $this->postJson('/api/v1/auth/register', [
+        'name' => 'No Email Tenant',
+        'phone' => '081299887766',
+        'otp' => $otp,
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+    ]);
+
+    $regRes->assertCreated()
+        ->assertJsonPath('phone_verified', true)
+        ->assertJsonStructure(['token', 'user']);
+
+    $tenant = \App\Models\Tenant::where('phone', '6281299887766')->first();
+    expect($tenant)->not->toBeNull();
+    expect($tenant->hasVerifiedPhone())->toBeTrue();
+    expect($tenant->email)->toBeNull();
+});
