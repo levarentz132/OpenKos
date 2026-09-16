@@ -38,6 +38,7 @@ class BookingOrder extends Model
     public const STATUS_PAID = 'paid';
     public const STATUS_EXPIRED = 'expired';
     public const STATUS_CANCELLED = 'cancelled';
+    public const STATUS_PAYMENT_CONFLICT = 'payment_conflict';
 
     protected function casts(): array
     {
@@ -89,5 +90,15 @@ class BookingOrder extends Model
     public function isPending(): bool
     {
         return $this->status === self::STATUS_PENDING;
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === self::STATUS_CANCELLED;
+    }
+
+    public function isConflict(): bool
+    {
+        return $this->status === self::STATUS_PAYMENT_CONFLICT;
     }
 }

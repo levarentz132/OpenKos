@@ -43,7 +43,8 @@ class BookingOrderController extends Controller
 
         $unit = Unit::with(['property', 'rates'])->findOrFail($validated['unit_id']);
 
-        if (in_array($unit->status, [UnitStatus::Maintenance, UnitStatus::Unavailable], true)) {
+        if (in_array($unit->status, [UnitStatus::Maintenance, UnitStatus::Unavailable, UnitStatus::Occupied], true)
+            || ! app(\App\Business\Leases\OccupancyCalculator::class)->canAccommodate($unit, 1)) {
             return response()->json([
                 'message' => 'This room is currently under maintenance or unavailable for booking.',
             ], 422);

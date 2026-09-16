@@ -196,3 +196,24 @@ async function handleBookingCommand(sock, senderJid, senderName, unitId, startDa
 | `/api/v1/tenant/invoices?status=unpaid` | `GET` | Melihat tagihan sewa berjalan bagi penghuni terdaftar. |
 | `/api/v1/tenant/invoices/{id}/checkout` | `POST` | Menerbitkan link DOKU untuk tagihan sewa berjalan. |
 | `/api/webhooks/payment/doku` | `POST` | Webhook otomatis dari DOKU: saat pembayaran sukses, otomatis menerbitkan sewa, tagihan, dan pembayaran lunas. |
+
+---
+
+## 6. Penanganan Jika Kamar Sudah Dibayar Pengguna Lain (Manajemen Konflik Bot)
+
+Jika calon penyewa A menunda pembayaran, lalu calon penyewa B membayar kamar yang sama lebih dulu:
+
+1. Sistem OpenKos otomatis membatalkan pesanan penyewa A (`status: cancelled`).
+2. Jika penyewa A mengklik link checkout lama atau meminta link pembayaran ulang ke Bot via `POST /api/v1/cart/{orderId}/checkout`:
+   - API merespons dengan HTTP `422 (ROOM_ALREADY_PAID)`.
+   - Bot dapat membalas dengan pesan informatif:
+
+```text
+Mohon maaf Kak, Kamar 101 baru saja disewa dan dibayar oleh calon penghuni lain yang menyelesaikan pembayaran lebih dulu. 🙏
+
+Kamar lain yang masih tersedia saat ini:
+1. Kamar 102 (Tipe Superior) - Rp 1.500.000 / bulan
+2. Kamar 103 (Tipe Deluxe) - Rp 1.750.000 / bulan
+
+Ketik: BOOKING [Nomor Kamar] [Tanggal Check-in] untuk memesan kamar pengganti.
+```

@@ -278,3 +278,228 @@ test('order fails if unit is unavailable or under maintenance', function () {
     $response->assertStatus(422)
         ->assertJsonPath('message', 'This room is currently under maintenance or unavailable for booking.');
 });
+
+test('competing pending booking orders are automatically cancelled when another user completes payment', function () {
+    $checkoutUrl = 'https://staging.doku.com/checkout-link-v2/compete-test';
+
+    Http::fake([
+        'https://api-sandbox.doku.com/checkout/v1/payment' => Http::response([
+            'order' => ['invoice_number' => 'dummy'],
+            'payment' => [
+                'url' => $checkoutUrl,
+                'token_id' => 'TKN-COMPETE',
+            ],
+            'message' => ['SUCCESS'],
+        ], 200),
+    ]);
+
+    $property = Property::factory()->create();
+    $unit = Unit::factory()->withRate(1800000)->create([
+        'property_id' => $property->id,
+        'capacity' => 1,
+        'status' => UnitStatus::Available,
+    ]);
+
+    // User A books the unit (Order A)
+    $resA = $this->postJson('/api/v1/cart', [
+        'unit_id' => $unit->id,
+        'name' => 'User A (Unpaid)',
+        'phone' => '081211110001',
+        'start_date' => '2026-10-01',
+    ]);
+    $resA->assertCreated();
+    $orderA = BookingOrder::findOrFail($resA->json('order.id'));
+    expect($orderA->status)->toBe(BookingOrder::STATUS_PENDING);
+
+    // User B also books the unit (Order B)
+    $resB = $this->postJson('/api/v1/cart', [
+        'unit_id' => $unit->id,
+        'name' => 'User B (First to Pay)',
+        'phone' => '081211110002',
+        'start_date' => '2026-10-01',
+    ]);
+    $resB->assertCreated();
+    $orderB = BookingOrder::findOrFail($resB->json('order.id'));
+    expect($orderB->status)->toBe(BookingOrder::STATUS_PENDING);
+
+    // User B completes payment via DOKU webhook
+    $clientId = 'BRN-0208-1788852244810';
+    $secretKey = 'SK-vkKdx1b9ZOLoYiyeMuqz';
+    $target = '/api/webhooks/payment/doku';
+    $requestId = 'REQ-' . uniqid();
+    $timestamp = gmdate('Y-m-d\TH:i:s\Z');
+
+    $payload = [
+        'order' => [
+            'invoice_number' => $orderB->reference,
+            'amount' => 1800000,
+        ],
+        'transaction' => [
+            'status' => 'SUCCESS',
+            'date' => '2026-09-16T16:00:00Z',
+            'original_request_id' => $requestId,
+        ],
+        'channel' => ['id' => 'QRIS'],
+    ];
+
+    $rawBody = json_encode($payload);
+    $digest = base64_encode(hash('sha256', $rawBody, true));
+    $component = "Client-Id:{$clientId}\nRequest-Id:{$requestId}\nRequest-Timestamp:{$timestamp}\nRequest-Target:{$target}\nDigest:{$digest}";
+    $signature = 'HMACSHA256=' . base64_encode(hash_hmac('sha256', $component, $secretKey, true));
+
+    $webhookResponse = $this->call('POST', $target, [], [], [], [
+        'CONTENT_TYPE' => 'application/json',
+        'HTTP_CLIENT_ID' => $clientId,
+        'HTTP_REQUEST_ID' => $requestId,
+        'HTTP_REQUEST_TIMESTAMP' => $timestamp,
+        'HTTP_SIGNATURE' => $signature,
+        'HTTP_REQUEST_TARGET' => $target,
+    ], $rawBody);
+
+    $webhookResponse->assertOk()->assertJson(['status' => 'processed']);
+
+    // Order B is PAID
+    $orderB->refresh();
+    expect($orderB->status)->toBe(BookingOrder::STATUS_PAID)
+        ->and($orderB->lease_id)->not->toBeNull();
+
+    // Order A is automatically CANCELLED with conflict note
+    $orderA->refresh();
+    expect($orderA->status)->toBe(BookingOrder::STATUS_CANCELLED)
+        ->and($orderA->notes)->toContain('Dibatalkan otomatis: Kamar telah dibayar oleh pengguna lain');
+
+    // Unit is now Occupied
+    $unit->refresh();
+    expect($unit->status)->toBe(UnitStatus::Occupied);
+});
+
+test('cart checkout fails with 422 ROOM_ALREADY_PAID when unit has already been paid and occupied by another user', function () {
+    $property = Property::factory()->create();
+    $unit = Unit::factory()->withRate(2000000)->create([
+        'property_id' => $property->id,
+        'capacity' => 1,
+        'status' => UnitStatus::Available,
+    ]);
+
+    // User creates booking order in cart
+    $res = $this->postJson('/api/v1/cart', [
+        'unit_id' => $unit->id,
+        'name' => 'Late Payer',
+        'phone' => '081298765432',
+        'start_date' => '2026-10-01',
+    ]);
+    $res->assertCreated();
+    $orderId = $res->json('order.id');
+
+    // In the meantime, another tenant occupied the unit
+    $unit->update(['status' => UnitStatus::Occupied]);
+
+    // Late Payer attempts to checkout
+    $checkoutRes = $this->postJson("/api/v1/cart/{$orderId}/checkout");
+    $checkoutRes->assertStatus(422)
+        ->assertJsonPath('code', 'ROOM_ALREADY_PAID')
+        ->assertJsonPath('message', 'Maaf, kamar ini baru saja disewa dan dibayar oleh pengguna lain. Silakan pilih kamar lain yang masih tersedia.');
+
+    // Booking order is now marked cancelled
+    $order = BookingOrder::findOrFail($orderId);
+    expect($order->status)->toBe(BookingOrder::STATUS_CANCELLED);
+});
+
+test('double payment race condition safely marks second paid order as payment_conflict without crashing', function () {
+    $property = Property::factory()->create();
+    $unit = Unit::factory()->withRate(1500000)->create([
+        'property_id' => $property->id,
+        'capacity' => 1,
+        'status' => UnitStatus::Available,
+    ]);
+
+    // Order 1 (User A)
+    $orderA = BookingOrder::create([
+        'cart_token' => 'cart-a',
+        'reference' => 'BK-ORDER-AAA',
+        'unit_id' => $unit->id,
+        'guest_name' => 'User A (First to settle)',
+        'guest_phone' => '628111111111',
+        'guest_email' => 'usera@example.com',
+        'start_date' => '2026-10-01',
+        'amount' => 1500000,
+        'status' => BookingOrder::STATUS_PENDING,
+    ]);
+
+    // Order 2 (User B)
+    $orderB = BookingOrder::create([
+        'cart_token' => 'cart-b',
+        'reference' => 'BK-ORDER-BBB',
+        'unit_id' => $unit->id,
+        'guest_name' => 'User B (Simultaneous payment)',
+        'guest_phone' => '628222222222',
+        'guest_email' => 'userb@example.com',
+        'start_date' => '2026-10-01',
+        'amount' => 1500000,
+        'status' => BookingOrder::STATUS_PENDING,
+    ]);
+
+    $clientId = 'BRN-0208-1788852244810';
+    $secretKey = 'SK-vkKdx1b9ZOLoYiyeMuqz';
+    $target = '/api/webhooks/payment/doku';
+
+    // 1. Webhook for Order A settles first
+    $reqA = 'REQ-A-' . uniqid();
+    $timeA = gmdate('Y-m-d\TH:i:s\Z');
+    $payloadA = [
+        'order' => ['invoice_number' => $orderA->reference, 'amount' => 1500000],
+        'transaction' => ['status' => 'SUCCESS', 'date' => $timeA, 'original_request_id' => $reqA],
+        'channel' => ['id' => 'BCA_VA'],
+    ];
+    $rawA = json_encode($payloadA);
+    $digestA = base64_encode(hash('sha256', $rawA, true));
+    $sigA = 'HMACSHA256=' . base64_encode(hash_hmac('sha256', "Client-Id:{$clientId}\nRequest-Id:{$reqA}\nRequest-Timestamp:{$timeA}\nRequest-Target:{$target}\nDigest:{$digestA}", $secretKey, true));
+
+    $resA = $this->call('POST', $target, [], [], [], [
+        'CONTENT_TYPE' => 'application/json',
+        'HTTP_CLIENT_ID' => $clientId,
+        'HTTP_REQUEST_ID' => $reqA,
+        'HTTP_REQUEST_TIMESTAMP' => $timeA,
+        'HTTP_SIGNATURE' => $sigA,
+        'HTTP_REQUEST_TARGET' => $target,
+    ], $rawA);
+
+    $resA->assertOk()->assertJson(['status' => 'processed']);
+    $orderA->refresh();
+    expect($orderA->status)->toBe(BookingOrder::STATUS_PAID);
+
+    // 2. Webhook for Order B arrives next (User B also paid before discovering it was occupied)
+    $reqB = 'REQ-B-' . uniqid();
+    $timeB = gmdate('Y-m-d\TH:i:s\Z');
+    $payloadB = [
+        'order' => ['invoice_number' => $orderB->reference, 'amount' => 1500000],
+        'transaction' => ['status' => 'SUCCESS', 'date' => $timeB, 'original_request_id' => $reqB],
+        'channel' => ['id' => 'QRIS'],
+    ];
+    $rawB = json_encode($payloadB);
+    $digestB = base64_encode(hash('sha256', $rawB, true));
+    $sigB = 'HMACSHA256=' . base64_encode(hash_hmac('sha256', "Client-Id:{$clientId}\nRequest-Id:{$reqB}\nRequest-Timestamp:{$timeB}\nRequest-Target:{$target}\nDigest:{$digestB}", $secretKey, true));
+
+    $resB = $this->call('POST', $target, [], [], [], [
+        'CONTENT_TYPE' => 'application/json',
+        'HTTP_CLIENT_ID' => $clientId,
+        'HTTP_REQUEST_ID' => $reqB,
+        'HTTP_REQUEST_TIMESTAMP' => $timeB,
+        'HTTP_SIGNATURE' => $sigB,
+        'HTTP_REQUEST_TARGET' => $target,
+    ], $rawB);
+
+    // Webhook should return HTTP 200 with status 'payment_conflict' so gateway doesn't retry loop
+    $resB->assertOk()->assertJson(['status' => 'payment_conflict']);
+
+    // Order B is safely marked as payment_conflict with full tracking for admin
+    $orderB->refresh();
+    expect($orderB->status)->toBe(BookingOrder::STATUS_PAYMENT_CONFLICT)
+        ->and($orderB->paid_at)->not->toBeNull()
+        ->and($orderB->notes)->toContain('OVERBOOKING DETECTED')
+        ->and($orderB->lease_id)->toBeNull();
+
+    // User A's lease remains valid and untouched
+    expect(Lease::count())->toBe(1);
+});
+

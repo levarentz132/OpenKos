@@ -1,17 +1,6 @@
 # Panduan Pemesanan Masuk Keranjang (Cart-First) & Pembuatan Sewa Otomatis Pasca Bayar (OpenKos)
 
-Dokumen ini menjelaskan alur **Cart-First Room Booking & Deferred Lease Creation** di OpenKos:
-1. **Penyimpanan ke Keranjang (Cart / Booking Order)**: Ketika calon penghuni memesan kamar melalui Website atau WhatsApp Bot, pesanan disimpan terlebih dahulu ke dalam sistem sebagai **Booking Order (Keranjang)** dengan status `pending`.
-2. **Kamar Tetap Tersedia & Belum Dibuatkan Lease**: Pada tahap ini, kontrak sewa (**Lease**) **BELUM** dibuat, kamar **BELUM** berstatus `Occupied`, dan tagihan resmi **BELUM** diterbitkan.
-3. **Pembayaran Melalui DOKU Checkout**: Sistem langsung membuatkan tautan pembayaran resmi DOKU untuk nomor referensi pesanan tersebut.
-4. **Penerbitan Sewa & Kwitansi Otomatis (Saat Pembayaran Sukses)**: Begitu pembayaran dinyatakan berhasil oleh DOKU melalui webhook, OpenKos secara otomatis:
-   - Membuat/menghubungkan akun **User & Tenant**.
-   - Menerbitkan kontrak sewa aktif (**Lease**).
-   - Mengubah status kamar menjadi **Occupied**.
-   - Menerbitkan **Invoice** bulan pertama.
-   - Mencatat record pembayaran sukses (**Payment**) dengan status `confirmed`.
-   - Mengubah status **Invoice** menjadi **Paid (Lunas)**.
-   - Memperbarui status **Booking Order** menjadi **Paid**.
+Dokumen ini menjelaskan alur **Cart-First Room Booking & Deferred Lease Creation** di OpenKos, termasuk **Manajemen Konflik & Concurrency** (jika ada pengguna yang memesan kamar namun belum bayar, sementara pengguna lain telah menyelesaikan pembayaran lebih dulu).
 
 ---
 
@@ -20,46 +9,39 @@ Dokumen ini menjelaskan alur **Cart-First Room Booking & Deferred Lease Creation
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Guest as Calon Penghuni (Web / WhatsApp)
+    actor GuestA as Pengguna A (Belum Bayar)
+    actor GuestB as Pengguna B (Bayar Duluan)
     participant Client as Website / WhatsApp Bot
-    participant API as OpenKos API (/api/v1/cart /orders)
+    participant API as OpenKos API (/api/v1/cart)
     participant DB as Database (BookingOrders)
     participant DOKU as DOKU Jokul Checkout
     participant Engine as OpenKos Core Engine (FulfillBookingOrder)
     
-    Note over Guest,DB: TAHAP 1: Masuk Keranjang (Booking Order Pending)
-    Guest->>Client: Pilih Kamar 101, Nama, No. HP, Tgl Mulai
-    Client->>API: POST /api/v1/cart (atau /api/v1/orders)
-    API->>DB: Simpan ke tabel booking_orders (status: pending)
-    Note over DB: Kamar tetap "available" & belum ada Lease!
-    API->>DOKU: Request DOKU Checkout URL untuk reference BK-XXXX
-    DOKU-->>API: Return checkout_url
-    API-->>Client: Return Cart Item & checkout_url (HTTP 201)
-    Client-->>Guest: Tampilkan Keranjang & Tombol Bayar
+    Note over GuestA,DB: TAHAP 1: Pengguna A & B Sama-sama Masuk Keranjang
+    GuestA->>API: POST /api/v1/cart (Kamar 101) -> Order A (Pending)
+    GuestB->>API: POST /api/v1/cart (Kamar 101) -> Order B (Pending)
+    Note over DB: Kamar 101 tetap "Available", belum ada Lease!
     
-    Note over Guest,DOKU: TAHAP 2: Pembayaran oleh Pengguna
-    Guest->>DOKU: Buka checkout_url & Bayar (QRIS / VA / E-Wallet)
-    
-    Note over DOKU,Engine: TAHAP 3: Webhook Pembayaran Sukses & Pembuatan Lease
-    DOKU->>API: POST /api/webhooks/payment/doku (Status: SUCCESS)
-    API->>API: Verifikasi HMAC-SHA256 Signature
-    API->>Engine: FulfillBookingOrder(bookingOrder, result)
-    Engine->>DB: 1. Buat User & Tenant akun penghuni
-    Engine->>DB: 2. Create Lease (Status: Active)
-    Engine->>DB: 3. Set Unit Status -> "occupied"
-    Engine->>DB: 4. Buat Tagihan Invoice (Status: Pending)
-    Engine->>DB: 5. Buat Payment Record (Status: Confirmed, Method: Gateway)
-    Engine->>DB: 6. Alokasikan Payment -> Invoice Status: "paid"
-    Engine->>DB: 7. Set BookingOrder Status -> "paid" & Simpan lease_id, invoice_id
+    Note over GuestB,DOKU: TAHAP 2: Pengguna B Menyelesaikan Pembayaran Lebih Dulu
+    GuestB->>DOKU: Buka Checkout & Bayar (QRIS / VA)
+    DOKU->>API: Webhook Callback (Status: SUCCESS, Ref: Order B)
+    API->>Engine: FulfillBookingOrder(Order B)
+    Engine->>DB: 1. Terbitkan Lease Kamar 101 untuk Pengguna B
+    Engine->>DB: 2. Kunci Kamar 101 -> Status "Occupied"
+    Engine->>DB: 3. Catat Pembayaran Sukses (Invoice Lunas)
+    Engine->>DB: 4. AUTO-CANCEL: Batalkan Order A milik Pengguna A!
     API-->>DOKU: HTTP 200 {"status":"processed"}
-    DOKU-->>Guest: Pembayaran Sukses! Selamat datang di kos.
+    
+    Note over GuestA,API: TAHAP 3: Pengguna A Terhalang Membayar Kamar yang Sudah Diisi
+    GuestA->>API: POST /api/v1/cart/OrderA/checkout
+    API-->>GuestA: HTTP 422 {"code":"ROOM_ALREADY_PAID","message":"Kamar ini baru saja disewa dan dibayar oleh orang lain."}
 ```
 
 ---
 
 ## 2. Spesifikasi API Keranjang & Pemesanan
 
-### 2.1 Menambahkan Kamar ke Keranjang (Add to Cart / Create Booking Order)
+### 2.1 Menambahkan Kamar ke Keranjang (Add to Cart)
 - **Method**: `POST`
 - **URL**: `https://api.domain-anda.com/api/v1/cart`  
   *(Atau alias: `POST /api/v1/orders` / `POST /api/v1/bookings`)*
@@ -76,24 +58,11 @@ sequenceDiagram
 | `unit_id` | `integer` | **Ya** | ID kamar yang dipilih (dari `GET /api/v1/available-rooms`). |
 | `name` | `string` | **Ya** | Nama lengkap calon penyewa. |
 | `phone` | `string` | **Ya** | Nomor telepon WhatsApp (format: `"081234567890"` atau `"6281234567890"`). |
-| `email` | `string` | Tidak | Alamat email calon penyewa. |
+| `email` | `string` | Tidak | Alamat email calon penyewa (jika kosong, sistem fallback ke `phone@openkos.local`). |
 | `start_date` | `date` | **Ya** | Tanggal mulai sewa / rencana check-in (`YYYY-MM-DD`). |
-| `duration_months` | `integer` | Tidak | Durasi sewa dalam bulan (default: `1`, min: `1`, max: `60`). |
-| `cart_token` | `string` | Tidak | Token keranjang dari browser / session bot. Jika tidak dikirim, sistem otomatis membuatkan UUID baru. |
+| `duration_months` | `integer` | Tidak | Durasi sewa dalam bulan (default: `1`). |
+| `cart_token` | `string` | Tidak | Token keranjang dari browser / session bot. |
 | `notes` | `string` | Tidak | Catatan tambahan. |
-
-#### Contoh Request:
-```json
-{
-  "unit_id": 5,
-  "name": "Budi Santoso",
-  "phone": "081299998888",
-  "email": "budi.santoso@example.com",
-  "start_date": "2026-10-01",
-  "duration_months": 1,
-  "notes": "Booking kamar dari website"
-}
-```
 
 #### Contoh Response Sukses (`201 Created`):
 ```json
@@ -106,8 +75,7 @@ sequenceDiagram
     "status": "pending",
     "property": {
       "id": 1,
-      "name": "Highlander Stay Grogol",
-      "address": "Jl. Alpukat No. 12, Jakarta Barat"
+      "name": "Highlander Stay Grogol"
     },
     "unit": {
       "id": 5,
@@ -115,13 +83,7 @@ sequenceDiagram
     },
     "guest": {
       "name": "Budi Santoso",
-      "phone": "6281299998888",
-      "email": "budi.santoso@example.com"
-    },
-    "period": {
-      "start_date": "2026-10-01",
-      "end_date": "2026-11-01",
-      "duration_months": 1
+      "phone": "6281299998888"
     },
     "amount": 1750000.0,
     "currency": "IDR",
@@ -132,19 +94,13 @@ sequenceDiagram
 }
 ```
 
-> **Catatan Penting**:
-> - `order.lease_created = false`: Menandakan sewa belum dibuat sebelum pembayaran berhasil.
-> - Kamar nomor 101 tetap berstatus `available` bagi pencarian publik.
-> - `order.checkout_url`: Tautan resmi DOKU untuk langsung melakukan pembayaran.
-
 ---
 
-### 2.2 Melihat Isi Keranjang (View Cart)
+### 2.2 Melihat Isi Keranjang (Dengan Indikator Ketersediaan Real-Time)
 - **Method**: `GET`
-- **URL**: `https://api.domain-anda.com/api/v1/cart?cart_token={cart_token}`  
-  *(Atau melalui query `?phone=081299998888` atau header `X-Cart-Token`)*
+- **URL**: `https://api.domain-anda.com/api/v1/cart?cart_token={cart_token}` *(atau `?phone={phone}`)*
 
-#### Contoh Response (`200 OK`):
+#### Contoh Response:
 ```json
 {
   "cart": {
@@ -158,14 +114,11 @@ sequenceDiagram
         "property_name": "Highlander Stay Grogol",
         "unit_name": "Kamar 101",
         "guest_name": "Budi Santoso",
-        "guest_phone": "6281299998888",
-        "start_date": "2026-10-01",
-        "end_date": "2026-11-01",
-        "duration_months": 1,
         "amount": 1750000.0,
-        "currency": "IDR",
         "status": "pending",
-        "checkout_url": "https://staging.doku.com/checkout-link-v2/9b7f9a12-xxxx-xxxx-xxxx",
+        "is_available": true,
+        "conflict_message": null,
+        "checkout_url": "https://staging.doku.com/checkout-link-v2/9b7f9a12-xxxx",
         "expires_at": "2026-09-16T11:45:00+00:00"
       }
     ]
@@ -173,97 +126,79 @@ sequenceDiagram
 }
 ```
 
----
-
-### 2.3 Menghapus Item dari Keranjang (Remove Item / Cancel)
-- **Method**: `DELETE`
-- **URL**: `https://api.domain-anda.com/api/v1/cart/{bookingOrderId}`
-
-#### Contoh Response (`200 OK`):
-```json
-{
-  "message": "Booking item removed from cart."
-}
-```
+> **Jika Kamar Telah Dibayar Oleh Orang Lain**:
+> `is_available` bernilai `false`, dan `conflict_message` berisi:
+> `"Kamar ini sudah terisi atau tidak tersedia lagi karena telah dibayar oleh pengguna lain."`
 
 ---
 
-### 2.4 Memperbarui Link Checkout Keranjang (Refresh Checkout URL)
-Jika tautan pembayaran kedaluwarsa atau pengguna ingin membuka ulang halaman DOKU:
+### 2.3 Checkout Guard (Pencegahan Sebelum Bayar)
+Ketika pengguna mengklik tombol "Bayar" / Checkout:
 - **Method**: `POST`
 - **URL**: `https://api.domain-anda.com/api/v1/cart/{bookingOrderId}/checkout`
 
-#### Contoh Response (`200 OK`):
+Jika kamar **sudah disewa & dibayar oleh orang lain**, sistem menolak dengan HTTP `422`:
 ```json
 {
-  "message": "Checkout URL generated successfully.",
-  "checkout_url": "https://staging.doku.com/checkout-link-v2/fresh-token-xxx",
-  "order": {
-    "id": 14,
-    "reference": "BK-X8K2M9LP1Q",
-    "amount": 1750000.0,
-    "status": "pending"
-  }
+  "code": "ROOM_ALREADY_PAID",
+  "message": "Maaf, kamar ini baru saja disewa dan dibayar oleh pengguna lain. Silakan pilih kamar lain yang masih tersedia."
 }
 ```
+Sistem juga secara otomatis memperbarui status pesanan tersebut menjadi `cancelled`.
 
 ---
 
-## 3. Eksekusi Otomatis Saat Pembayaran Sukses (Webhook DOKU)
+## 3. Manajemen Konflik Pemesanan (First-Paid-First-Served)
 
-Saat pengguna menyelesaikan transaksi via QRIS, Virtual Account, atau E-Wallet:
+Jika Pengguna A memesan kamar tetapi belum membayar, dan kemudian Pengguna B memesan kamar yang sama dan langsung membayar, sistem mengelolanya dengan **3 Lapis Perlindungan Otomatis**:
 
-### 1. DOKU Mengirimkan Webhook ke OpenKos
-- **URL Webhook**: `POST https://api.domain-anda.com/api/webhooks/payment/doku`
-- Payload transaksi memiliki status `SUCCESS` dan invoice number yang merujuk pada `order.reference` (contoh: `BK-X8K2M9LP1Q`).
+### Lapis 1: Pembatalan Otomatis Pesanan Pesaing (`Auto-Cancellation`)
+Saat pembayaran Pengguna B terkonfirmasi oleh webhook DOKU:
+1. Pengguna B resmi mendapatkan kontrak sewa (`Lease`), kamar berubah menjadi `Occupied`, dan pembayaran tercatat lunas.
+2. OpenKos mengeksekusi query atomik untuk mencari seluruh `BookingOrder` lain yang masih berstatus `pending` untuk kamar tersebut:
+   - Status otomatis diubah menjadi `cancelled`.
+   - Kolom `notes` dicatat: `"Dibatalkan otomatis: Kamar telah dibayar oleh pengguna lain (Order BK-XXXXX)"`.
+   - Pesanan tersebut otomatis hilang dari keranjang belanja aktif Pengguna A.
 
-### 2. Verifikasi & Fulfillment (`FulfillBookingOrder`)
-OpenKos mengenali referensi `BK-xxxx` dari tabel `booking_orders` dan menjalankan transaksi database atomik:
-1. **User & Tenant**: Membuat akun penyewa otomatis jika belum terdaftar.
-2. **Lease**: Menjalankan aksi `CreateLease`:
-   - Unit status diubah menjadi **Occupied**.
-   - Masa sewa aktif diikat ke tenant.
-   - Tagihan pertama dibuat di tabel `invoices`.
-3. **Payment Record**:
-   - Dibuatkan record di tabel `payment_attempts` dengan status `settled`.
-   - Dibuatkan record di tabel `payments` dengan nominal lunas, status `confirmed`, dan metode `gateway`.
-   - Menjalankan `AllocatePayment` sehingga status tagihan di tabel `invoices` berubah menjadi `paid` dan `amount_paid` terisi penuh.
-4. **Booking Order**:
-   - Status diubah menjadi `paid`.
-   - Field `lease_id`, `invoice_id`, dan `paid_at` diisi secara otomatis.
+### Lapis 2: Pre-Checkout Availability Guard
+Jika Pengguna A sedang membuka halaman pembayaran atau mencoba checkout ulang via endpoint `/cart/{id}/checkout`:
+- Sistem mengecek apakah kamar masih `Available` dan kapasitas kamar belum penuh.
+- Jika sudah `Occupied` atau kapasitas habis, permintaan ditolak dengan kode `ROOM_ALREADY_PAID`. Pengguna A terhindar dari salah transfer uang ke kamar yang sudah tidak tersedia.
+
+### Lapis 3: Safety Net Kasus Ekstrem (Double Payment / Keduanya Sempat Bayar Bersamaan)
+Skenario langka: Pengguna A dan Pengguna B sama-sama membuka halaman pembayaran bank/e-wallet dan mentransfer uang pada detik yang hampir bersamaan:
+1. Pembayaran Pengguna B masuk pertama (pukul 10:00:00) -> Kontrak sewa Pengguna B resmi terbit.
+2. Pembayaran Pengguna A masuk kedua (pukul 10:00:02) untuk kamar yang sama.
+3. **Penanganan Sistem**:
+   - `FulfillBookingOrder` mendeteksi bahwa kapasitas kamar telah penuh.
+   - Status `BookingOrder` Pengguna A ditandai sebagai `payment_conflict`.
+   - Timestamp `paid_at` dan nomor referensi DOKU tetap tersimpan rapi (uang tidak hilang tanpa jejak).
+   - Log level `CRITICAL` dikirim ke tim operasional / admin kos:
+     ```text
+     DOUBLE BOOKING PAYMENT CONFLICT DETECTED!
+     Order BK-AAA telah membayar Rp 1.750.000 via DOKU, namun Kamar 101 telah terisi oleh Order BK-BBB.
+     Tindakan yang diperlukan: Hubungi penyewa untuk relokasi ke kamar setara atau proses refund.
+     ```
+   - Webhook mengembalikan `HTTP 200 {"status": "payment_conflict"}` sehingga DOKU tidak terjebak dalam perulangan pengiriman webhook gagal.
 
 ---
 
-## 4. Struktur Database `booking_orders`
+## 4. Struktur Status `BookingOrder`
 
-| Kolom | Tipe | Deskripsi |
-| :--- | :--- | :--- |
-| `id` | `BIGINT UNSIGNED` | Primary Key. |
-| `cart_token` | `VARCHAR(100)` | Token identitas sesi keranjang browser/bot. |
-| `reference` | `VARCHAR(50)` | Nomor referensi unik (contoh: `BK-XXXXXXXXXX`). |
-| `unit_id` | `BIGINT UNSIGNED` | ID kamar yang dipesan. |
-| `tenant_id` | `BIGINT UNSIGNED (Nullable)` | ID penyewa (diisi otomatis saat pembayaran sukses). |
-| `guest_name` | `VARCHAR(255)` | Nama calon penyewa. |
-| `guest_phone` | `VARCHAR(30)` | Nomor HP WhatsApp. |
-| `guest_email` | `VARCHAR(255)` | Email calon penyewa. |
-| `start_date` | `DATE` | Tanggal mulai tinggal. |
-| `end_date` | `DATE` | Tanggal berakhir sewa periode pertama. |
-| `duration_months` | `INT` | Durasi bulan yang dipesan. |
-| `amount` | `DECIMAL(12,2)` | Nominal sewa yang harus dibayar. |
-| `currency` | `VARCHAR(3)` | Mata uang (`IDR`). |
-| `status` | `VARCHAR(20)` | Status order (`pending`, `paid`, `cancelled`, `expired`). |
-| `lease_id` | `BIGINT UNSIGNED (Nullable)` | ID kontrak sewa setelah sukses bayar. |
-| `invoice_id` | `BIGINT UNSIGNED (Nullable)` | ID tagihan yang terbit dan telah lunas. |
-| `doku_checkout_url` | `TEXT` | URL sesi checkout DOKU. |
-| `paid_at` | `TIMESTAMP` | Waktu pembayaran terkonfirmasi. |
+| Status | Deskripsi |
+| :--- | :--- |
+| `pending` | Pesanan tersimpan di keranjang, kamar belum dikunci, menunggu pembayaran. |
+| `paid` | Pembayaran berhasil diproses, kontrak sewa (`Lease`) aktif, kwitansi tagihan lunas. |
+| `cancelled` | Dibatalkan oleh pengguna, atau dibatalkan otomatis karena kamar telah dibayar oleh penyewa lain. |
+| `expired` | Melewati batas waktu pembayaran yang ditentukan. |
+| `payment_conflict` | Uang berhasil masuk via gateway, namun kamar sudah penuh terisi oleh penyewa lain. Memerlukan penanganan admin (pindah kamar setara atau refund). |
 
 ---
 
 ## 5. Ringkasan Tanya Jawab
 
-| Pertanyaan | Jawaban Teknis |
+| Pertanyaan | Solusi Sistem |
 | :--- | :--- |
-| **Apakah sebelum bayar kamar sudah terkunci (occupied)?** | **Tidak**. Kamar tetap `available` dan belum ada `Lease` yang dibuat. |
-| **Kapan Lease dan Invoice terbit?** | Tepat pada saat DOKU mengirimkan notifikasi callback webhook dengan status `SUCCESS`. |
-| **Apakah otomatis tercatat pembayaran sukses?** | **Ya**. Tabel `payments` terisi dengan status `confirmed`, `amount_paid` diisi pada tagihan, dan status invoice menjadi `paid`. |
-| **Bagaimana jika calon penghuni membatalkan dari keranjang?** | Cukup panggil `DELETE /api/v1/cart/{id}`, status order diupdate menjadi `cancelled`. |
+| **User A booking tapi belum bayar, User B bayar duluan. Apa yang terjadi pada User A?** | Pesanan User A otomatis dibatalkan (`cancelled`). Jika User A mencoba checkout, sistem memblokir dengan pesan `"Maaf, kamar ini baru saja disewa dan dibayar oleh pengguna lain."` |
+| **Kapan kamar berubah jadi occupied?** | Hanya ketika salah satu pengguna berhasil menyelesaikan pembayaran di DOKU. |
+| **Bagaimana jika uang User A terlanjur terdebet karena bayar hampir bersamaan?** | Sistem mencatat transaksi dengan status `payment_conflict`, menyimpan bukti DOKU, dan memunculkan notifikasi agar admin dapat menawarkan kamar setara atau refund. |

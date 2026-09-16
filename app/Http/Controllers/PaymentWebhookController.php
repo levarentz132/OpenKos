@@ -49,7 +49,7 @@ class PaymentWebhookController extends Controller
 
         if ($bookingOrder && $result->status === \OpenKOS\Core\Enums\PaymentStatus::Settled) {
             $fulfiller = app(\App\Actions\Bookings\FulfillBookingOrder::class);
-            $fulfiller->execute(
+            $fulfilledOrder = $fulfiller->execute(
                 $bookingOrder,
                 providerReference: $result->providerReference,
                 occurredAt: $result->occurredAt,
@@ -59,9 +59,14 @@ class PaymentWebhookController extends Controller
                 'gateway' => $gateway,
                 'booking_order_id' => $bookingOrder->id,
                 'reference' => $bookingOrder->reference,
+                'status' => $fulfilledOrder->status,
             ]);
 
-            return response()->json(['status' => 'processed'], 200);
+            return response()->json([
+                'status' => $fulfilledOrder->status === \App\Models\BookingOrder::STATUS_PAYMENT_CONFLICT
+                    ? 'payment_conflict'
+                    : 'processed',
+            ], 200);
         }
 
         $processed = $apply->execute($gateway, $result);

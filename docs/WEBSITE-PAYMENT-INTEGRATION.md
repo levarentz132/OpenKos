@@ -194,6 +194,8 @@ interface CartItem {
   start_date: string;
   duration_months: number;
   amount: number;
+  is_available: boolean;
+  conflict_message?: string | null;
   checkout_url: string;
 }
 
@@ -227,9 +229,19 @@ export function BookingCart() {
     }
   };
 
-  const handlePay = (checkoutUrl: string) => {
-    // Redirect langsung ke DOKU Hosted Checkout
-    window.location.href = checkoutUrl;
+  const handlePay = async (item: CartItem) => {
+    try {
+      // Verifikasi ketersediaan kamar ke backend sebelum redirect
+      const res = await axios.post(`https://api.domain-anda.com/api/v1/cart/${item.id}/checkout`);
+      window.location.href = res.data.checkout_url;
+    } catch (err: any) {
+      if (err.response?.data?.code === 'ROOM_ALREADY_PAID') {
+        alert(err.response.data.message);
+        fetchCart(cartToken); // Segarkan keranjang otomatis
+      } else {
+        alert('Gagal membuka halaman pembayaran DOKU.');
+      }
+    }
   };
 
   const handleRemove = async (orderId: number) => {
@@ -251,6 +263,8 @@ export function BookingCart() {
     );
   }
 
+  const activeItem = items.find((i) => i.is_available);
+
   return (
     <div className="p-6 bg-white rounded-2xl shadow border max-w-lg mx-auto">
       <h2 className="text-xl font-bold text-gray-900 mb-4">Keranjang Booking Kos</h2>
@@ -259,12 +273,24 @@ export function BookingCart() {
         {items.map((item) => (
           <div key={item.id} className="p-4 border rounded-xl bg-gray-50 flex justify-between items-start">
             <div>
-              <h3 className="font-semibold text-gray-800">{item.unit_name}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-gray-800">{item.unit_name}</h3>
+                {!item.is_available && (
+                  <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded-full font-semibold">
+                    Sudah Diisi Orang Lain
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-gray-500">{item.property_name}</p>
               <p className="text-xs text-gray-400 mt-1">Check-in: {item.start_date} ({item.duration_months} Bulan)</p>
-              <p className="text-sm font-bold text-indigo-600 mt-2">
-                Rp {item.amount.toLocaleString('id-ID')}
-              </p>
+              
+              {item.conflict_message ? (
+                <p className="text-xs text-red-600 font-medium mt-1.5">{item.conflict_message}</p>
+              ) : (
+                <p className="text-sm font-bold text-indigo-600 mt-2">
+                  Rp {item.amount.toLocaleString('id-ID')}
+                </p>
+              )}
             </div>
             <button
               onClick={() => handleRemove(item.id)}
@@ -283,13 +309,17 @@ export function BookingCart() {
         </span>
       </div>
 
-      {items.length > 0 && items[0].checkout_url && (
+      {activeItem ? (
         <button
-          onClick={() => handlePay(items[0].checkout_url)}
+          onClick={() => handlePay(activeItem)}
           className="mt-6 w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition shadow-lg flex items-center justify-center gap-2"
         >
           Bayar Sekarang dengan DOKU (QRIS/VA)
         </button>
+      ) : (
+        <div className="mt-6 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl text-center">
+          Kamar pada keranjang ini telah diisi oleh orang lain. Silakan hapus item dan pilih kamar lain yang masih tersedia.
+        </div>
       )}
     </div>
   );

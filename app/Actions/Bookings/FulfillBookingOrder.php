@@ -4,10 +4,12 @@ namespace App\Actions\Bookings;
 
 use App\Actions\Invoices\AllocatePayment;
 use App\Actions\Leases\CreateLease;
+use App\Business\Leases\OccupancyCalculator;
 use App\Data\Lease\CreateLeaseData;
 use App\Enums\InvoiceStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus as ApplicationPaymentStatus;
+use App\Enums\UnitStatus;
 use App\Events\Payment\PaymentRecorded;
 use App\Models\BookingOrder;
 use App\Models\Tenant;
@@ -25,14 +27,17 @@ class FulfillBookingOrder
     public function __construct(
         private CreateLease $createLease,
         private AllocatePayment $allocatePayment,
+        private OccupancyCalculator $occupancy,
     ) {}
 
     /**
      * Fulfill a paid BookingOrder:
-     * 1. Resolves/creates Tenant & User.
-     * 2. Executes CreateLease (occupies Unit, creates Lease, generates Invoice).
-     * 3. Creates PaymentAttempt & confirmed Payment, settling the Invoice.
-     * 4. Updates BookingOrder with lease_id, invoice_id, and status = 'paid'.
+     * 1. Checks unit availability & capacity (guards against double-booking race condition).
+     * 2. Resolves/creates Tenant & User.
+     * 3. Executes CreateLease (occupies Unit, creates Lease, generates Invoice).
+     * 4. Creates PaymentAttempt & confirmed Payment, settling the Invoice.
+     * 5. Updates BookingOrder with lease_id, invoice_id, and status = 'paid'.
+     * 6. Automatically cancels any other competing pending orders for this unit.
      */
     public function execute(
         BookingOrder $bookingOrder,
@@ -52,6 +57,36 @@ class FulfillBookingOrder
 
             $unit = Unit::lockForUpdate()->findOrFail($lockedOrder->unit_id);
 
+            // Double Booking / Race Condition Guard:
+            // Check if unit is still available and can accommodate the new lease
+            $canAccommodate = in_array($unit->status, [UnitStatus::Available, UnitStatus::Occupied], true)
+                && $this->occupancy->canAccommodate($unit, 1);
+
+            if (! $canAccommodate || in_array($unit->status, [UnitStatus::Maintenance, UnitStatus::Unavailable], true)) {
+                // Overbooking race condition detected!
+                // Another user completed payment and occupied the unit just moments ago.
+                $conflictNote = "OVERBOOKING DETECTED: Pembayaran berhasil via DOKU ({$providerReference}), namun kamar {$unit->name} telah terisi penuh oleh penyewa lain. Memerlukan tindakan admin (relokasi kamar / refund).";
+
+                $lockedOrder->update([
+                    'status' => BookingOrder::STATUS_PAYMENT_CONFLICT,
+                    'paid_at' => $occurredAt ?? now(),
+                    'notes' => ($lockedOrder->notes ? $lockedOrder->notes . ' | ' : '') . $conflictNote,
+                ]);
+
+                Log::critical('DOUBLE BOOKING PAYMENT CONFLICT DETECTED!', [
+                    'booking_order_id' => $lockedOrder->id,
+                    'reference' => $lockedOrder->reference,
+                    'unit_id' => $unit->id,
+                    'unit_name' => $unit->name,
+                    'amount' => $lockedOrder->amount,
+                    'guest_name' => $lockedOrder->guest_name,
+                    'guest_phone' => $lockedOrder->guest_phone,
+                    'provider_reference' => $providerReference,
+                ]);
+
+                return $lockedOrder->fresh();
+            }
+
             // 1. Resolve or create Tenant and User
             $phone = $lockedOrder->guest_phone;
             $email = $lockedOrder->guest_email;
@@ -65,11 +100,13 @@ class FulfillBookingOrder
                     ->when(! empty($email), fn ($q) => $q->orWhere('email', $email))
                     ->first();
 
+                $userEmail = ! empty($email) ? $email : ($phone . '@openkos.local');
+
                 if (! $user) {
                     $user = User::create([
                         'name' => $lockedOrder->guest_name,
                         'phone' => $phone,
-                        'email' => $email,
+                        'email' => $userEmail,
                         'password' => Hash::make(Str::random(16)),
                     ]);
                 }
@@ -78,7 +115,7 @@ class FulfillBookingOrder
                     'user_id' => $user->id,
                     'name' => $lockedOrder->guest_name,
                     'phone' => $phone,
-                    'email' => $email,
+                    'email' => $userEmail,
                     'password' => Hash::make(Str::random(16)),
                     'is_active' => true,
                 ]);
@@ -160,12 +197,27 @@ class FulfillBookingOrder
                 'paid_at' => $occurredAt ?? now(),
             ]);
 
-            Log::info('Booking order fulfilled with active lease and confirmed payment.', [
+            // 6. Automatically cancel any competing pending booking orders for this unit
+            $competingOrders = BookingOrder::where('unit_id', $unit->id)
+                ->where('id', '!=', $lockedOrder->id)
+                ->where('status', BookingOrder::STATUS_PENDING)
+                ->get();
+
+            foreach ($competingOrders as $competingOrder) {
+                $competingOrder->update([
+                    'status' => BookingOrder::STATUS_CANCELLED,
+                    'notes' => ($competingOrder->notes ? $competingOrder->notes . ' | ' : '')
+                        . "Dibatalkan otomatis: Kamar telah dibayar oleh pengguna lain (Order {$lockedOrder->reference}).",
+                ]);
+            }
+
+            Log::info('Booking order fulfilled with active lease and confirmed payment. Competing orders cancelled.', [
                 'booking_order_id' => $lockedOrder->id,
                 'reference' => $lockedOrder->reference,
                 'lease_id' => $lease->id,
                 'invoice_id' => $invoice?->id,
                 'tenant_id' => $tenant->id,
+                'cancelled_competing_orders_count' => $competingOrders->count(),
             ]);
 
             return $lockedOrder->fresh();
