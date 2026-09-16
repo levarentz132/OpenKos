@@ -46,6 +46,10 @@ Route::prefix('pay/invoices/{token}')
         Route::post('/', [SignedPaymentController::class, 'pay'])->name('payments.signed.pay');
     });
 
+Route::get('payment/finish', [TenantPortalPaymentController::class, 'paymentStatus'])->name('payments.finish');
+Route::get('payment/callback', [TenantPortalPaymentController::class, 'paymentStatus'])->name('payments.callback');
+Route::get('portal/billing', [TenantPortalPaymentController::class, 'index'])->name('portal.billing.index');
+
 Route::middleware(['auth', 'verified'])->prefix('portal')->name('portal.')->group(function () {
     Route::redirect('/', '/portal/dashboard');
     Route::get('dashboard', TenantPortalDashboardController::class)->name('dashboard');
@@ -55,7 +59,6 @@ Route::middleware(['auth', 'verified'])->prefix('portal')->name('portal.')->grou
         Route::post('read-all', [TenantPortalNotificationController::class, 'markAllAsRead'])->name('read-all');
     });
     Route::prefix('billing')->name('billing.')->group(function () {
-        Route::get('/', [TenantPortalPaymentController::class, 'index'])->name('index');
         Route::post('/', [TenantPortalPaymentController::class, 'store'])->name('store');
         Route::get('history/invoices', [TenantPortalPaymentController::class, 'invoiceHistory'])->name('history.invoices');
         Route::get('history/payments', [TenantPortalPaymentController::class, 'paymentHistory'])->name('history.payments');

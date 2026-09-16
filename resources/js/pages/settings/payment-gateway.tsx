@@ -268,6 +268,9 @@ export default function PaymentGateway({
                                         />
                                     ),
                                 )}
+                                {selectedGateway.key === 'doku' && (
+                                    <SandboxTrialCard gateway={selectedGateway} />
+                                )}
                             </div>
                         )}
                     </div>
@@ -480,5 +483,153 @@ function GatewayField({
             )}
             {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
+    );
+}
+
+function SandboxTrialCard({ gateway }: { gateway: PaymentGateway }) {
+    const [amount, setAmount] = useState('10000');
+    const [loadingTrial, setLoadingTrial] = useState(false);
+    const [trialData, setTrialData] = useState<{ checkout_url: string; reference: string; amount: number } | null>(null);
+    const [trialError, setTrialError] = useState<string | null>(null);
+
+    const [loadingSim, setLoadingSim] = useState(false);
+    const [simMessage, setSimMessage] = useState<string | null>(null);
+
+    async function handleCreateTrial() {
+        setLoadingTrial(true);
+        setTrialError(null);
+        try {
+            const res = await fetch('/api/v1/sandbox/trial', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ amount: Number(amount) || 10000 }),
+            });
+            const result = await res.json();
+            if (result.success && result.checkout_url) {
+                setTrialData(result);
+            } else {
+                setTrialError(result.message || 'Failed to create trial checkout session.');
+            }
+        } catch (e: any) {
+            setTrialError(e.message || 'Network error');
+        } finally {
+            setLoadingTrial(false);
+        }
+    }
+
+    async function handleSimulateWebhook() {
+        setLoadingSim(true);
+        setSimMessage(null);
+        try {
+            const res = await fetch('/api/v1/sandbox/simulate-payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    reference: trialData?.reference,
+                }),
+            });
+            const result = await res.json();
+            if (result.success) {
+                setSimMessage(result.message);
+            } else {
+                setSimMessage('Simulation failed: ' + result.message);
+            }
+        } catch (e: any) {
+            setSimMessage('Network error: ' + e.message);
+        } finally {
+            setLoadingSim(false);
+        }
+    }
+
+    return (
+        <Card className="border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/20">
+            <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-semibold text-emerald-900 dark:text-emerald-300 flex items-center gap-2">
+                        <span>⚡ DOKU Sandbox Trial & Testing</span>
+                    </CardTitle>
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                        SANDBOX
+                    </span>
+                </div>
+                <CardDescription className="text-xs">
+                    Test live checkout URL creation on DOKU Sandbox and simulate webhook fulfillment without real money.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="trial_amount" className="text-xs font-medium">Trial Amount (IDR)</Label>
+                    <div className="flex gap-2">
+                        <Input
+                            id="trial_amount"
+                            type="number"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            className="bg-white dark:bg-zinc-900 text-sm h-9"
+                            placeholder="10000"
+                        />
+                        <Button
+                            type="button"
+                            onClick={handleCreateTrial}
+                            disabled={loadingTrial}
+                            className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 text-xs"
+                        >
+                            {loadingTrial ? 'Connecting...' : 'Generate Trial Link'}
+                        </Button>
+                    </div>
+                </div>
+
+                {trialError && (
+                    <p className="text-xs text-red-600 bg-red-50 dark:bg-red-950/40 p-2 rounded border border-red-200">
+                        {trialError}
+                    </p>
+                )}
+
+                {trialData && (
+                    <div className="p-3 bg-white dark:bg-zinc-900 rounded-lg border space-y-2.5">
+                        <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">Reference:</span>
+                            <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{trialData.reference}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">Amount:</span>
+                            <span className="font-semibold text-emerald-600">Rp {Number(trialData.amount).toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="pt-2 flex gap-2">
+                            <a
+                                href={trialData.checkout_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex-1 text-center py-1.5 px-3 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition"
+                            >
+                                Open DOKU Checkout ↗
+                            </a>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleSimulateWebhook}
+                                disabled={loadingSim}
+                                className="h-8 text-xs shrink-0"
+                            >
+                                {loadingSim ? 'Simulating...' : 'Simulate SUCCESS ⚡'}
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {simMessage && (
+                    <Alert className="bg-emerald-100/70 border-emerald-300 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
+                        <AlertTitle className="text-xs font-bold">Simulator Result</AlertTitle>
+                        <AlertDescription className="text-xs">{simMessage}</AlertDescription>
+                    </Alert>
+                )}
+            </CardContent>
+        </Card>
     );
 }

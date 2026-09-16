@@ -32,6 +32,12 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('{bookingOrder}/checkout', [CartController::class, 'checkout'])->name('checkout');
     });
 
+    // Developer & Testing Sandbox Endpoints
+    Route::prefix('sandbox')->name('sandbox.')->group(function () {
+        Route::post('trial', [\App\Http\Controllers\Settings\PaymentGatewayTrialController::class, 'trialSession'])->name('trial');
+        Route::post('simulate-payment', [\App\Http\Controllers\Settings\PaymentGatewayTrialController::class, 'simulateWebhook'])->name('simulate-payment');
+    });
+
     // Authentication & Verification
     Route::prefix('auth')->name('auth.')->group(function () {
         Route::post('register', [AuthController::class, 'register'])->name('register');

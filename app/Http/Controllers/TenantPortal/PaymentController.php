@@ -13,6 +13,7 @@ use App\Exceptions\PaymentGatewayCreationException;
 use App\Exceptions\PaymentGatewayUnavailableException;
 use App\Exceptions\PaymentOverflowException;
 use App\Http\Requests\Payment\StoreTenantPortalPaymentRequest;
+use App\Models\BookingOrder;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentAttempt;
@@ -33,9 +34,76 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PaymentController extends TenantPortalController
 {
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
-        $tenant = $this->tenant($request);
+        $user = $request->user();
+        $isPaymentCallback = $request->hasAny([
+            'order_id',
+            'invoice_number',
+            'status_code',
+            'status',
+            'reference',
+            'trial',
+            'trans_id_merchant',
+            'session_id',
+            'status_type',
+        ]) || str_contains((string) $request->server('HTTP_REFERER'), 'doku.com');
+
+        // 1. Guest access
+        if (! $user) {
+            if ($isPaymentCallback) {
+                return $this->paymentStatus($request);
+            }
+
+            return redirect()->route('login');
+        }
+
+        // 2. Authenticated user without a tenant profile (Owner, Admin, Manager)
+        $tenant = $user->tenant()->first();
+
+        if (! $tenant) {
+            $reference = (string) (
+                $request->query('reference')
+                ?? $request->query('order_id')
+                ?? $request->query('invoice_number')
+                ?? $request->query('trans_id_merchant')
+                ?? ''
+            );
+
+            $isTrial = str_starts_with($reference, 'TRIAL-')
+                || $request->query('status') === 'trial_finish'
+                || $request->has('trial');
+
+            if ($isTrial) {
+                Inertia::flash('toast', [
+                    'type' => 'success',
+                    'message' => '⚡ Pembayaran Sandbox DOKU berhasil diselesaikan! Reference: ' . ($reference ?: 'Trial'),
+                ]);
+
+                return redirect()->route('settings.payment-gateway.edit');
+            }
+
+            if ($isPaymentCallback) {
+                return $this->paymentStatus($request);
+            }
+
+            // Normal visit by owner/admin without payment params: redirect gracefully to dashboard
+            Inertia::flash('toast', [
+                'type' => 'info',
+                'message' => 'Halaman Portal Tagihan khusus untuk akun penyewa. Anda diarahkan ke Dashboard Pemilik.',
+            ]);
+
+            return redirect()->route('dashboard');
+        }
+
+        // 3. Authenticated tenant
+        if ($isPaymentCallback) {
+            Inertia::flash('toast', [
+                'type' => 'success',
+                'message' => 'Pembayaran Anda telah diterima dan sedang diproses oleh sistem.',
+            ]);
+        }
+
         $leaseContext = $this->leaseContext($request, $tenant);
         $lease = $leaseContext['selectedLease'];
         $pendingPaymentAmount = Payment::query()
@@ -341,9 +409,70 @@ class PaymentController extends TenantPortalController
         return back();
     }
 
+    public function paymentStatus(Request $request): Response
+    {
+        $reference = (string) (
+            $request->query('reference')
+            ?? $request->query('order_id')
+            ?? $request->query('invoice_number')
+            ?? $request->query('trans_id_merchant')
+            ?? ''
+        );
+
+        $statusParam = strtolower((string) ($request->query('status') ?? $request->query('status_code') ?? 'success'));
+        $isSuccess = in_array($statusParam, ['success', '0000', 'trial_finish', 'settled', 'paid', 'finish'], true)
+            || empty($statusParam);
+
+        $bookingOrder = null;
+        $invoice = null;
+
+        if (! empty($reference)) {
+            $bookingOrder = BookingOrder::with(['unit.property'])->where('reference', $reference)->first();
+            if (! $bookingOrder) {
+                $invoice = Invoice::with(['lease.unit.property'])->where('reference', $reference)->first();
+            }
+        }
+
+        $user = $request->user();
+        $isOwner = $user && ($user->hasRole('owner') || $user->can('dashboard.view'));
+        $isTenant = $user && $user->tenant()->exists();
+
+        $amount = null;
+        $description = null;
+        $propertyUnit = null;
+
+        if ($bookingOrder) {
+            $amount = (float) ($bookingOrder->amount ?? $bookingOrder->total_amount ?? 0);
+            $description = "Pemesanan Kamar Kos ({$bookingOrder->unit?->name})";
+            $propertyUnit = ($bookingOrder->unit?->property?->name ?? 'Kos') . ' - ' . ($bookingOrder->unit?->name ?? '');
+        } elseif ($invoice) {
+            $amount = (float) $invoice->total;
+            $description = "Tagihan Sewa ({$invoice->reference})";
+            $propertyUnit = ($invoice->lease?->unit?->property?->name ?? 'Kos') . ' - ' . ($invoice->lease?->unit?->name ?? '');
+        } elseif (str_starts_with($reference, 'TRIAL-') || $request->query('status') === 'trial_finish') {
+            $amount = 10000.0;
+            $description = 'Simulasi DOKU Sandbox Testing';
+            $propertyUnit = 'DOKU Payment Gateway Sandbox';
+        }
+
+        return Inertia::render('payments/status', [
+            'reference' => $reference ?: 'DOKU-PAYMENT',
+            'status' => $isSuccess ? 'success' : 'pending',
+            'statusCode' => $request->query('status_code'),
+            'amount' => $amount,
+            'description' => $description,
+            'propertyUnit' => $propertyUnit,
+            'gateway' => 'DOKU Payment Gateway (Sandbox)',
+            'isOwner' => (bool) $isOwner,
+            'isTenant' => (bool) $isTenant,
+            'isGuest' => ! $user,
+        ]);
+    }
+
     private function hasUsableInstructions(?array $instructions): bool
     {
         return ($instructions['url'] ?? null) !== null
             || ($instructions['entries'] ?? []) !== [];
     }
 }
+

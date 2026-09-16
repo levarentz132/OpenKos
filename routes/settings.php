@@ -36,6 +36,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('settings/payment-gateway', [PaymentGatewayController::class, 'edit'])->name('settings.payment-gateway.edit');
         Route::patch('settings/payment-gateway', [PaymentGatewayController::class, 'update'])->name('settings.payment-gateway.update');
+        Route::post('settings/payment-gateway/trial', [\App\Http\Controllers\Settings\PaymentGatewayTrialController::class, 'trialSession'])->name('settings.payment-gateway.trial');
+        Route::post('settings/payment-gateway/simulate-webhook', [\App\Http\Controllers\Settings\PaymentGatewayTrialController::class, 'simulateWebhook'])->name('settings.payment-gateway.simulate-webhook');
 
         Route::get('settings/reminders', [ReminderController::class, 'edit'])->name('settings.reminders.edit');
         Route::patch('settings/reminders', [ReminderController::class, 'update'])->name('settings.reminders.update');

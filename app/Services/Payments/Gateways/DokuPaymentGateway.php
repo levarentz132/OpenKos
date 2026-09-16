@@ -74,7 +74,8 @@ class DokuPaymentGateway implements PaymentGateway, PaymentGatewayStatusLookup
 
         $customer = $this->resolveCustomer($request);
 
-        $callbackUrl = $this->config['callback_url']
+        $callbackUrl = $request->metadata['callback_url']
+            ?? $this->config['callback_url']
             ?? config('services.doku.callback_url')
             ?? (config('app.url') ? rtrim((string) config('app.url'), '/') . '/portal/billing' : 'https://openkos.local');
 
@@ -139,15 +140,16 @@ class DokuPaymentGateway implements PaymentGateway, PaymentGatewayStatusLookup
         }
 
         $data = $response->json();
-        $checkoutUrl = $data['payment']['url'] ?? null;
+        $checkoutUrl = $data['response']['payment']['url'] ?? $data['payment']['url'] ?? null;
 
         if (empty($checkoutUrl)) {
             throw new PaymentGatewayCreationException('DOKU Checkout did not return a valid payment URL.');
         }
 
-        $tokenId = $data['payment']['token_id'] ?? null;
-        $expiresAt = isset($data['payment']['expired_date'])
-            ? new DateTimeImmutable($data['payment']['expired_date'])
+        $tokenId = $data['response']['payment']['token_id'] ?? $data['payment']['token_id'] ?? null;
+        $expiredDateStr = $data['response']['payment']['expired_date'] ?? $data['payment']['expired_date'] ?? null;
+        $expiresAt = !empty($expiredDateStr)
+            ? new DateTimeImmutable($expiredDateStr)
             : (new DateTimeImmutable())->modify('+60 minutes');
 
         return new PaymentCreationResult(
