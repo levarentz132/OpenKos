@@ -24,12 +24,14 @@ Base URL: `https://dashboard.highlanderstay.com/api/v1/tenant`
 
 | Category | Method | Endpoint | Description |
 | :--- | :--- | :--- | :--- |
+| **Orders** | `POST` | `/api/v1/orders`<br>*(alias: `/api/v1/bookings`)* | Create room order: creates Tenant, Lease, Invoice, and DOKU Checkout URL |
 | **Dashboard** | `GET` | `/dashboard` | Aggregated overview (active lease, invoices, tickets, next action) |
 | **Leases** | `GET` | `/leases` | List current active and past leases |
 | **Leases** | `GET` | `/leases/{id}` | Detailed lease info, unit, property, and rent history |
 | **Invoices** | `GET` | `/invoices` | List invoices (filter by `status`, `lease_id`, paginated) |
 | **Invoices** | `GET` | `/invoices/{id}` | Invoice breakdown, line items, and payment transaction history |
 | **Invoices** | `POST` | `/invoices/{id}/pay` | Submit payment proof (receipt image / bank transfer record) |
+| **Invoices** | `POST` | `/invoices/{id}/checkout` | Generate online payment checkout session (DOKU QRIS, VA, E-Wallet) |
 | **Maintenance**| `GET` | `/maintenance-tickets` | List maintenance requests submitted by tenant |
 | **Maintenance**| `POST`| `/maintenance-tickets` | Submit a new maintenance ticket |
 | **Maintenance**| `GET` | `/maintenance-tickets/{id}` | View maintenance ticket details and resolution notes |

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AvailableRoomsController;
 use App\Http\Controllers\Api\v1\AuthController;
+use App\Http\Controllers\Api\v1\BookingOrderController;
 use App\Http\Controllers\Api\v1\OtpController;
 use App\Http\Controllers\Api\v1\PhoneVerificationController;
 use App\Http\Controllers\Api\v1\Tenant\TenantDashboardController;
@@ -18,6 +19,10 @@ Route::post('webhooks/payment/{gateway}', PaymentWebhookController::class)
 Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::get('available-rooms', [AvailableRoomsController::class, 'index'])->name('available-rooms');
     Route::get('properties/{property:slug}/available-rooms', [AvailableRoomsController::class, 'forProperty'])->name('properties.available-rooms');
+
+    // Room Booking Orders (Creates Lease, Invoice, and DOKU Checkout Session)
+    Route::post('orders', [BookingOrderController::class, 'store'])->name('orders.store');
+    Route::post('bookings', [BookingOrderController::class, 'store'])->name('bookings.store');
 
     // Authentication & Verification
     Route::prefix('auth')->name('auth.')->group(function () {
