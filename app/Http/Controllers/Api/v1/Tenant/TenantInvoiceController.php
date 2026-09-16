@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers\Api\v1\Tenant;
 
+use App\Actions\Payments\StartGatewayPayment;
 use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
+use App\Exceptions\PaymentGatewayCreationException;
+use App\Exceptions\PaymentGatewayUnavailableException;
 use App\Http\Requests\Api\Tenant\SubmitPaymentProofRequest;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -13,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class TenantInvoiceController extends TenantBaseController
 {
@@ -170,5 +174,58 @@ class TenantInvoiceController extends TenantBaseController
                 'payment_date' => $payment->payment_date,
             ],
         ], 201);
+    }
+
+    /**
+     * Generate an online payment checkout session (e.g. DOKU Jokul Checkout).
+     */
+    public function checkout(
+        Request $request,
+        Invoice $invoice,
+        StartGatewayPayment $startGatewayPayment,
+    ): JsonResponse {
+        $tenant = $this->requireTenant($request);
+
+        abort_unless($tenant->leases()->whereKey($invoice->lease_id)->exists(), 404);
+
+        if (! in_array($invoice->status, [InvoiceStatus::Pending, InvoiceStatus::Partial], true)) {
+            return response()->json([
+                'message' => 'This invoice is already settled or cannot accept payments.',
+            ], 422);
+        }
+
+        try {
+            $result = $startGatewayPayment->execute($invoice, $request->user());
+
+            return response()->json([
+                'message' => 'Checkout session created successfully.',
+                'checkout_url' => $result->instructions->url,
+                'reused' => $result->reused,
+                'attempt' => [
+                    'id' => $result->attempt->id,
+                    'reference' => $result->attempt->reference,
+                    'provider_reference' => $result->attempt->provider_reference,
+                    'amount' => (float) $result->attempt->amount,
+                    'currency' => $result->attempt->currency,
+                    'status' => $result->attempt->status->value,
+                    'expires_at' => $result->attempt->expires_at?->toIso8601String(),
+                ],
+            ]);
+        } catch (PaymentGatewayUnavailableException $e) {
+            return response()->json([
+                'message' => 'Online payment is currently unavailable.',
+                'error' => $e->getMessage(),
+            ], 503);
+        } catch (PaymentGatewayCreationException $e) {
+            return response()->json([
+                'message' => 'Failed to initialize payment gateway checkout.',
+                'error' => $e->getMessage(),
+            ], 502);
+        } catch (Throwable $e) {
+            return response()->json([
+                'message' => 'An unexpected error occurred while starting checkout.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 }

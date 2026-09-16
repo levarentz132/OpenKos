@@ -327,7 +327,58 @@ Allows a tenant to submit payment proof (bank transfer receipt image or record).
 
 ---
 
-### 3.7 List Maintenance Tickets
+### 3.7 Online Payment Checkout (DOKU Gateway / QRIS / Virtual Account / E-Wallet)
+
+Generates a hosted payment session link (DOKU Jokul Checkout). The tenant or WhatsApp Bot can open this link to complete the payment via:
+- **QRIS** (GoPay, OVO, ShopeePay, Dana, LinkAja, Mobile Banking QR)
+- **Virtual Accounts** (BCA, Mandiri, BRI, BNI, Permata, Danamon, CIMB)
+- **Credit / Debit Cards**
+- **Convenience Stores** (Indomaret, Alfamart)
+
+Upon successful payment, DOKU sends a real-time signed webhook to `POST /api/webhooks/payment/doku`, which automatically settles the invoice and records the transaction in OpenKos.
+
+- **Method**: `POST`
+- **URL**: `/api/v1/tenant/invoices/{id}/checkout`
+- **Headers**:
+  ```http
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+#### Response (`200 OK`)
+```json
+{
+  "message": "Checkout session created successfully.",
+  "checkout_url": "https://staging.doku.com/checkout-link-v2/xxxxxxxxx",
+  "reused": false,
+  "attempt": {
+    "id": 14,
+    "reference": "25fbbdae-3dbb-4fc6-b816-16010d8a9563",
+    "provider_reference": "25fbbdae-3dbb-4fc6-b816-16010d8a9563",
+    "amount": 1500000,
+    "currency": "IDR",
+    "status": "pending",
+    "expires_at": "2026-09-16T09:45:00+00:00"
+  }
+}
+```
+
+#### WhatsApp Bot Example Usage
+When a tenant asks the WhatsApp bot *"Bayar kos bulan ini"* or *"Minta link pembayaran"*:
+1. The bot authenticates or identifies the tenant phone number.
+2. Bot calls `GET /api/v1/tenant/invoices?status=unpaid` to find the invoice ID.
+3. Bot calls `POST /api/v1/tenant/invoices/{id}/checkout`.
+4. Bot sends message:
+   ```text
+   Halo Kak Budi, berikut link pembayaran sewa Kamar 204:
+   Total: Rp 1.500.000
+   Link Pembayaran: https://staging.doku.com/checkout-link-v2/xxxxxxxxx
+   (Mendukung QRIS, BCA, Mandiri, BRI, BNI, OVO, ShopeePay, dll.)
+   ```
+
+---
+
+### 3.8 List Maintenance Tickets
 
 - **Method**: `GET`
 - **URL**: `/api/v1/tenant/maintenance-tickets`
@@ -364,7 +415,7 @@ Allows a tenant to submit payment proof (bank transfer receipt image or record).
 
 ---
 
-### 3.8 Submit Maintenance Ticket
+### 3.9 Submit Maintenance Ticket
 
 - **Method**: `POST`
 - **URL**: `/api/v1/tenant/maintenance-tickets`
@@ -438,7 +489,14 @@ export async function getUnpaidInvoices() {
   return response.data.invoices.data;
 }
 
-// 3. Upload Payment Receipt
+// 3. Online Payment Checkout (DOKU QRIS, Virtual Account, E-Wallet)
+export async function createCheckoutSession(invoiceId: number) {
+  const response = await api.post(`/invoices/${invoiceId}/checkout`);
+  // Open the returned URL in browser or in-app webview
+  return response.data.checkout_url;
+}
+
+// 4. Manual Upload Payment Receipt
 export async function submitPaymentProof(invoiceId: number, amount: number, fileUri: string) {
   const formData = new FormData();
   formData.append('amount', String(amount));
@@ -455,7 +513,7 @@ export async function submitPaymentProof(invoiceId: number, amount: number, file
   return response.data;
 }
 
-// 4. Create Maintenance Ticket
+// 5. Create Maintenance Ticket
 export async function createMaintenanceTicket(title: string, description: string, priority = 'medium') {
   const response = await api.post('/maintenance-tickets', {
     title,

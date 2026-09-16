@@ -21,7 +21,16 @@ class PlatformBindingsServiceProvider extends ServiceProvider
     {
         $this->app->booted(function (): void {
             $this->registerPlatformSettingsPages();
+            $this->registerPaymentGateways();
         });
+    }
+
+    private function registerPaymentGateways(): void
+    {
+        $payments = app(OpenKOSManager::class)->payments();
+        if (! $payments->has('doku')) {
+            $payments->registerGateway('doku', \App\Services\Payments\Gateways\DokuPaymentGateway::class);
+        }
     }
 
     private function registerPlatformSettingsPages(): void

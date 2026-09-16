@@ -70,6 +70,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('invoices', [TenantInvoiceController::class, 'index'])->name('invoices.index');
         Route::get('invoices/{invoice}', [TenantInvoiceController::class, 'show'])->name('invoices.show');
         Route::post('invoices/{invoice}/pay', [TenantInvoiceController::class, 'submitPayment'])->name('invoices.pay');
+        Route::post('invoices/{invoice}/checkout', [TenantInvoiceController::class, 'checkout'])->name('invoices.checkout');
 
         // Maintenance Tickets
         Route::get('maintenance-tickets', [TenantMaintenanceController::class, 'index'])->name('maintenance-tickets.index');

@@ -50,4 +50,12 @@ return [
         ],
     ],
 
+    'doku' => [
+        'client_id' => env('DOKU_CLIENT_ID'),
+        'secret_key' => env('DOKU_SECRET_KEY'),
+        'api_key' => env('DOKU_API_KEY'),
+        'environment' => env('DOKU_ENVIRONMENT', 'sandbox'),
+        'callback_url' => env('DOKU_CALLBACK_URL'),
+    ],
+
 ];

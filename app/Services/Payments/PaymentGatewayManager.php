@@ -138,7 +138,15 @@ class PaymentGatewayManager
             return null;
         }
 
-        return is_string($key) && $key !== '' ? $key : null;
+        if (is_string($key) && $key !== '') {
+            return $key;
+        }
+
+        if (config('services.doku.client_id') && config('services.doku.secret_key')) {
+            return 'doku';
+        }
+
+        return null;
     }
 
     /** @return array<string, mixed> */
@@ -151,6 +159,20 @@ class PaymentGatewayManager
         }
 
         $configuration = is_array($configurations) ? ($configurations[$key] ?? []) : [];
+
+        if (empty($configuration) && $key === 'doku') {
+            $dokuConfig = array_filter([
+                'client_id' => config('services.doku.client_id'),
+                'secret_key' => config('services.doku.secret_key'),
+                'api_key' => config('services.doku.api_key'),
+                'environment' => config('services.doku.environment', 'sandbox'),
+                'callback_url' => config('services.doku.callback_url'),
+            ]);
+
+            if (! empty($dokuConfig['client_id']) && ! empty($dokuConfig['secret_key'])) {
+                return $dokuConfig;
+            }
+        }
 
         return is_array($configuration) ? $configuration : [];
     }
