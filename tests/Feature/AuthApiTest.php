@@ -891,3 +891,186 @@ test('new user can register with only phone number and whatsapp otp without emai
     expect($tenant->hasVerifiedPhone())->toBeTrue();
     expect($tenant->email)->toBeNull();
 });
+
+test('tenant can request password reset OTP using phone number via whatsapp', function () {
+    $tenant = \App\Models\Tenant::create([
+        'name' => 'Reset Phone User',
+        'phone' => '6281234567891',
+        'password' => Hash::make('oldpassword123'),
+        'phone_verified_at' => now(),
+        'is_active' => true,
+    ]);
+
+    $response = $this->postJson('/api/v1/auth/password/forgot', [
+        'login' => '081234567891',
+        'channel' => 'whatsapp',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('channel', 'whatsapp')
+        ->assertJsonPath('target', '6281234567891')
+        ->assertJsonStructure(['reset_token', 'channel', 'target', 'sent']);
+
+    $resetToken = $response->json('reset_token');
+    $cached = Cache::get("pw_reset_{$resetToken}");
+    expect($cached)->not->toBeNull();
+    expect($cached['tenant_id'])->toBe($tenant->id);
+    expect($cached['otp'])->not->toBeNull();
+});
+
+test('tenant can request password reset OTP using email', function () {
+    $tenant = \App\Models\Tenant::create([
+        'name' => 'Reset Email User',
+        'email' => 'resetemail@example.com',
+        'phone' => '6281234567892',
+        'password' => Hash::make('oldpassword123'),
+        'email_verified_at' => now(),
+        'is_active' => true,
+    ]);
+
+    $response = $this->postJson('/api/v1/auth/password/forgot', [
+        'login' => 'resetemail@example.com',
+        'channel' => 'email',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('channel', 'email')
+        ->assertJsonPath('target', 'resetemail@example.com');
+});
+
+test('forgot password fails if account is unknown', function () {
+    $response = $this->postJson('/api/v1/auth/password/forgot', [
+        'login' => '089999999999',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['login']);
+});
+
+test('forgot password fails for owner/admin account', function () {
+    User::factory()->owner()->create([
+        'email' => 'adminowner@example.com',
+        'phone' => '628111222333',
+    ]);
+
+    $response = $this->postJson('/api/v1/auth/password/forgot', [
+        'login' => 'adminowner@example.com',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['login']);
+
+    expect($response->json('errors.login.0'))->toContain('Administrator');
+});
+
+test('forgot password enforces 60s cooldown per target', function () {
+    \App\Models\Tenant::create([
+        'name' => 'Cooldown User',
+        'phone' => '6281234567893',
+        'password' => Hash::make('oldpass123'),
+        'is_active' => true,
+    ]);
+
+    $res1 = $this->postJson('/api/v1/auth/password/forgot', [
+        'login' => '081234567893',
+    ]);
+    $res1->assertOk();
+
+    $res2 = $this->postJson('/api/v1/auth/password/forgot', [
+        'login' => '081234567893',
+    ]);
+    $res2->assertStatus(422)
+        ->assertJsonValidationErrors(['otp']);
+});
+
+test('tenant cannot reset password with invalid OTP', function () {
+    $tenant = \App\Models\Tenant::create([
+        'name' => 'Invalid OTP User',
+        'phone' => '6281234567894',
+        'password' => Hash::make('oldpass123'),
+        'is_active' => true,
+    ]);
+
+    $forgotRes = $this->postJson('/api/v1/auth/password/forgot', [
+        'login' => '081234567894',
+    ]);
+    $resetToken = $forgotRes->json('reset_token');
+
+    $response = $this->postJson('/api/v1/auth/password/reset', [
+        'reset_token' => $resetToken,
+        'code' => '000000',
+        'password' => 'newpassword123',
+        'password_confirmation' => 'newpassword123',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['otp']);
+});
+
+test('tenant can reset password with valid OTP, revokes old tokens, and allows immediate login with new password', function () {
+    $tenant = \App\Models\Tenant::create([
+        'name' => 'Success Reset User',
+        'phone' => '6281234567895',
+        'password' => Hash::make('oldpassword123'),
+        'phone_verified_at' => now(),
+        'is_active' => true,
+    ]);
+
+    // Create an old active token
+    $oldToken = $tenant->createToken('old-device')->plainTextToken;
+    expect($tenant->tokens()->count())->toBe(1);
+
+    // 1. Request forgot password OTP
+    $forgotRes = $this->postJson('/api/v1/auth/password/forgot', [
+        'login' => '081234567895',
+    ]);
+    $forgotRes->assertOk();
+    $resetToken = $forgotRes->json('reset_token');
+
+    $cached = Cache::get("pw_reset_{$resetToken}");
+    $otpCode = $cached['otp'];
+
+    // 2. Submit password reset with OTP
+    $resetRes = $this->postJson('/api/v1/auth/password/reset', [
+        'reset_token' => $resetToken,
+        'code' => $otpCode,
+        'password' => 'brandNewPassword999',
+        'password_confirmation' => 'brandNewPassword999',
+        'device_name' => 'new-phone',
+    ]);
+
+    $resetRes->assertOk()
+        ->assertJsonStructure(['message', 'token', 'user'])
+        ->assertJsonPath('user.phone', '6281234567895');
+
+    // Fresh token issued, old token revoked
+    $freshToken = $resetRes->json('token');
+    expect($freshToken)->not->toBeNull();
+    expect($freshToken)->not->toBe($oldToken);
+
+    // Old token should no longer work
+    $oldTokenCheck = $this->withHeader('Authorization', "Bearer {$oldToken}")
+        ->getJson('/api/v1/auth/me');
+    $oldTokenCheck->assertUnauthorized();
+
+    // Fresh token works immediately
+    $newTokenCheck = $this->withHeader('Authorization', "Bearer {$freshToken}")
+        ->getJson('/api/v1/auth/me');
+    $newTokenCheck->assertOk();
+
+    // 3. Login with old password fails
+    $loginOld = $this->postJson('/api/v1/auth/login', [
+        'login' => '081234567895',
+        'password' => 'oldpassword123',
+    ]);
+    $loginOld->assertStatus(422);
+
+    // 4. Login with new password succeeds
+    $loginNew = $this->postJson('/api/v1/auth/login', [
+        'login' => '081234567895',
+        'password' => 'brandNewPassword999',
+    ]);
+    $loginNew->assertOk()
+        ->assertJsonStructure(['token', 'user']);
+});
+

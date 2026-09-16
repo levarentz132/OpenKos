@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api\v1;
 
 use App\Http\Controllers\Api\v1\Concerns\FormatsUserResponse;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\ForgotPasswordRequest;
 use App\Http\Requests\Api\LoginRequest;
 use App\Http\Requests\Api\RegisterRequest;
+use App\Http\Requests\Api\ResetPasswordRequest;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\OtpVerificationService;
@@ -417,5 +419,61 @@ class AuthController extends Controller
         }
 
         return response()->json($response);
+    }
+
+    /**
+     * Request a password reset OTP via WhatsApp or Email.
+     */
+    public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+        $result = $this->otpService->sendPasswordResetOtp($validated['login'], $validated['channel'] ?? null);
+
+        $channelLabel = $result['channel'] === 'whatsapp' ? 'WhatsApp' : 'email';
+        $message = $result['sent']
+            ? "Kode verifikasi reset password berhasil dikirimkan via {$channelLabel}."
+            : "Permintaan reset password dibuat, namun pengiriman kode gagal (" . ($result['delivery_error'] ?? 'delivery error') . ').';
+
+        $response = [
+            'message' => $message,
+            'reset_token' => $result['reset_token'],
+            'channel' => $result['channel'],
+            'target' => $result['target'],
+            'sent' => $result['sent'],
+            'driver' => $result['driver'] ?? null,
+        ];
+
+        if (! empty($result['delivery_warning'])) {
+            $response['delivery_warning'] = $result['delivery_warning'];
+        }
+
+        if (! empty($result['delivery_error'])) {
+            $response['delivery_error'] = $result['delivery_error'];
+        }
+
+        if (config('app.debug') && isset($result['debug_otp'])) {
+            $response['debug_otp'] = $result['debug_otp'];
+        }
+
+        return response()->json($response);
+    }
+
+    /**
+     * Reset tenant password using the verified OTP code.
+     */
+    public function resetPassword(ResetPasswordRequest $request): JsonResponse
+    {
+        $identifier = $request->resolvedIdentifier();
+        $code = $request->resolvedCode();
+        $password = (string) $request->validated('password');
+        $deviceName = $request->validated('device_name');
+
+        $result = $this->otpService->resetPasswordWithOtp($identifier, $code, $password, $deviceName);
+
+        return response()->json([
+            'message' => 'Password berhasil direset! Anda telah otomatis masuk.',
+            'token' => $result['token'],
+            'user' => $this->formatUserResponse($result['tenant']),
+        ]);
     }
 }

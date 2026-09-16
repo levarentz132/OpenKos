@@ -36,6 +36,8 @@ https://dashboard.highlanderstay.com/api/v1/auth
 | 7 | **Delete My Account** | `DELETE` | `/me` | Bearer Token | Permanently deletes authenticated account & revokes tokens |
 | 8 | **Delete User (Admin)**| `DELETE` | `/users/{user_id}` | Bearer Token (Admin) | Deletes target user and associated tenant data |
 | 9 | **Logout** | `POST` | `/logout` | Bearer Token | Revokes active Sanctum API token |
+| 10 | **Forgot Password** | `POST` | `/password/forgot` | No | Sends 6-digit OTP via WhatsApp or Email for password reset |
+| 11 | **Reset Password** | `POST` | `/password/reset` | No | Verifies reset OTP, updates password, and returns fresh token |
 
 ---
 
@@ -458,6 +460,76 @@ Allows property administrators to delete any user account and associated tenant 
   ```json
   {
     "message": "User deleted successfully."
+  }
+  ```
+
+---
+
+### 4.8 Forgot Password (Request OTP via WhatsApp or Email)
+
+Dispatches a 6-digit OTP code to the tenant's registered phone number (via WhatsApp) or email address.
+
+- **URL**: `POST /api/v1/auth/password/forgot` *(Alias: `POST /api/v1/auth/forgot-password`)*
+- **Headers**:
+  ```http
+  Accept: application/json
+  Content-Type: application/json
+  ```
+- **Request Body**:
+  ```json
+  {
+    "login": "081234567890",
+    "channel": "whatsapp"
+  }
+  ```
+  *(Can pass phone number or email in `login`. `channel` is optional, defaulting to `"whatsapp"` for phone numbers and `"email"` for emails).*
+- **Response (`200 OK`)**:
+  ```json
+  {
+    "message": "Kode verifikasi reset password berhasil dikirimkan via WhatsApp.",
+    "reset_token": "pw_reset_7b8a1c9e2f...",
+    "channel": "whatsapp",
+    "target": "6281234567890",
+    "sent": true,
+    "driver": "openkos/waba"
+  }
+  ```
+
+---
+
+### 4.9 Reset Password with OTP
+
+Submits the 6-digit OTP code along with the new password. Updates the tenant's password, invalidates all prior sessions/tokens, and immediately returns a fresh Sanctum bearer token.
+
+- **URL**: `POST /api/v1/auth/password/reset` *(Alias: `POST /api/v1/auth/reset-password`)*
+- **Headers**:
+  ```http
+  Accept: application/json
+  Content-Type: application/json
+  ```
+- **Request Body**:
+  ```json
+  {
+    "reset_token": "pw_reset_7b8a1c9e2f...",
+    "code": "123456",
+    "password": "newSecurePassword123",
+    "password_confirmation": "newSecurePassword123",
+    "device_name": "mobile-app"
+  }
+  ```
+  *(Can also supply `"login": "081234567890"` instead of `"reset_token"`, and `"otp"` instead of `"code"`).*
+- **Response (`200 OK`)**:
+  ```json
+  {
+    "message": "Password berhasil direset! Anda telah otomatis masuk.",
+    "token": "6|x7k8p9...",
+    "user": {
+      "id": 12,
+      "name": "Jane Doe",
+      "email": "jane@example.com",
+      "phone": "6281234567890",
+      "is_active": true
+    }
   }
   ```
 

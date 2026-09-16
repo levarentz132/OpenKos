@@ -1029,4 +1029,200 @@ class OtpVerificationService
 
         return $tenant->fresh();
     }
+
+    /**
+     * Send OTP for password reset via WhatsApp or Email.
+     *
+     * @throws ValidationException
+     */
+    public function sendPasswordResetOtp(string $login, ?string $channel = null): array
+    {
+        $login = trim($login);
+        $normalizedPhone = $this->normalizePhoneNumber($login);
+
+        // 1. Locate tenant directly or via linked user
+        /** @var Tenant|null $tenant */
+        $tenant = Tenant::query()
+            ->where('email', strtolower($login))
+            ->orWhere('phone', $login)
+            ->orWhere('phone', $normalizedPhone)
+            ->first();
+
+        if (! $tenant) {
+            $user = User::query()
+                ->where('email', strtolower($login))
+                ->orWhere('phone', $login)
+                ->orWhere('phone', $normalizedPhone)
+                ->first();
+
+            if ($user && $user->isOwner()) {
+                throw ValidationException::withMessages([
+                    'login' => ['Administrator accounts must reset their password via the web dashboard.'],
+                ]);
+            }
+
+            if ($user && $user->hasTenantProfile()) {
+                $tenant = $user->tenant;
+            }
+        }
+
+        if (! $tenant) {
+            throw ValidationException::withMessages([
+                'login' => ['No tenant account found matching this phone number or email address.'],
+            ]);
+        }
+
+        if (! $tenant->is_active) {
+            throw ValidationException::withMessages([
+                'login' => ['This account has been deactivated. Please contact support.'],
+            ]);
+        }
+
+        // Determine delivery channel if not explicitly specified
+        if (blank($channel)) {
+            $channel = str_contains($login, '@') ? 'email' : 'whatsapp';
+        } else {
+            $channel = strtolower(trim($channel));
+        }
+
+        if (! in_array($channel, ['whatsapp', 'email'], true)) {
+            $channel = 'whatsapp';
+        }
+
+        if ($channel === 'whatsapp') {
+            $target = $this->normalizePhoneNumber($tenant->phone ?? '');
+            if (blank($target)) {
+                throw ValidationException::withMessages([
+                    'phone' => ['This account does not have a registered phone number for WhatsApp verification.'],
+                ]);
+            }
+        } else {
+            $target = strtolower(trim($tenant->email ?? $tenant->user?->email ?? ''));
+            if (blank($target) || ! filter_var($target, FILTER_VALIDATE_EMAIL)) {
+                throw ValidationException::withMessages([
+                    'email' => ['This account does not have a valid registered email address.'],
+                ]);
+            }
+        }
+
+        // Rate limit: 60 seconds cooldown per target
+        $cooldownKey = "pw_reset_cooldown_{$channel}_{$target}";
+        if (Cache::has($cooldownKey)) {
+            $secondsRemaining = max(1, Cache::get($cooldownKey) - time());
+            throw ValidationException::withMessages([
+                'otp' => ["Please wait {$secondsRemaining} seconds before requesting a new password reset code."],
+            ]);
+        }
+
+        $resetToken = 'pw_reset_' . Str::random(32);
+        $otp = (string) random_int(100000, 999999);
+
+        $payload = [
+            'reset_token' => $resetToken,
+            'tenant_id' => $tenant->id,
+            'target' => $target,
+            'channel' => $channel,
+            'otp' => $otp,
+            'created_at' => now()->timestamp,
+        ];
+
+        // Store session for 10 minutes
+        Cache::put("pw_reset_{$resetToken}", $payload, now()->addMinutes(10));
+        Cache::put("pw_reset_target_{$target}", $resetToken, now()->addMinutes(10));
+        Cache::put("pw_reset_target_{$login}", $resetToken, now()->addMinutes(10));
+        if ($normalizedPhone) {
+            Cache::put("pw_reset_target_{$normalizedPhone}", $resetToken, now()->addMinutes(10));
+        }
+        Cache::put($cooldownKey, time() + 60, now()->addSeconds(60));
+
+        // Dispatch OTP code
+        $dispatch = $this->dispatchOtpCode($target, $channel, $otp);
+
+        $result = [
+            'reset_token' => $resetToken,
+            'channel' => $channel,
+            'target' => $target,
+            'sent' => $dispatch['sent'],
+            'driver' => $dispatch['driver'],
+            'is_mock' => $dispatch['is_mock'],
+            'delivery_warning' => $dispatch['warning'],
+            'delivery_error' => $dispatch['error'],
+        ];
+
+        if (config('app.debug')) {
+            $result['debug_otp'] = $otp;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Reset tenant password with verified OTP code.
+     *
+     * @throws ValidationException
+     */
+    public function resetPasswordWithOtp(string $identifier, string $code, string $newPassword, ?string $deviceName = null): array
+    {
+        $identifier = trim($identifier);
+        $code = trim($code);
+        $normalized = $this->normalizePhoneNumber($identifier);
+
+        $token = Cache::get("pw_reset_target_{$identifier}")
+            ?? Cache::get("pw_reset_target_{$normalized}")
+            ?? $identifier;
+
+        $session = Cache::get("pw_reset_{$token}");
+
+        if (! $session || empty($session['tenant_id'])) {
+            throw ValidationException::withMessages([
+                'otp' => ['No active password reset request found, or the verification code has expired.'],
+            ]);
+        }
+
+        if ($code !== (string) $session['otp']) {
+            throw ValidationException::withMessages([
+                'otp' => ['The verification code is invalid.'],
+            ]);
+        }
+
+        /** @var Tenant|null $tenant */
+        $tenant = Tenant::query()->find($session['tenant_id']);
+        if (! $tenant) {
+            throw ValidationException::withMessages([
+                'otp' => ['The account associated with this request could not be found.'],
+            ]);
+        }
+
+        // Update password on Tenant and linked User
+        $hashedPassword = Hash::make($newPassword);
+        $tenant->forceFill(['password' => $hashedPassword])->saveQuietly();
+
+        if ($tenant->user) {
+            $tenant->user->forceFill(['password' => $hashedPassword])->saveQuietly();
+        }
+
+        // Revoke all previous Sanctum API tokens for security
+        if (method_exists($tenant, 'tokens')) {
+            $tenant->tokens()->delete();
+        }
+        if ($tenant->user && method_exists($tenant->user, 'tokens')) {
+            $tenant->user->tokens()->delete();
+        }
+
+        // Invalidate OTP cache
+        Cache::forget("pw_reset_{$token}");
+        Cache::forget("pw_reset_target_{$session['target']}");
+        Cache::forget("pw_reset_target_{$identifier}");
+
+        // Generate fresh Sanctum bearer token
+        $deviceName = $deviceName ?: 'api-client';
+        $newToken = $tenant->createToken($deviceName)->plainTextToken;
+
+        return [
+            'tenant' => $tenant->fresh(),
+            'token' => $newToken,
+            'channel' => $session['channel'],
+            'target' => $session['target'],
+        ];
+    }
 }
