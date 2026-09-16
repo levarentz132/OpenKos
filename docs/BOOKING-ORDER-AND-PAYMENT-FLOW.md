@@ -1,339 +1,269 @@
-# Panduan Pembuatan Order/Sewa Baru & Siklus Pembayaran Sukses (OpenKos)
+# Panduan Pemesanan Masuk Keranjang (Cart-First) & Pembuatan Sewa Otomatis Pasca Bayar (OpenKos)
 
-Dokumen ini menjawab dan mendokumentasikan alur lengkap:
-1. **Pembuatan Order/Sewa**: Bagaimana order dari Website atau WhatsApp Bot secara otomatis membuat akun **Tenant**, menerbitkan kontrak sewa (**Lease**), mengunci kamar (**Occupied**), dan menerbitkan tagihan (**Invoice**).
-2. **Pencatatan Pembayaran Sukses**: Bagaimana sistem secara otomatis mencatat data pembayaran sukses (**Payment**) dan mengubah status tagihan menjadi **Lunas (Paid)** setelah pembayaran diproses oleh payment gateway (DOKU Checkout).
+Dokumen ini menjelaskan alur **Cart-First Room Booking & Deferred Lease Creation** di OpenKos:
+1. **Penyimpanan ke Keranjang (Cart / Booking Order)**: Ketika calon penghuni memesan kamar melalui Website atau WhatsApp Bot, pesanan disimpan terlebih dahulu ke dalam sistem sebagai **Booking Order (Keranjang)** dengan status `pending`.
+2. **Kamar Tetap Tersedia & Belum Dibuatkan Lease**: Pada tahap ini, kontrak sewa (**Lease**) **BELUM** dibuat, kamar **BELUM** berstatus `Occupied`, dan tagihan resmi **BELUM** diterbitkan.
+3. **Pembayaran Melalui DOKU Checkout**: Sistem langsung membuatkan tautan pembayaran resmi DOKU untuk nomor referensi pesanan tersebut.
+4. **Penerbitan Sewa & Kwitansi Otomatis (Saat Pembayaran Sukses)**: Begitu pembayaran dinyatakan berhasil oleh DOKU melalui webhook, OpenKos secara otomatis:
+   - Membuat/menghubungkan akun **User & Tenant**.
+   - Menerbitkan kontrak sewa aktif (**Lease**).
+   - Mengubah status kamar menjadi **Occupied**.
+   - Menerbitkan **Invoice** bulan pertama.
+   - Mencatat record pembayaran sukses (**Payment**) dengan status `confirmed`.
+   - Mengubah status **Invoice** menjadi **Paid (Lunas)**.
+   - Memperbarui status **Booking Order** menjadi **Paid**.
 
 ---
 
-## 1. Ringkasan Jawaban
-
-| Pertanyaan | Status | Penjelasan Singkat |
-| :--- | :---: | :--- |
-| **Apakah ada API untuk membuat order yang otomatis membuat Lease dengan data tenant?** | ✅ **SUDAH DIBUAT** | Endpoint `POST /api/v1/orders` (atau alias `POST /api/v1/bookings`) menerima data calon penghuni dan kamar, membuat `Tenant` & `User`, membuat `Lease`, mengupdate status kamar menjadi `occupied`, menerbitkan `Invoice` pertama, dan langsung mengembalikan link pembayaran DOKU (`checkout_url`). |
-| **Jika pembayaran diproses, apakah otomatis membuat data pembayaran sukses (success payment)?** | ✅ **SUDAH DIBUAT** | Webhook DOKU di `POST /api/webhooks/payment/doku` memverifikasi signature transaksi. Saat pembayaran sukses, OpenKos otomatis membuat record di tabel `payments` (`status: confirmed`), mengalokasikan pembayaran, dan mengubah status invoice menjadi `Paid`. |
-
----
-
-## 2. Diagram Alur Lengkap (End-to-End Lifecycle)
+## 1. Diagram Alur Lengkap (Cart-First Lifecycle)
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Guest as Calon Penghuni (Web / WhatsApp)
     participant Client as Website / WhatsApp Bot
-    participant API as OpenKos API (/api/v1/orders)
-    participant Core as OpenKos Core Engine
+    participant API as OpenKos API (/api/v1/cart /orders)
+    participant DB as Database (BookingOrders)
     participant DOKU as DOKU Jokul Checkout
+    participant Engine as OpenKos Core Engine (FulfillBookingOrder)
     
-    Note over Guest,API: FASE 1: Pembuatan Order & Sewa Baru
-    Guest->>Client: Isi data booking (Kamar 101, Nama, No. HP, Tgl Mulai)
-    Client->>API: POST /api/v1/orders
-    API->>Core: 1. Find or Create User & Tenant
-    API->>Core: 2. Create Lease (CreateLease Action)
-    Core->>Core: Set Unit Status -> "occupied"
-    Core->>Core: Generate Initial Invoice (Status: "pending")
-    API->>DOKU: 3. Request Checkout Session Link
+    Note over Guest,DB: TAHAP 1: Masuk Keranjang (Booking Order Pending)
+    Guest->>Client: Pilih Kamar 101, Nama, No. HP, Tgl Mulai
+    Client->>API: POST /api/v1/cart (atau /api/v1/orders)
+    API->>DB: Simpan ke tabel booking_orders (status: pending)
+    Note over DB: Kamar tetap "available" & belum ada Lease!
+    API->>DOKU: Request DOKU Checkout URL untuk reference BK-XXXX
     DOKU-->>API: Return checkout_url
-    API-->>Client: Return Lease, Tenant, Invoice, & checkout_url (HTTP 201)
-    Client-->>Guest: Buka Link DOKU Checkout / Tampilkan di Layar
+    API-->>Client: Return Cart Item & checkout_url (HTTP 201)
+    Client-->>Guest: Tampilkan Keranjang & Tombol Bayar
     
-    Note over Guest,API: FASE 2: Pembayaran & Konfirmasi Otomatis
-    Guest->>DOKU: Bayar melalui QRIS / Virtual Account / E-Wallet
-    DOKU->>API: POST /api/webhooks/payment/doku (Signed HMAC)
-    API->>Core: ApplyGatewayPaymentResult
-    Core->>Core: 1. Buat record Payment baru (status: confirmed)
-    Core->>Core: 2. Alokasikan Payment ke Invoice
-    Core->>Core: 3. Update Invoice: amount_paid & status = "paid"
-    Core->>Core: 4. Update Payment Attempt: status = "settled"
+    Note over Guest,DOKU: TAHAP 2: Pembayaran oleh Pengguna
+    Guest->>DOKU: Buka checkout_url & Bayar (QRIS / VA / E-Wallet)
+    
+    Note over DOKU,Engine: TAHAP 3: Webhook Pembayaran Sukses & Pembuatan Lease
+    DOKU->>API: POST /api/webhooks/payment/doku (Status: SUCCESS)
+    API->>API: Verifikasi HMAC-SHA256 Signature
+    API->>Engine: FulfillBookingOrder(bookingOrder, result)
+    Engine->>DB: 1. Buat User & Tenant akun penghuni
+    Engine->>DB: 2. Create Lease (Status: Active)
+    Engine->>DB: 3. Set Unit Status -> "occupied"
+    Engine->>DB: 4. Buat Tagihan Invoice (Status: Pending)
+    Engine->>DB: 5. Buat Payment Record (Status: Confirmed, Method: Gateway)
+    Engine->>DB: 6. Alokasikan Payment -> Invoice Status: "paid"
+    Engine->>DB: 7. Set BookingOrder Status -> "paid" & Simpan lease_id, invoice_id
     API-->>DOKU: HTTP 200 {"status":"processed"}
-    DOKU-->>Guest: Pembayaran Sukses! Kwitansi Terbit
+    DOKU-->>Guest: Pembayaran Sukses! Selamat datang di kos.
 ```
 
 ---
 
-## 3. Spesifikasi API: Pembuatan Order & Sewa Baru
+## 2. Spesifikasi API Keranjang & Pemesanan
 
-### Endpoint
+### 2.1 Menambahkan Kamar ke Keranjang (Add to Cart / Create Booking Order)
 - **Method**: `POST`
-- **URL**: `https://api.domain-anda.com/api/v1/orders`  
-  *(Alias: `https://api.domain-anda.com/api/v1/bookings`)*
+- **URL**: `https://api.domain-anda.com/api/v1/cart`  
+  *(Atau alias: `POST /api/v1/orders` / `POST /api/v1/bookings`)*
 - **Headers**:
   ```http
   Content-Type: application/json
   Accept: application/json
+  X-Cart-Token: <opsional-uuid-keranjang>
   ```
-  *(Endpoint ini bersifat publik, calon penghuni baru tidak diwajibkan menyertakan Bearer token).*
 
----
-
-### Request Body Parameters
-
+#### Request Body Parameters:
 | Parameter | Tipe | Wajib? | Keterangan |
 | :--- | :--- | :---: | :--- |
 | `unit_id` | `integer` | **Ya** | ID kamar yang dipilih (dari `GET /api/v1/available-rooms`). |
-| `name` | `string` | **Ya** | Nama lengkap penyewa (misal: `"Budi Santoso"`). |
+| `name` | `string` | **Ya** | Nama lengkap calon penyewa. |
 | `phone` | `string` | **Ya** | Nomor telepon WhatsApp (format: `"081234567890"` atau `"6281234567890"`). |
-| `email` | `string` | Tidak | Email penyewa (misal: `"budi@example.com"`). |
-| `start_date` | `date` | **Ya** | Tanggal mulai sewa / check-in (format: `YYYY-MM-DD`). |
+| `email` | `string` | Tidak | Alamat email calon penyewa. |
+| `start_date` | `date` | **Ya** | Tanggal mulai sewa / rencana check-in (`YYYY-MM-DD`). |
 | `duration_months` | `integer` | Tidak | Durasi sewa dalam bulan (default: `1`, min: `1`, max: `60`). |
-| `notes` | `string` | Tidak | Catatan tambahan penyewa. |
+| `cart_token` | `string` | Tidak | Token keranjang dari browser / session bot. Jika tidak dikirim, sistem otomatis membuatkan UUID baru. |
+| `notes` | `string` | Tidak | Catatan tambahan. |
 
-#### Contoh Request Body (JSON):
+#### Contoh Request:
 ```json
 {
-  "unit_id": 12,
+  "unit_id": 5,
   "name": "Budi Santoso",
   "phone": "081299998888",
   "email": "budi.santoso@example.com",
   "start_date": "2026-10-01",
   "duration_months": 1,
-  "notes": "Booking dari website"
+  "notes": "Booking kamar dari website"
 }
 ```
 
----
-
-### Response Sukses (`201 Created`)
-
+#### Contoh Response Sukses (`201 Created`):
 ```json
 {
-  "message": "Order created successfully. Lease and invoice have been generated.",
+  "message": "Booking order created and saved in cart. Please complete payment to confirm your lease.",
   "order": {
-    "lease_id": 45,
-    "lease_reference": "LSX20260045",
+    "id": 14,
+    "reference": "BK-X8K2M9LP1Q",
+    "cart_token": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "status": "pending",
     "property": {
-      "id": 2,
+      "id": 1,
       "name": "Highlander Stay Grogol",
       "address": "Jl. Alpukat No. 12, Jakarta Barat"
     },
     "unit": {
-      "id": 12,
-      "name": "Kamar 204"
+      "id": 5,
+      "name": "Kamar 101"
+    },
+    "guest": {
+      "name": "Budi Santoso",
+      "phone": "6281299998888",
+      "email": "budi.santoso@example.com"
     },
     "period": {
       "start_date": "2026-10-01",
       "end_date": "2026-11-01",
       "duration_months": 1
     },
-    "tenant": {
-      "id": 19,
-      "name": "Budi Santoso",
-      "phone": "6281299998888",
-      "email": "budi.santoso@example.com"
-    },
-    "invoice": {
-      "id": 89,
-      "reference": "INV20260089",
-      "status": "pending",
-      "total": 1500000.0,
-      "due_date": "2026-10-01"
-    },
+    "amount": 1750000.0,
+    "currency": "IDR",
     "checkout_url": "https://staging.doku.com/checkout-link-v2/9b7f9a12-xxxx-xxxx-xxxx",
-    "payment_attempt": {
-      "id": 34,
-      "reference": "25fbbdae-3dbb-4fc6-b816-16010d8a9563",
-      "amount": 1500000.0,
-      "status": "pending",
-      "expires_at": "2026-09-16T10:45:00+00:00"
-    },
-    "token": "1|sanctum_token_string_..."
+    "expires_at": "2026-09-16T11:45:00+00:00",
+    "lease_created": false
   }
 }
 ```
 
-> **Penjelasan Field Response**:
-> - `order.lease_id`: ID sewa resmi yang telah tercatat di OpenKos.
-> - `order.invoice`: Tagihan sewa bulan pertama dengan nominal sewa kamar.
-> - `order.checkout_url`: Link pembayaran resmi DOKU. Arahkan pengguna ke URL ini untuk membayar via QRIS, VA, atau E-Wallet.
-> - `order.token`: Token Sanctum yang siap disimpan di local storage website/aplikasi agar penghuni langsung berstatus login.
+> **Catatan Penting**:
+> - `order.lease_created = false`: Menandakan sewa belum dibuat sebelum pembayaran berhasil.
+> - Kamar nomor 101 tetap berstatus `available` bagi pencarian publik.
+> - `order.checkout_url`: Tautan resmi DOKU untuk langsung melakukan pembayaran.
 
 ---
 
-### Penanganan Error (Validasi & Status Kamar)
+### 2.2 Melihat Isi Keranjang (View Cart)
+- **Method**: `GET`
+- **URL**: `https://api.domain-anda.com/api/v1/cart?cart_token={cart_token}`  
+  *(Atau melalui query `?phone=081299998888` atau header `X-Cart-Token`)*
 
-| Kode HTTP | Respon | Solusi |
-| :--- | :--- | :--- |
-| **`422 Unprocessable Content`** | `{"message": "This room is currently under maintenance or unavailable for booking."}` | Kamar berstatus *Maintenance* atau *Unavailable*. Pilih kamar lain dari daftar kamar tersedia. |
-| **`422 Unprocessable Content`** | `{"message": "This tenant already has an active lease. Please contact management."}` | Nomor HP tersebut sudah terdaftar dan masih memiliki sewa kamar aktif yang sedang berjalan. |
-| **`404 Not Found`** | `{"message": "No query results for model [Unit]..."}` | ID Kamar (`unit_id`) tidak ditemukan dalam database. |
-
----
-
-## 4. Siklus Pembayaran Sukses (Success Payment)
-
-Ketika penghuni menyelesaikan pembayaran di DOKU Checkout, tahapan berikut berjalan **100% otomatis** di latar belakang:
-
-### 1. Penerimaan Webhook DOKU
-- DOKU mengirimkan HTTP `POST` ke endpoint:
-  ```http
-  POST /api/webhooks/payment/doku
-  ```
-- Header HTTP memuat `Client-Id`, `Request-Id`, `Request-Timestamp`, dan `Signature` (HMAC-SHA256).
-- OpenKos memverifikasi signature menggunakan `DOKU_SECRET_KEY`. Jika valid, webhook diproses.
-
-### 2. Pembuatan Data Pembayaran Sukses di Database OpenKos
-Sistem mengeksekusi pipeline pencatatan transaksi:
-1. **Tabel `payments`**:
-   - Dibuat baris data baru dengan nominal yang dibayar.
-   - `payment_method` diset menjadi `'gateway'`.
-   - `status` diset menjadi `'confirmed'`.
-   - `reference_number` dicatat sesuai referensi sesi DOKU.
-   - `verified_at` diisi timestamp saat transaksi terjadi.
-2. **Tabel `payment_allocations`**:
-   - Dibuat relasi alokasi dana antara baris `payments` dan baris `invoices`.
-3. **Tabel `invoices`**:
-   - `amount_paid` bertambah sesuai jumlah uang yang dibayarkan.
-   - `status` otomatis berubah dari `'pending'` menjadi `'paid'`.
-4. **Tabel `payment_attempts`**:
-   - `status` berubah dari `'pending'` menjadi `'settled'`.
-   - `settled_at` tercatat.
-
----
-
-## 5. Contoh Kode Frontend: Pemesanan & Pembayaran (React / Next.js)
-
-```tsx
-import React, { useState } from 'react';
-import axios from 'axios';
-
-interface BookingFormData {
-  unitId: number;
-  unitName: string;
-  price: number;
-}
-
-export function RoomBookingForm({ unitId, unitName, price }: BookingFormData) {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      // 1. Kirim order booking ke OpenKos API
-      const response = await axios.post('https://api.domain-anda.com/api/v1/orders', {
-        unit_id: unitId,
-        name: name,
-        phone: phone,
-        email: email || undefined,
-        start_date: startDate,
-        duration_months: 1,
-      });
-
-      const { checkout_url, token } = response.data.order;
-
-      // 2. Simpan token otentikasi penghuni di local storage
-      if (token) {
-        localStorage.setItem('tenant_token', token);
+#### Contoh Response (`200 OK`):
+```json
+{
+  "cart": {
+    "cart_token": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "count": 1,
+    "total": 1750000.0,
+    "items": [
+      {
+        "id": 14,
+        "reference": "BK-X8K2M9LP1Q",
+        "property_name": "Highlander Stay Grogol",
+        "unit_name": "Kamar 101",
+        "guest_name": "Budi Santoso",
+        "guest_phone": "6281299998888",
+        "start_date": "2026-10-01",
+        "end_date": "2026-11-01",
+        "duration_months": 1,
+        "amount": 1750000.0,
+        "currency": "IDR",
+        "status": "pending",
+        "checkout_url": "https://staging.doku.com/checkout-link-v2/9b7f9a12-xxxx-xxxx-xxxx",
+        "expires_at": "2026-09-16T11:45:00+00:00"
       }
-
-      // 3. Arahkan penghuni langsung ke DOKU Checkout untuk membayar
-      if (checkout_url) {
-        window.location.href = checkout_url;
-      } else {
-        alert('Sewa berhasil dibuat! Silakan hubungi admin untuk pembayaran.');
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Gagal memproses pesanan.');
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="p-6 bg-white rounded-xl shadow-md max-w-md">
-      <h2 className="text-xl font-bold mb-4">Sewa {unitName}</h2>
-      <p className="text-gray-600 mb-4">Harga: Rp {price.toLocaleString('id-ID')} / bulan</p>
-
-      {error && <div className="p-3 mb-4 text-sm bg-red-50 text-red-700 rounded-lg">{error}</div>}
-
-      <div className="space-y-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Nama Lengkap</label>
-          <input
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full border rounded-lg p-2.5 mt-1"
-            placeholder="Contoh: Budi Santoso"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Nomor WhatsApp</label>
-          <input
-            type="tel"
-            required
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="w-full border rounded-lg p-2.5 mt-1"
-            placeholder="Contoh: 081234567890"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Email (Opsional)</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full border rounded-lg p-2.5 mt-1"
-            placeholder="budi@example.com"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Tanggal Mulai Sewa</label>
-          <input
-            type="date"
-            required
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="w-full border rounded-lg p-2.5 mt-1"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full mt-4 bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {loading ? 'Memproses Sewa & Link Bayar...' : 'Lanjut ke Pembayaran (DOKU)'}
-        </button>
-      </div>
-    </form>
-  );
+    ]
+  }
 }
 ```
 
 ---
 
-## 6. Contoh Alur di WhatsApp Bot (Node.js / Baileys / WABA)
+### 2.3 Menghapus Item dari Keranjang (Remove Item / Cancel)
+- **Method**: `DELETE`
+- **URL**: `https://api.domain-anda.com/api/v1/cart/{bookingOrderId}`
 
-Ketika calon penghuni menyetujui booking kamar di WhatsApp:
-1. Bot menanyakan: Nama, Nomor HP (dari sender), Tanggal check-in.
-2. Bot memanggil `POST /api/v1/orders`.
-3. Bot langsung membalas dengan link DOKU Checkout:
-   ```text
-   Selamat Kak *Budi Santoso*! 🎉
-   Pesanan sewa kamar Anda berhasil dibuat:
+#### Contoh Response (`200 OK`):
+```json
+{
+  "message": "Booking item removed from cart."
+}
+```
 
-   🏠 Properti: Highlander Stay Grogol
-   🚪 Kamar: Kamar 101
-   📅 Tanggal Mulai: 01 Oktober 2026
-   💰 Tagihan Sewa: Rp 1.750.000
+---
 
-   Silakan selesaikan pembayaran melalui tautan DOKU di bawah ini:
-   👉 https://staging.doku.com/checkout-link-v2/xxxxxxxxx
+### 2.4 Memperbarui Link Checkout Keranjang (Refresh Checkout URL)
+Jika tautan pembayaran kedaluwarsa atau pengguna ingin membuka ulang halaman DOKU:
+- **Method**: `POST`
+- **URL**: `https://api.domain-anda.com/api/v1/cart/{bookingOrderId}/checkout`
 
-   (Bisa bayar via QRIS, BCA VA, Mandiri VA, BRI VA, OVO, ShopeePay, dll.)
+#### Contoh Response (`200 OK`):
+```json
+{
+  "message": "Checkout URL generated successfully.",
+  "checkout_url": "https://staging.doku.com/checkout-link-v2/fresh-token-xxx",
+  "order": {
+    "id": 14,
+    "reference": "BK-X8K2M9LP1Q",
+    "amount": 1750000.0,
+    "status": "pending"
+  }
+}
+```
 
-   Setelah pembayaran selesai, kamar akan resmi terkunci untuk Anda secara otomatis.
-   ```
+---
+
+## 3. Eksekusi Otomatis Saat Pembayaran Sukses (Webhook DOKU)
+
+Saat pengguna menyelesaikan transaksi via QRIS, Virtual Account, atau E-Wallet:
+
+### 1. DOKU Mengirimkan Webhook ke OpenKos
+- **URL Webhook**: `POST https://api.domain-anda.com/api/webhooks/payment/doku`
+- Payload transaksi memiliki status `SUCCESS` dan invoice number yang merujuk pada `order.reference` (contoh: `BK-X8K2M9LP1Q`).
+
+### 2. Verifikasi & Fulfillment (`FulfillBookingOrder`)
+OpenKos mengenali referensi `BK-xxxx` dari tabel `booking_orders` dan menjalankan transaksi database atomik:
+1. **User & Tenant**: Membuat akun penyewa otomatis jika belum terdaftar.
+2. **Lease**: Menjalankan aksi `CreateLease`:
+   - Unit status diubah menjadi **Occupied**.
+   - Masa sewa aktif diikat ke tenant.
+   - Tagihan pertama dibuat di tabel `invoices`.
+3. **Payment Record**:
+   - Dibuatkan record di tabel `payment_attempts` dengan status `settled`.
+   - Dibuatkan record di tabel `payments` dengan nominal lunas, status `confirmed`, dan metode `gateway`.
+   - Menjalankan `AllocatePayment` sehingga status tagihan di tabel `invoices` berubah menjadi `paid` dan `amount_paid` terisi penuh.
+4. **Booking Order**:
+   - Status diubah menjadi `paid`.
+   - Field `lease_id`, `invoice_id`, dan `paid_at` diisi secara otomatis.
+
+---
+
+## 4. Struktur Database `booking_orders`
+
+| Kolom | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `id` | `BIGINT UNSIGNED` | Primary Key. |
+| `cart_token` | `VARCHAR(100)` | Token identitas sesi keranjang browser/bot. |
+| `reference` | `VARCHAR(50)` | Nomor referensi unik (contoh: `BK-XXXXXXXXXX`). |
+| `unit_id` | `BIGINT UNSIGNED` | ID kamar yang dipesan. |
+| `tenant_id` | `BIGINT UNSIGNED (Nullable)` | ID penyewa (diisi otomatis saat pembayaran sukses). |
+| `guest_name` | `VARCHAR(255)` | Nama calon penyewa. |
+| `guest_phone` | `VARCHAR(30)` | Nomor HP WhatsApp. |
+| `guest_email` | `VARCHAR(255)` | Email calon penyewa. |
+| `start_date` | `DATE` | Tanggal mulai tinggal. |
+| `end_date` | `DATE` | Tanggal berakhir sewa periode pertama. |
+| `duration_months` | `INT` | Durasi bulan yang dipesan. |
+| `amount` | `DECIMAL(12,2)` | Nominal sewa yang harus dibayar. |
+| `currency` | `VARCHAR(3)` | Mata uang (`IDR`). |
+| `status` | `VARCHAR(20)` | Status order (`pending`, `paid`, `cancelled`, `expired`). |
+| `lease_id` | `BIGINT UNSIGNED (Nullable)` | ID kontrak sewa setelah sukses bayar. |
+| `invoice_id` | `BIGINT UNSIGNED (Nullable)` | ID tagihan yang terbit dan telah lunas. |
+| `doku_checkout_url` | `TEXT` | URL sesi checkout DOKU. |
+| `paid_at` | `TIMESTAMP` | Waktu pembayaran terkonfirmasi. |
+
+---
+
+## 5. Ringkasan Tanya Jawab
+
+| Pertanyaan | Jawaban Teknis |
+| :--- | :--- |
+| **Apakah sebelum bayar kamar sudah terkunci (occupied)?** | **Tidak**. Kamar tetap `available` dan belum ada `Lease` yang dibuat. |
+| **Kapan Lease dan Invoice terbit?** | Tepat pada saat DOKU mengirimkan notifikasi callback webhook dengan status `SUCCESS`. |
+| **Apakah otomatis tercatat pembayaran sukses?** | **Ya**. Tabel `payments` terisi dengan status `confirmed`, `amount_paid` diisi pada tagihan, dan status invoice menjadi `paid`. |
+| **Bagaimana jika calon penghuni membatalkan dari keranjang?** | Cukup panggil `DELETE /api/v1/cart/{id}`, status order diupdate menjadi `cancelled`. |

@@ -42,6 +42,28 @@ class PaymentWebhookController extends Controller
             return response()->json(['status' => 'invalid_payload'], 202);
         }
 
+        // Check if webhook belongs to a pre-lease BookingOrder (Cart Order)
+        $bookingOrder = \App\Models\BookingOrder::where('reference', $result->reference)
+            ->orWhere('reference', $result->providerReference)
+            ->first();
+
+        if ($bookingOrder && $result->status === \OpenKOS\Core\Enums\PaymentStatus::Settled) {
+            $fulfiller = app(\App\Actions\Bookings\FulfillBookingOrder::class);
+            $fulfiller->execute(
+                $bookingOrder,
+                providerReference: $result->providerReference,
+                occurredAt: $result->occurredAt,
+            );
+
+            \Illuminate\Support\Facades\Log::info('Payment webhook processed for booking order.', [
+                'gateway' => $gateway,
+                'booking_order_id' => $bookingOrder->id,
+                'reference' => $bookingOrder->reference,
+            ]);
+
+            return response()->json(['status' => 'processed'], 200);
+        }
+
         $processed = $apply->execute($gateway, $result);
 
         Log::info('Payment webhook processed.', [

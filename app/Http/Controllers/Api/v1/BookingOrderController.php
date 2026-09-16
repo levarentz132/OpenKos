@@ -2,39 +2,33 @@
 
 namespace App\Http\Controllers\Api\v1;
 
-use App\Actions\Leases\CreateLease;
-use App\Actions\Payments\StartGatewayPayment;
-use App\Data\Lease\CreateLeaseData;
-use App\Enums\InvoiceStatus;
-use App\Enums\LeaseStatus;
 use App\Enums\UnitStatus;
 use App\Http\Controllers\Controller;
-use App\Models\Tenant;
+use App\Models\BookingOrder;
 use App\Models\Unit;
-use App\Models\User;
+use App\Services\Payments\PaymentGatewayManager;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use OpenKOS\Core\Data\Payment\Money;
+use OpenKOS\Core\Data\Payment\PaymentRequest;
 use Throwable;
 
 class BookingOrderController extends Controller
 {
     /**
-     * Create a room booking order:
-     * 1. Finds or creates the Tenant and User profile.
-     * 2. Creates the Lease on the Unit (which occupies the unit).
-     * 3. Automatically generates the first Invoice.
-     * 4. Generates an online payment checkout session (e.g. DOKU Checkout).
-     * 5. Returns the lease, invoice, and DOKU checkout URL.
+     * Create a pre-lease booking order stored in cart:
+     * 1. Validates room availability and customer details.
+     * 2. Stores booking order in database with status 'pending'.
+     *    (Lease and Invoice are NOT created yet; Unit remains available).
+     * 3. Generates DOKU Checkout link for the booking order.
+     * 4. When payment is confirmed via DOKU webhook, the Lease is automatically created!
      */
     public function store(
         Request $request,
-        CreateLease $createLease,
-        StartGatewayPayment $startGatewayPayment,
+        PaymentGatewayManager $gatewayManager,
     ): JsonResponse {
         $validated = $request->validate([
             'unit_id' => ['required', 'integer', 'exists:units,id'],
@@ -44,6 +38,7 @@ class BookingOrderController extends Controller
             'start_date' => ['required', 'date'],
             'duration_months' => ['nullable', 'integer', 'min:1', 'max:60'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'cart_token' => ['nullable', 'string', 'max:100'],
         ]);
 
         $unit = Unit::with(['property', 'rates'])->findOrFail($validated['unit_id']);
@@ -56,128 +51,72 @@ class BookingOrderController extends Controller
 
         $phone = $this->normalizePhoneNumber($validated['phone']);
 
+        $startDate = Carbon::parse($validated['start_date'])->startOfDay();
+        $durationMonths = (int) ($validated['duration_months'] ?? 1);
+        $endDate = $startDate->copy()->addMonthsNoOverflow($durationMonths)->format('Y-m-d');
+
+        $monthlyRent = $unit->rates()->where('billing_unit', 'month')->where('billing_interval', 1)->value('amount')
+            ?? $unit->activeRates()->first()?->amount
+            ?? 0;
+
+        $amount = (float) $monthlyRent;
+
+        $cartToken = $request->header('X-Cart-Token')
+            ?? $validated['cart_token']
+            ?? (string) Str::uuid();
+
+        $reference = 'BK-' . strtoupper(Str::random(10));
+
+        // Create the pre-lease booking order (Cart Item)
+        $bookingOrder = BookingOrder::create([
+            'cart_token' => $cartToken,
+            'reference' => $reference,
+            'unit_id' => $unit->id,
+            'guest_name' => $validated['name'],
+            'guest_phone' => $phone,
+            'guest_email' => $validated['email'] ?? null,
+            'start_date' => $startDate->toDateString(),
+            'end_date' => $endDate,
+            'duration_months' => $durationMonths,
+            'amount' => $amount,
+            'currency' => 'IDR',
+            'status' => BookingOrder::STATUS_PENDING,
+            'notes' => $validated['notes'] ?? null,
+            'expires_at' => now()->addMinutes(60),
+        ]);
+
+        // Generate DOKU Checkout Session Link
+        $checkoutUrl = null;
         try {
-            $orderData = DB::transaction(function () use ($validated, $unit, $phone, $createLease) {
-                // 1. Find or create User & Tenant
-                $tenant = Tenant::where('phone', $phone)
-                    ->when(! empty($validated['email']), fn ($q) => $q->orWhere('email', $validated['email']))
-                    ->first();
-
-                if (! $tenant) {
-                    $user = User::where('phone', $phone)
-                        ->when(! empty($validated['email']), fn ($q) => $q->orWhere('email', $validated['email']))
-                        ->first();
-
-                    if (! $user) {
-                        $user = User::create([
-                            'name' => $validated['name'],
-                            'phone' => $phone,
-                            'email' => $validated['email'] ?? null,
-                            'password' => Hash::make(Str::random(16)),
-                        ]);
-                    }
-
-                    $tenant = Tenant::create([
-                        'user_id' => $user->id,
-                        'name' => $validated['name'],
-                        'phone' => $phone,
-                        'email' => $validated['email'] ?? null,
-                        'password' => Hash::make(Str::random(16)),
-                        'is_active' => true,
-                    ]);
-                }
-
-                // Check if tenant already has an active lease
-                $hasActiveLease = $tenant->leases()
-                    ->where('status', LeaseStatus::Active->value)
-                    ->exists();
-
-                if ($hasActiveLease) {
-                    abort(422, 'This tenant already has an active lease. Please contact management.');
-                }
-
-                // 2. Calculate lease dates & rent amount
-                $startDate = Carbon::parse($validated['start_date'])->startOfDay();
-                $durationMonths = (int) ($validated['duration_months'] ?? 1);
-                $endDate = $startDate->copy()->addMonthsNoOverflow($durationMonths)->format('Y-m-d');
-
-                $rentAmount = $unit->rates()->where('billing_unit', 'month')->where('billing_interval', 1)->value('amount')
-                    ?? $unit->activeRates()->first()?->amount
-                    ?? 0;
-
-                $leaseData = new CreateLeaseData(
-                    tenantIds: [$tenant->id],
-                    startDate: $startDate->format('Y-m-d'),
-                    endDate: $endDate,
-                    rentAmount: $rentAmount,
-                    billingInterval: 1,
-                    billingUnit: 'month',
-                    billingStrategy: 'advance',
-                    unitRateId: null,
-                    depositAmount: 0,
-                    depositPaidAt: null,
-                    depositRefundAmount: null,
-                    depositRefundedAt: null,
-                    rentDueDay: (int) $startDate->format('j'),
-                    notes: $validated['notes'] ?? 'Online booking order',
+            $doku = $gatewayManager->find('doku');
+            if ($doku) {
+                $paymentRequest = new PaymentRequest(
+                    reference: $bookingOrder->reference,
+                    amount: new Money((int) $bookingOrder->amount, 'IDR'),
+                    description: "Booking {$unit->name} - {$unit->property?->name}",
+                    metadata: [
+                        'booking_order_id' => $bookingOrder->id,
+                        'unit_id' => $unit->id,
+                        'guest_name' => $bookingOrder->guest_name,
+                        'guest_phone' => $bookingOrder->guest_phone,
+                    ],
                 );
 
-                // 3. Execute CreateLease (occupies unit and generates invoice)
-                $lease = $createLease->execute($unit, $leaseData);
-
-                // 4. Retrieve newly generated pending invoice
-                $invoice = $lease->invoices()
-                    ->where('status', InvoiceStatus::Pending->value)
-                    ->latest('id')
-                    ->first();
-
-                return [
-                    'tenant' => $tenant,
-                    'lease' => $lease,
-                    'invoice' => $invoice,
-                    'start_date' => $startDate->toDateString(),
-                    'end_date' => $endDate,
-                    'duration_months' => $durationMonths,
-                ];
-            });
-        } catch (Throwable $e) {
-            return response()->json([
-                'message' => $e->getMessage() ?: 'Failed to create booking order.',
-            ], $e->getCode() >= 400 && $e->getCode() < 500 ? $e->getCode() : 422);
-        }
-
-        $tenant = $orderData['tenant'];
-        $lease = $orderData['lease'];
-        $invoice = $orderData['invoice'];
-
-        // 5. Generate DOKU Checkout Session Link
-        $checkoutUrl = null;
-        $attemptData = null;
-
-        if ($invoice) {
-            try {
-                $paymentResult = $startGatewayPayment->executeViaSignedLink($invoice);
-                $checkoutUrl = $paymentResult->instructions->url;
-                $attemptData = [
-                    'id' => $paymentResult->attempt->id,
-                    'reference' => $paymentResult->attempt->reference,
-                    'amount' => (float) $paymentResult->attempt->amount,
-                    'status' => $paymentResult->attempt->status->value,
-                    'expires_at' => $paymentResult->attempt->expires_at?->toIso8601String(),
-                ];
-            } catch (Throwable $e) {
-                Log::warning('Booking created but checkout session link generation failed: ' . $e->getMessage());
+                $result = $doku->createPayment($paymentRequest);
+                $checkoutUrl = $result->instructions->url;
+                $bookingOrder->update(['doku_checkout_url' => $checkoutUrl]);
             }
+        } catch (Throwable $e) {
+            Log::warning('DOKU payment session creation for booking order failed: ' . $e->getMessage());
         }
-
-        // 6. Generate Sanctum token for tenant
-        $token = $tenant->createToken('booking-session')->plainTextToken;
 
         return response()->json([
-            'message' => 'Order created successfully. Lease and invoice have been generated.',
+            'message' => 'Booking order created and saved in cart. Please complete payment to confirm your lease.',
             'order' => [
-                'lease_id' => $lease->id,
-                'lease_reference' => $lease->reference,
+                'id' => $bookingOrder->id,
+                'reference' => $bookingOrder->reference,
+                'cart_token' => $cartToken,
+                'status' => $bookingOrder->status,
                 'property' => [
                     'id' => $unit->property?->id,
                     'name' => $unit->property?->name,
@@ -187,27 +126,21 @@ class BookingOrderController extends Controller
                     'id' => $unit->id,
                     'name' => $unit->name,
                 ],
+                'guest' => [
+                    'name' => $bookingOrder->guest_name,
+                    'phone' => $bookingOrder->guest_phone,
+                    'email' => $bookingOrder->guest_email,
+                ],
                 'period' => [
-                    'start_date' => $orderData['start_date'],
-                    'end_date' => $orderData['end_date'],
-                    'duration_months' => $orderData['duration_months'],
+                    'start_date' => $bookingOrder->start_date->toDateString(),
+                    'end_date' => $bookingOrder->end_date?->toDateString(),
+                    'duration_months' => $bookingOrder->duration_months,
                 ],
-                'tenant' => [
-                    'id' => $tenant->id,
-                    'name' => $tenant->name,
-                    'phone' => $tenant->phone,
-                    'email' => $tenant->email,
-                ],
-                'invoice' => $invoice ? [
-                    'id' => $invoice->id,
-                    'reference' => $invoice->reference,
-                    'status' => $invoice->status->value,
-                    'total' => (float) $invoice->total,
-                    'due_date' => $invoice->due_date?->toDateString(),
-                ] : null,
+                'amount' => (float) $bookingOrder->amount,
+                'currency' => $bookingOrder->currency,
                 'checkout_url' => $checkoutUrl,
-                'payment_attempt' => $attemptData,
-                'token' => $token,
+                'expires_at' => $bookingOrder->expires_at?->toIso8601String(),
+                'lease_created' => false,
             ],
         ], 201);
     }

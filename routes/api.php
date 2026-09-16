@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AvailableRoomsController;
 use App\Http\Controllers\Api\v1\AuthController;
 use App\Http\Controllers\Api\v1\BookingOrderController;
+use App\Http\Controllers\Api\v1\CartController;
 use App\Http\Controllers\Api\v1\OtpController;
 use App\Http\Controllers\Api\v1\PhoneVerificationController;
 use App\Http\Controllers\Api\v1\Tenant\TenantDashboardController;
@@ -20,9 +21,16 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::get('available-rooms', [AvailableRoomsController::class, 'index'])->name('available-rooms');
     Route::get('properties/{property:slug}/available-rooms', [AvailableRoomsController::class, 'forProperty'])->name('properties.available-rooms');
 
-    // Room Booking Orders (Creates Lease, Invoice, and DOKU Checkout Session)
+    // Room Booking Orders & Cart
     Route::post('orders', [BookingOrderController::class, 'store'])->name('orders.store');
     Route::post('bookings', [BookingOrderController::class, 'store'])->name('bookings.store');
+
+    Route::prefix('cart')->name('cart.')->group(function () {
+        Route::get('/', [CartController::class, 'index'])->name('index');
+        Route::post('/', [CartController::class, 'store'])->name('store');
+        Route::delete('{bookingOrder}', [CartController::class, 'destroy'])->name('destroy');
+        Route::post('{bookingOrder}/checkout', [CartController::class, 'checkout'])->name('checkout');
+    });
 
     // Authentication & Verification
     Route::prefix('auth')->name('auth.')->group(function () {

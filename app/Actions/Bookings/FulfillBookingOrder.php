@@ -1,0 +1,174 @@
+<?php
+
+namespace App\Actions\Bookings;
+
+use App\Actions\Invoices\AllocatePayment;
+use App\Actions\Leases\CreateLease;
+use App\Data\Lease\CreateLeaseData;
+use App\Enums\InvoiceStatus;
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus as ApplicationPaymentStatus;
+use App\Events\Payment\PaymentRecorded;
+use App\Models\BookingOrder;
+use App\Models\Tenant;
+use App\Models\Unit;
+use App\Models\User;
+use DateTimeInterface;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use OpenKOS\Core\Enums\PaymentStatus;
+
+class FulfillBookingOrder
+{
+    public function __construct(
+        private CreateLease $createLease,
+        private AllocatePayment $allocatePayment,
+    ) {}
+
+    /**
+     * Fulfill a paid BookingOrder:
+     * 1. Resolves/creates Tenant & User.
+     * 2. Executes CreateLease (occupies Unit, creates Lease, generates Invoice).
+     * 3. Creates PaymentAttempt & confirmed Payment, settling the Invoice.
+     * 4. Updates BookingOrder with lease_id, invoice_id, and status = 'paid'.
+     */
+    public function execute(
+        BookingOrder $bookingOrder,
+        ?string $providerReference = null,
+        ?DateTimeInterface $occurredAt = null,
+    ): BookingOrder {
+        if ($bookingOrder->isPaid()) {
+            return $bookingOrder;
+        }
+
+        return DB::transaction(function () use ($bookingOrder, $providerReference, $occurredAt) {
+            $lockedOrder = BookingOrder::lockForUpdate()->findOrFail($bookingOrder->id);
+
+            if ($lockedOrder->isPaid()) {
+                return $lockedOrder;
+            }
+
+            $unit = Unit::lockForUpdate()->findOrFail($lockedOrder->unit_id);
+
+            // 1. Resolve or create Tenant and User
+            $phone = $lockedOrder->guest_phone;
+            $email = $lockedOrder->guest_email;
+
+            $tenant = Tenant::where('phone', $phone)
+                ->when(! empty($email), fn ($q) => $q->orWhere('email', $email))
+                ->first();
+
+            if (! $tenant) {
+                $user = User::where('phone', $phone)
+                    ->when(! empty($email), fn ($q) => $q->orWhere('email', $email))
+                    ->first();
+
+                if (! $user) {
+                    $user = User::create([
+                        'name' => $lockedOrder->guest_name,
+                        'phone' => $phone,
+                        'email' => $email,
+                        'password' => Hash::make(Str::random(16)),
+                    ]);
+                }
+
+                $tenant = Tenant::create([
+                    'user_id' => $user->id,
+                    'name' => $lockedOrder->guest_name,
+                    'phone' => $phone,
+                    'email' => $email,
+                    'password' => Hash::make(Str::random(16)),
+                    'is_active' => true,
+                ]);
+            }
+
+            // 2. Prepare lease data
+            $startDate = $lockedOrder->start_date;
+            $endDate = $lockedOrder->end_date?->toDateString();
+
+            $leaseData = new CreateLeaseData(
+                tenantIds: [$tenant->id],
+                startDate: $startDate->toDateString(),
+                endDate: $endDate,
+                rentAmount: $lockedOrder->amount,
+                billingInterval: 1,
+                billingUnit: 'month',
+                billingStrategy: 'advance',
+                unitRateId: null,
+                depositAmount: 0,
+                depositPaidAt: null,
+                depositRefundAmount: null,
+                depositRefundedAt: null,
+                rentDueDay: (int) $startDate->format('j'),
+                notes: $lockedOrder->notes ?? "Online booking {$lockedOrder->reference}",
+            );
+
+            // 3. Create Lease (occupies Unit and calls GenerateInvoices)
+            $lease = $this->createLease->execute($unit, $leaseData);
+
+            // 4. Retrieve generated initial Invoice
+            $invoice = $lease->invoices()
+                ->where('status', InvoiceStatus::Pending->value)
+                ->latest('id')
+                ->first();
+
+            if ($invoice) {
+                $settledAt = $occurredAt ?? now();
+
+                // Create PaymentAttempt record
+                $attempt = $invoice->paymentAttempts()->create([
+                    'gateway_key' => 'doku',
+                    'reference' => $lockedOrder->reference,
+                    'provider_reference' => $providerReference ?? $lockedOrder->reference,
+                    'amount' => $lockedOrder->amount,
+                    'currency' => $lockedOrder->currency,
+                    'status' => PaymentStatus::Settled,
+                    'initiated_at' => $lockedOrder->created_at ?? now(),
+                    'settled_at' => $settledAt,
+                    'metadata' => [
+                        'booking_order_id' => $lockedOrder->id,
+                        'booking_reference' => $lockedOrder->reference,
+                    ],
+                ]);
+
+                // Create confirmed Payment record
+                $payment = $invoice->payments()->create([
+                    'amount' => $lockedOrder->amount,
+                    'payment_date' => $settledAt->format('Y-m-d'),
+                    'payment_method' => PaymentMethod::Gateway->value,
+                    'reference_number' => $lockedOrder->reference,
+                    'status' => ApplicationPaymentStatus::Confirmed,
+                    'verified_at' => now(),
+                ]);
+
+                $attempt->update(['payment_id' => $payment->id]);
+
+                // Allocate payment to invoice (marks invoice as Paid)
+                $this->allocatePayment->execute($payment);
+
+                PaymentRecorded::dispatch($payment);
+            }
+
+            // 5. Mark BookingOrder as paid
+            $lockedOrder->update([
+                'status' => BookingOrder::STATUS_PAID,
+                'tenant_id' => $tenant->id,
+                'lease_id' => $lease->id,
+                'invoice_id' => $invoice?->id,
+                'paid_at' => $occurredAt ?? now(),
+            ]);
+
+            Log::info('Booking order fulfilled with active lease and confirmed payment.', [
+                'booking_order_id' => $lockedOrder->id,
+                'reference' => $lockedOrder->reference,
+                'lease_id' => $lease->id,
+                'invoice_id' => $invoice?->id,
+                'tenant_id' => $tenant->id,
+            ]);
+
+            return $lockedOrder->fresh();
+        });
+    }
+}

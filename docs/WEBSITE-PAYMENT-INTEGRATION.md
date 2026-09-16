@@ -1,336 +1,308 @@
-# Panduan Integrasi Pembayaran DOKU untuk Website & Portal Penghuni (OpenKos)
+# Panduan Integrasi Pembayaran DOKU & Keranjang Pemesanan untuk Website (OpenKos)
 
-Dokumentasi ini ditujukan bagi pengembang frontend (React, Next.js, Vue, Nuxt, Svelte, atau HTML/JS) yang membangun **Website Penghuni (Tenant Portal)** atau **Aplikasi Web Kos** yang terhubung ke backend OpenKos dan payment gateway **DOKU Checkout (Jokul)**.
-
----
-
-## 1. Arsitektur & Alur Pengguna (User Flow)
-
-Metode yang direkomendasikan adalah **Hosted Checkout Redirect**, di mana pengguna diarahkan ke halaman pembayaran aman DOKU yang telah dioptimalkan untuk perangkat mobile dan desktop.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Penghuni Kos
-    participant Web as Frontend Website (React/Next/Vue)
-    participant API as OpenKos Backend API
-    participant DOKU as DOKU Jokul Checkout
-    
-    User->>Web: Buka Halaman Tagihan (/billing)
-    Web->>API: GET /api/v1/tenant/invoices/{id}
-    API-->>Web: Data tagihan (Status: Pending, Rp 1.500.000)
-    User->>Web: Klik tombol "Bayar Sekarang (Online)"
-    Web->>API: POST /api/v1/tenant/invoices/{id}/checkout
-    API->>DOKU: Generate Checkout Session Link
-    DOKU-->>API: Return payment URL
-    API-->>Web: Return { checkout_url: "https://staging.doku.com/..." }
-    Web->>DOKU: window.location.href = checkout_url (Redirect)
-    
-    User->>DOKU: Pilih Pembayaran (QRIS / VA BCA / E-Wallet) & Bayar
-    DOKU->>API: Webhook Notifikasi Sukses (Background)
-    API->>API: Update Invoice Status -> "paid"
-    DOKU-->>Web: Redirect kembali ke Return URL (/portal/billing?status=finish)
-    Web->>API: GET /api/v1/tenant/invoices/{id} (Cek Status Terkini)
-    Web-->>User: Tampilkan Layar "Pembayaran Berhasil! 🎉"
-```
+Dokumentasi lengkap bagi pengembang frontend (React, Next.js, Vue, Nuxt, Svelte, atau HTML/JS) untuk mengintegrasikan sistem **Keranjang Kamar (Cart-First Booking)** dan **Pembayaran Tagihan DOKU (Jokul Checkout)** pada backend OpenKos.
 
 ---
 
-## 2. Endpoint API OpenKos yang Digunakan
+## 1. Arsitektur Pemesanan & Pembayaran (Website Frontend)
 
-Semua request dari website tenant wajib menyertakan header:
-```http
-Authorization: Bearer <tenant_sanctum_token>
-Accept: application/json
-```
+Sistem mendukung dua alur pembayaran utama:
+1. **Pemesanan Kamar Masuk Keranjang (Tamu / Calon Penghuni)**:
+   - Kamar dimasukkan ke keranjang (`/api/v1/cart`) dengan status `pending`.
+   - Kontrak sewa (**Lease**) **BELUM** dibuat dan kamar **TIDAK** langsung dikunci (*tetap available*).
+   - Link pembayaran DOKU Checkout dibuat langsung untuk pesanan tersebut.
+   - Saat pembayaran berhasil, webhook OpenKos otomatis menerbitkan akun tenant, membuat Lease, menandai kamar `occupied`, dan menerbitkan kwitansi lunas.
+2. **Pembayaran Tagihan Rutin (Penghuni Terdaftar / Tenant Portal)**:
+   - Penghuni login dan melihat tagihan bulanan (`/api/v1/tenant/invoices`).
+   - Penghuni menekan tombol bayar dan diarahkan ke DOKU Checkout.
 
-### 2.1 Mengambil Detail Tagihan
-- **Method**: `GET`
-- **URL**: `/api/v1/tenant/invoices/{id}`
-- **Fungsi**: Memeriksa status tagihan (`pending`, `partial`, `paid`) dan nominal yang harus dibayar.
+---
 
-### 2.2 Membuat Sesi Pembayaran DOKU
+## 2. Alur 1: Keranjang Kamar (Cart-First Booking Flow)
+
+### 2.1 Menambahkan Kamar ke Keranjang & Mendapatkan Link DOKU
+
 - **Method**: `POST`
-- **URL**: `/api/v1/tenant/invoices/{id}/checkout`
-- **Fungsi**: Membuat link checkout DOKU instan.
+- **URL**: `https://api.domain-anda.com/api/v1/cart`  
+  *(Atau `POST /api/v1/orders` / `POST /api/v1/bookings`)*
+- **Headers**:
+  ```http
+  Content-Type: application/json
+  Accept: application/json
+  X-Cart-Token: <uuid-keranjang-browser>
+  ```
 
-#### Contoh Response (`200 OK`):
+#### Request Payload:
 ```json
 {
-  "message": "Checkout session created successfully.",
-  "checkout_url": "https://staging.doku.com/checkout-link-v2/9b7f9a12-xxxx-xxxx-xxxx",
-  "reused": false,
-  "attempt": {
-    "id": 18,
-    "reference": "d290f1ee-6c54-4b01-90e6-d701748f0851",
-    "provider_reference": "d290f1ee-6c54-4b01-90e6-d701748f0851",
-    "amount": 1500000,
-    "currency": "IDR",
+  "unit_id": 5,
+  "name": "Budi Santoso",
+  "phone": "081299998888",
+  "email": "budi.santoso@example.com",
+  "start_date": "2026-10-01",
+  "duration_months": 1,
+  "notes": "Booking lewat website"
+}
+```
+
+#### Response Sukses (`201 Created`):
+```json
+{
+  "message": "Booking order created and saved in cart. Please complete payment to confirm your lease.",
+  "order": {
+    "id": 14,
+    "reference": "BK-X8K2M9LP1Q",
+    "cart_token": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
     "status": "pending",
-    "expires_at": "2026-09-16T10:30:00+00:00"
+    "property": {
+      "id": 1,
+      "name": "Highlander Stay Grogol",
+      "address": "Jl. Alpukat No. 12, Jakarta Barat"
+    },
+    "unit": {
+      "id": 5,
+      "name": "Kamar 101"
+    },
+    "guest": {
+      "name": "Budi Santoso",
+      "phone": "6281299998888",
+      "email": "budi.santoso@example.com"
+    },
+    "period": {
+      "start_date": "2026-10-01",
+      "end_date": "2026-11-01",
+      "duration_months": 1
+    },
+    "amount": 1750000.0,
+    "currency": "IDR",
+    "checkout_url": "https://staging.doku.com/checkout-link-v2/9b7f9a12-xxxx-xxxx-xxxx",
+    "expires_at": "2026-09-16T11:45:00+00:00",
+    "lease_created": false
   }
 }
 ```
 
 ---
 
-## 3. Implementasi Frontend
+### 2.2 Menampilkan Keranjang Belanja
 
-### A. Contoh Komponen React / Next.js (TypeScript + Tailwind CSS)
+Simpan `cart_token` di `localStorage` browser agar isi keranjang tetap tersimpan saat pengguna berpindah halaman:
 
-Berikut adalah komponen tagihan lengkap dengan tombol bayar online, status loading, dan penanganan error:
+- **Method**: `GET`
+- **URL**: `https://api.domain-anda.com/api/v1/cart?cart_token={cart_token}`
+
+#### Response:
+```json
+{
+  "cart": {
+    "cart_token": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "count": 1,
+    "total": 1750000.0,
+    "items": [
+      {
+        "id": 14,
+        "reference": "BK-X8K2M9LP1Q",
+        "property_name": "Highlander Stay Grogol",
+        "unit_name": "Kamar 101",
+        "guest_name": "Budi Santoso",
+        "guest_phone": "6281299998888",
+        "start_date": "2026-10-01",
+        "end_date": "2026-11-01",
+        "duration_months": 1,
+        "amount": 1750000.0,
+        "status": "pending",
+        "checkout_url": "https://staging.doku.com/checkout-link-v2/9b7f9a12-xxxx-xxxx-xxxx",
+        "expires_at": "2026-09-16T11:45:00+00:00"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 2.3 Menghapus Kamar dari Keranjang
+- **Method**: `DELETE`
+- **URL**: `https://api.domain-anda.com/api/v1/cart/{orderId}`
+
+```json
+{
+  "message": "Booking item removed from cart."
+}
+```
+
+---
+
+### 2.4 Memperbarui Link Checkout Keranjang
+Jika link pembayaran kadaluarsa sebelum dibayar:
+- **Method**: `POST`
+- **URL**: `https://api.domain-anda.com/api/v1/cart/{orderId}/checkout`
+
+```json
+{
+  "message": "Checkout URL generated successfully.",
+  "checkout_url": "https://staging.doku.com/checkout-link-v2/fresh-url",
+  "order": {
+    "id": 14,
+    "reference": "BK-X8K2M9LP1Q",
+    "amount": 1750000.0,
+    "status": "pending"
+  }
+}
+```
+
+---
+
+## 3. Alur 2: Pembayaran Tagihan Rutin Penghuni (Tenant Portal)
+
+Bagi penghuni yang sudah aktif dan memiliki tagihan bulanan:
+
+### 3.1 Mengambil Daftar Tagihan Belum Lunas
+- **Method**: `GET`
+- **URL**: `/api/v1/tenant/invoices?status=unpaid`
+- **Header**: `Authorization: Bearer <tenant_token>`
+
+### 3.2 Membuat Link Checkout Tagihan
+- **Method**: `POST`
+- **URL**: `/api/v1/tenant/invoices/{id}/checkout`
+- **Header**: `Authorization: Bearer <tenant_token>`
+
+#### Response:
+```json
+{
+  "message": "Checkout session created successfully.",
+  "checkout_url": "https://staging.doku.com/checkout-link-v2/9b7f9a12-xxxx-xxxx-xxxx"
+}
+```
+
+---
+
+## 4. Contoh Komponen React (TypeScript + Tailwind CSS)
+
+### Contoh Komponen: Keranjang Kamar & Checkout Langsung (`BookingCart.tsx`)
 
 ```tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
-interface InvoiceProps {
-  invoice: {
-    id: number;
-    reference: string;
-    total: number;
-    amount_paid: number;
-    outstanding: number;
-    status: 'pending' | 'partial' | 'paid';
-    due_date: string;
-    unit_name?: string;
-  };
-  token: string;
-  apiBaseUrl: string;
+interface CartItem {
+  id: number;
+  reference: string;
+  property_name: string;
+  unit_name: string;
+  guest_name: string;
+  start_date: string;
+  duration_months: number;
+  amount: number;
+  checkout_url: string;
 }
 
-export const InvoiceCard: React.FC<InvoiceProps> = ({ invoice, token, apiBaseUrl }) => {
-  const [loading, setLoading] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+export function BookingCart() {
+  const [cartToken, setCartToken] = useState<string>('');
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [total, setTotal] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const handleOnlinePayment = async () => {
-    setLoading(true);
-    setErrorMessage(null);
+  // Ambil atau buat cart_token di browser
+  useEffect(() => {
+    let token = localStorage.getItem('openkos_cart_token');
+    if (!token) {
+      token = 'cart-' + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('openkos_cart_token', token);
+    }
+    setCartToken(token);
+    fetchCart(token);
+  }, []);
 
+  const fetchCart = async (token: string) => {
     try {
-      const response = await axios.post(
-        `${apiBaseUrl}/api/v1/tenant/invoices/${invoice.id}/checkout`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
-        }
-      );
-
-      const checkoutUrl = response.data?.checkout_url;
-
-      if (checkoutUrl) {
-        // Arahkan penghuni ke halaman DOKU Checkout
-        window.location.href = checkoutUrl;
-      } else {
-        throw new Error('Link pembayaran tidak ditemukan dalam respon server.');
-      }
-    } catch (err: any) {
-      const msg =
-        err.response?.data?.message ||
-        err.message ||
-        'Gagal memulai pembayaran online. Silakan coba lagi nanti.';
-      setErrorMessage(msg);
+      setLoading(true);
+      const res = await axios.get(`https://api.domain-anda.com/api/v1/cart?cart_token=${token}`);
+      setItems(res.data.cart.items);
+      setTotal(res.data.cart.total);
+    } catch (err) {
+      console.error('Gagal mengambil keranjang:', err);
+    } finally {
       setLoading(false);
     }
   };
 
-  const isPaid = invoice.status === 'paid' || invoice.outstanding <= 0;
+  const handlePay = (checkoutUrl: string) => {
+    // Redirect langsung ke DOKU Hosted Checkout
+    window.location.href = checkoutUrl;
+  };
+
+  const handleRemove = async (orderId: number) => {
+    try {
+      await axios.delete(`https://api.domain-anda.com/api/v1/cart/${orderId}`);
+      fetchCart(cartToken);
+    } catch (err) {
+      alert('Gagal menghapus item dari keranjang.');
+    }
+  };
+
+  if (loading) return <div className="p-4 text-gray-500">Memuat keranjang...</div>;
+
+  if (items.length === 0) {
+    return (
+      <div className="p-6 text-center border rounded-xl bg-gray-50">
+        <p className="text-gray-600">Keranjang pesanan kamar Anda masih kosong.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 max-w-md w-full">
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-            Tagihan Sewa
-          </span>
-          <h3 className="text-lg font-bold text-gray-900">{invoice.reference}</h3>
-          {invoice.unit_name && (
-            <p className="text-sm text-gray-500 mt-0.5">{invoice.unit_name}</p>
-          )}
-        </div>
-        <span
-          className={`px-3 py-1 rounded-full text-xs font-medium ${
-            isPaid
-              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-              : 'bg-amber-50 text-amber-700 border border-amber-200'
-          }`}
-        >
-          {isPaid ? 'Lunas' : 'Belum Lunas'}
+    <div className="p-6 bg-white rounded-2xl shadow border max-w-lg mx-auto">
+      <h2 className="text-xl font-bold text-gray-900 mb-4">Keranjang Booking Kos</h2>
+
+      <div className="space-y-4">
+        {items.map((item) => (
+          <div key={item.id} className="p-4 border rounded-xl bg-gray-50 flex justify-between items-start">
+            <div>
+              <h3 className="font-semibold text-gray-800">{item.unit_name}</h3>
+              <p className="text-sm text-gray-500">{item.property_name}</p>
+              <p className="text-xs text-gray-400 mt-1">Check-in: {item.start_date} ({item.duration_months} Bulan)</p>
+              <p className="text-sm font-bold text-indigo-600 mt-2">
+                Rp {item.amount.toLocaleString('id-ID')}
+              </p>
+            </div>
+            <button
+              onClick={() => handleRemove(item.id)}
+              className="text-xs text-red-500 hover:text-red-700 underline"
+            >
+              Hapus
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 pt-4 border-t flex justify-between items-center">
+        <span className="text-gray-600 font-medium">Total Tagihan:</span>
+        <span className="text-xl font-black text-gray-900">
+          Rp {total.toLocaleString('id-ID')}
         </span>
       </div>
 
-      <div className="border-t border-b border-gray-100 py-3 my-4 space-y-2 text-sm">
-        <div className="flex justify-between text-gray-600">
-          <span>Jatuh Tempo</span>
-          <span className="font-medium text-gray-900">{invoice.due_date}</span>
-        </div>
-        <div className="flex justify-between text-gray-600">
-          <span>Total Tagihan</span>
-          <span className="font-medium text-gray-900">
-            Rp {Number(invoice.total).toLocaleString('id-ID')}
-          </span>
-        </div>
-        <div className="flex justify-between text-base font-bold text-gray-900 pt-1">
-          <span>Sisa Pembayaran</span>
-          <span className="text-indigo-600">
-            Rp {Number(invoice.outstanding).toLocaleString('id-ID')}
-          </span>
-        </div>
-      </div>
-
-      {errorMessage && (
-        <div className="p-3 mb-4 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg">
-          {errorMessage}
-        </div>
-      )}
-
-      {!isPaid ? (
+      {items.length > 0 && items[0].checkout_url && (
         <button
-          onClick={handleOnlinePayment}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => handlePay(items[0].checkout_url)}
+          className="mt-6 w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition shadow-lg flex items-center justify-center gap-2"
         >
-          {loading ? (
-            <>
-              <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                  fill="none"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v8H4z"
-                />
-              </svg>
-              <span>Mempersiapkan Pembayaran...</span>
-            </>
-          ) : (
-            <>
-              <span>Bayar Sekarang (QRIS / VA / E-Wallet)</span>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-              </svg>
-            </>
-          )}
+          Bayar Sekarang dengan DOKU (QRIS/VA)
         </button>
-      ) : (
-        <div className="text-center py-2 text-sm text-emerald-600 font-medium">
-          ✓ Tagihan ini telah selesai dibayar
-        </div>
       )}
     </div>
   );
-};
+}
 ```
 
 ---
 
-### B. Contoh Implementasi HTML & Vanilla JavaScript
+## 5. Ringkasan Tanya Jawab Frontend
 
-Cocok untuk landing page sederhana atau integrasi cepat:
-
-```html
-<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <title>Bayar Tagihan Kos</title>
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-</head>
-<body style="font-family: sans-serif; padding: 40px; background: #f8fafc;">
-
-  <div style="background: white; max-width: 400px; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-    <h2>Tagihan Sewa Kamar</h2>
-    <p>Total: <strong>Rp 1.500.000</strong></p>
-    
-    <button id="pay-button" style="background: #4f46e5; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%;">
-      Bayar via DOKU
-    </button>
-    
-    <p id="status-msg" style="margin-top: 12px; font-size: 14px; color: #dc2626;"></p>
-  </div>
-
-  <script>
-    const API_BASE = 'https://dashboard.highlanderstay.com';
-    const INVOICE_ID = 89; // Disesuaikan dengan id invoice
-    const TOKEN = 'TOKEN_SANCTUM_PENGHUNI';
-
-    document.getElementById('pay-button').addEventListener('click', async () => {
-      const btn = document.getElementById('pay-button');
-      const msg = document.getElementById('status-msg');
-
-      btn.disabled = true;
-      btn.innerText = 'Memuat DOKU Checkout...';
-      msg.innerText = '';
-
-      try {
-        const response = await axios.post(`${API_BASE}/api/v1/tenant/invoices/${INVOICE_ID}/checkout`, {}, {
-          headers: {
-            'Authorization': `Bearer ${TOKEN}`,
-            'Accept': 'application/json'
-          }
-        });
-
-        if (response.data && response.data.checkout_url) {
-          window.location.href = response.data.checkout_url;
-        } else {
-          throw new Error('Gagal mendapatkan URL checkout');
-        }
-      } catch (err) {
-        msg.innerText = err.response?.data?.message || err.message;
-        btn.disabled = false;
-        btn.innerText = 'Bayar via DOKU';
-      }
-    });
-  </script>
-</body>
-</html>
-```
-
----
-
-## 4. Return URL & Verifikasi Status Pembayaran
-
-Ketika penghuni selesai membayar atau menutup halaman DOKU, DOKU akan mengarahkan kembali peramban ke **Callback URL** yang Anda konfigurasikan di `.env`:
-
-```env
-DOKU_CALLBACK_URL=https://website-anda.com/portal/billing
-```
-
-### Rekomendasi Alur di Halaman Return (`/portal/billing`):
-1. Saat komponen halaman dimuat, panggil `GET /api/v1/tenant/invoices/{id}`.
-2. Jika status telah berubah menjadi `paid`:
-   - Tampilkan animasi konfirmasi / modal: *"Terima kasih! Pembayaran Anda sebesar Rp X telah berhasil diverifikasi."*
-3. Jika status masih `pending` (misal transfer VA tertunda atau belum dibayar):
-   - Tampilkan informasi: *"Menunggu Pembayaran. Silakan selesaikan pembayaran sebelum batas waktu berakhir."*
-
----
-
-## 5. Pengujian di Lingkungan Sandbox DOKU
-
-Untuk mencoba pembayaran tanpa uang asli:
-1. Pastikan `DOKU_ENVIRONMENT=sandbox` di backend `.env`.
-2. Klik tombol bayar untuk masuk ke halaman `staging.doku.com`.
-3. Pilih metode pembayaran:
-   - **BCA / Mandiri / BRI Virtual Account**: Salin nomor VA yang muncul di layar.
-   - Gunakan **DOKU Simulator** di portal Jokul Sandbox (`https://sandbox.doku.com`) untuk mensimulasikan pembayaran sukses.
-   - **QRIS**: Scan menggunakan simulator DOKU atau tekan tombol simulasi sukses.
-4. Dalam beberapa detik, webhook OpenKos akan menerima data dari DOKU dan mengubah status invoice menjadi **Paid**.
-
----
-
-## 6. Checklist Keamanan & Produksi
-
-- [x] **Jangan pernah mengekspos `DOKU_SECRET_KEY` di kode frontend**. Signature generation dilakukan 100% di backend OpenKos.
-- [x] **Gunakan protokol HTTPS** untuk domain backend dan website agar webhook DOKU dapat diterima dengan aman.
-- [x] **Pastikan URL Webhook terdaftar di Dashboard DOKU**: `https://api.domain-anda.com/api/webhooks/payment/doku`.
-- [x] **Idempoten**: Jika penghuni mengklik tombol bayar dua kali, OpenKos secara cerdas mengembalikan sesi pembayaran aktif yang belum kadaluarsa (`reused: true`) tanpa menduplikasi tagihan.
+| Pertanyaan | Solusi Frontend |
+| :--- | :--- |
+| **Kapan tenant akun dan lease dibuat?** | Dibuat otomatis oleh webhook setelah user selesai membayar di DOKU. Frontend tidak perlu membuat tenant/lease manual. |
+| **Bagaimana jika browser user di-refresh?** | Simpan `cart_token` di `localStorage`. Panggil `GET /api/v1/cart?cart_token=...` saat halaman dimuat. |
+| **Bagaimana jika link checkout sudah expired?** | Panggil `POST /api/v1/cart/{id}/checkout` untuk mendapatkan URL checkout baru. |
+| **Metode bayar apa saja yang didukung?** | Halaman DOKU Checkout otomatis menampilkan seluruh channel aktif: QRIS (GoPay, OVO, ShopeePay, Dana), BCA/Mandiri/BRI/BNI Virtual Account, dan minimarket. |

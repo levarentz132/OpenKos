@@ -1,339 +1,198 @@
-# Panduan Integrasi Pembayaran DOKU untuk WhatsApp Bot (OpenKos)
+# Panduan Integrasi Pembayaran DOKU & Booking Keranjang untuk WhatsApp Bot (OpenKos)
 
-Dokumentasi ini menjelaskan langkah-langkah teknis untuk mengintegrasikan layanan **DOKU Checkout (Jokul)** ke dalam sistem **WhatsApp Bot** (misalnya bot berbasis Node.js/Baileys, Python, n8n, Fonnte, atau WhatsApp Cloud API).
-
-Dengan integrasi ini, tenant dapat meminta link pembayaran secara instan di WhatsApp, membuka halaman pembayaran resmi DOKU untuk membayar melalui **QRIS, Virtual Account (BCA, Mandiri, BRI, BNI, Permata), E-Wallet (OVO, ShopeePay), atau Minimarket**, dan menerima bukti pembayaran lunas secara otomatis tanpa perlu konfirmasi manual.
+Dokumentasi ini menjelaskan langkah-langkah teknis untuk mengintegrasikan layanan **DOKU Checkout (Jokul)** dan **Sistem Keranjang Pemesanan Kamar (Cart-First Booking)** ke dalam sistem **WhatsApp Bot** (misalnya bot berbasis Node.js/Baileys, Python, n8n, Fonnte, Wwebjs, atau WhatsApp Cloud API).
 
 ---
 
-## 1. Arsitektur & Alur Kerja (Flow)
+## 1. Dua Alur Transaksi Utama pada WhatsApp Bot
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Tenant as Penghuni (WhatsApp)
-    participant Bot as WhatsApp Bot Engine
-    participant API as OpenKos API
-    participant DOKU as DOKU Gateway
-    
-    Tenant->>Bot: "Minta link bayar kos bulan ini"
-    Bot->>API: GET /api/v1/tenant/invoices?status=unpaid
-    API-->>Bot: Return list invoice (ID, Amount, Reference)
-    Bot->>API: POST /api/v1/tenant/invoices/{id}/checkout
-    API->>DOKU: Request Jokul Checkout Session
-    DOKU-->>API: Return payment url
-    API-->>Bot: Return checkout_url
-    Bot->>Tenant: Kirim pesan WA beserta Link Pembayaran
-    
-    Tenant->>DOKU: Buka link & Bayar (QRIS / VA / E-Wallet)
-    DOKU->>API: POST /api/webhooks/payment/doku (Signed HMAC Webhook)
-    API->>API: Verifikasi Signature & Set Invoice: Paid
-    API-->>Tenant: (Opsional) Kirim notifikasi WA "Pembayaran Berhasil"
-```
+1. **Alur Calon Penghuni Baru (Booking Masuk Keranjang -> Bayar -> Otomatis Terbit Sewa)**:
+   - Calon tamu memilih kamar lewat WA.
+   - Bot memanggil endpoint `POST /api/v1/cart` (atau `/api/v1/orders`).
+   - Sistem menyimpan pesanan ke database dengan status `pending` (kamar belum dikunci/belum berstatus occupied, belum ada sewa resmi).
+   - Bot mengirimkan tautan DOKU Checkout ke calon penghuni.
+   - Saat calon penghuni membayar (QRIS / VA / E-Wallet), webhook DOKU otomatis membuat akun tenant, menerbitkan kontrak sewa (`Lease`), mengunci kamar (`Occupied`), dan menerbitkan kwitansi lunas.
+2. **Alur Penghuni Aktif (Bayar Tagihan Bulanan / Invoice Rutin)**:
+   - Penghuni meminta tagihan sewa berjalan.
+   - Bot mengambil tagihan via `GET /api/v1/tenant/invoices?status=unpaid`.
+   - Bot meminta link checkout via `POST /api/v1/tenant/invoices/{id}/checkout` dan mengirimkannya ke penghuni.
 
 ---
 
-## 2. Persiapan & Kredensial
+## 2. Alur 1: Calon Tamu Booking Kamar (Keranjang & Sewa Otomatis)
 
-Pastikan sistem OpenKos telah terkonfigurasi dengan kredensial DOKU Sandbox/Production di `.env`:
-
-```env
-DOKU_CLIENT_ID=BRN-0208-1788852244810
-DOKU_SECRET_KEY=SK-vkKdx1b9ZOLoYiyeMuqz
-DOKU_API_KEY=doku_key_sandbox_11f95366b305485d8e9de31f9399cc8e
-DOKU_ENVIRONMENT=sandbox
-DOKU_CALLBACK_URL=https://dashboard.highlanderstay.com/portal/billing
-```
-
-URL Webhook DOKU yang harus didaftarkan di Jokul Back Office / Merchant Dashboard:
-- **Notification URL**: `https://api.domain-anda.com/api/webhooks/payment/doku`
-
----
-
-## 3. Tahapan Integrasi pada Bot
-
-### Langkah 1: Otentikasi Bot ke OpenKos API
-Bot melakukan request menggunakan **Bearer Token (Sanctum)** milik akun tenant atau akun sistem/admin bot.
-
-> **Tips Identifikasi Nomor HP**:
-> Jika bot menerima pesan dari nomor `628123456789`, bot dapat login atau memvalidasi akun tenant menggunakan endpoint login nomor telepon:
-> `POST /api/v1/auth/login` dengan `{ "login": "08123456789", "password": "..." }` atau menggunakan token Sanctum statis yang telah digenerate untuk Bot Integrator.
-
----
-
-### Langkah 2: Mengambil Tagihan Belum Lunas (`status=unpaid`)
-
+### Langkah 1: Calon Tamu Menanyakan Kamar Tersedia
+Bot memanggil endpoint kamar kosong:
 - **Method**: `GET`
-- **URL**: `https://api.domain-anda.com/api/v1/tenant/invoices?status=unpaid`
-- **Headers**:
-  ```http
-  Authorization: Bearer <tenant_token>
-  Accept: application/json
-  ```
+- **URL**: `https://api.domain-anda.com/api/v1/available-rooms`
 
-#### Contoh Response:
-```json
-{
-  "invoices": {
-    "data": [
-      {
-        "id": 89,
-        "reference": "INV-2026-0089",
-        "property_name": "Highlander Stay Grogol",
-        "unit_name": "Kamar 204",
-        "due_date": "2026-10-01",
-        "status": "pending",
-        "total": 1500000.0,
-        "amount_paid": 0.0,
-        "outstanding": 1500000.0,
-        "is_overdue": false
-      }
-    ]
-  }
-}
+#### Contoh Pesan WhatsApp ke Calon Tamu:
+```text
+Halo Kak Budi! 👋
+Berikut kamar yang sedang tersedia di Highlander Stay:
+
+1. Kamar 101 (Tipe Deluxe) - Rp 1.750.000 / bulan
+2. Kamar 102 (Tipe Superior) - Rp 1.500.000 / bulan
+
+Ketik: BOOKING [Nomor Kamar] [Tanggal Mulai: YYYY-MM-DD]
+Contoh: BOOKING 101 2026-10-01
 ```
 
 ---
 
-### Langkah 3: Membuat Link Checkout DOKU
+### Langkah 2: Bot Menyimpan Booking ke Keranjang (`POST /api/v1/cart`)
+
+Ketika pengguna membalas `BOOKING 101 2026-10-01`:
 
 - **Method**: `POST`
-- **URL**: `https://api.domain-anda.com/api/v1/tenant/invoices/{invoice_id}/checkout`
-- **Headers**:
-  ```http
-  Authorization: Bearer <tenant_token>
-  Accept: application/json
+- **URL**: `https://api.domain-anda.com/api/v1/cart`
+- **Body**:
+  ```json
+  {
+    "unit_id": 5,
+    "name": "Budi Santoso",
+    "phone": "6281299998888",
+    "email": "budi@example.com",
+    "start_date": "2026-10-01",
+    "duration_months": 1,
+    "notes": "Booking via WhatsApp Bot"
+  }
   ```
 
-#### Contoh Response (`200 OK`):
+#### Response dari API OpenKos:
 ```json
 {
-  "message": "Checkout session created successfully.",
-  "checkout_url": "https://staging.doku.com/checkout-link-v2/0c9a8f29-...",
-  "reused": false,
-  "attempt": {
+  "message": "Booking order created and saved in cart. Please complete payment to confirm your lease.",
+  "order": {
     "id": 14,
-    "reference": "25fbbdae-3dbb-4fc6-b816-16010d8a9563",
-    "provider_reference": "25fbbdae-3dbb-4fc6-b816-16010d8a9563",
-    "amount": 1500000,
-    "currency": "IDR",
-    "status": "pending",
-    "expires_at": "2026-09-16T09:45:00+00:00"
+    "reference": "BK-X8K2M9LP1Q",
+    "amount": 1750000.0,
+    "checkout_url": "https://staging.doku.com/checkout-link-v2/9b7f9a12-xxxx-xxxx-xxxx",
+    "expires_at": "2026-09-16T11:45:00+00:00",
+    "lease_created": false
   }
 }
 ```
 
 ---
 
-### Langkah 4: Format Pesan WhatsApp ke Penghuni
+### Langkah 3: Bot Mengirimkan Link Pembayaran ke Calon Tamu
 
-Bot mengirimkan pesan ramah dan informatif ke WhatsApp penghuni:
+Bot merespons pesan WhatsApp calon tamu:
 
 ```text
-Halo Kak *Budi Santoso* 👋
+Pesanan kamar berhasil dicatat di keranjang! 🛒
 
-Berikut adalah rincian tagihan sewa kos Anda:
-🏠 *Properti*: Highlander Stay Grogol
-🚪 *Kamar*: Kamar 204
-📄 *No. Invoice*: INV-2026-0089
-📅 *Jatuh Tempo*: 01 Oktober 2026
-💰 *Total Tagihan*: *Rp 1.500.000*
+Detail Pemesanan:
+• Kamar: 101 (Highlander Stay)
+• Check-in: 01 Oktober 2026
+• Durasi: 1 Bulan
+• Total Biaya: Rp 1.750.000
 
-Silakan klik tautan resmi di bawah ini untuk melakukan pembayaran:
-👉 {{checkout_url}}
+Silakan selesaikan pembayaran melalui tautan resmi DOKU berikut untuk mengaktifkan sewa kamar Anda:
+👉 https://staging.doku.com/checkout-link-v2/9b7f9a12-xxxx-xxxx-xxxx
 
-💳 *Metode Pembayaran yang Didukung*:
-• QRIS (GoPay, OVO, ShopeePay, Dana, BCA Mobile)
-• Virtual Account (BCA, Mandiri, BRI, BNI, Permata)
-• Kartu Kredit / Debit Online
-
-_Catatan: Link pembayaran ini aman dan tagihan Anda akan otomatis lunas dalam hitungan detik setelah pembayaran berhasil._
-
-Ada pertanyaan atau kendala? Balas chat ini untuk terhubung dengan pengelola. Terima kasih! 🙏
+(Bisa bayar via QRIS GoPay/OVO/Dana, BCA VA, Mandiri VA, BRI, atau BNI)
+Link berlaku selama 60 menit.
 ```
 
 ---
 
-## 4. Contoh Kode Implementasi
+### Langkah 4: Pembayaran Berhasil & Notifikasi Otomatis
+1. Tamu membuka link dan membayar via QRIS / VA.
+2. DOKU mengirim webhook callback ke OpenKos backend:
+   ```http
+   POST /api/webhooks/payment/doku
+   ```
+3. OpenKos secara atomik:
+   - Membuat akun User & Tenant.
+   - Menerbitkan kontrak sewa aktif (**Lease**).
+   - Mengubah kamar 101 menjadi **Occupied**.
+   - Menerbitkan Invoice & mencatat pembayaran sukses di tabel `payments`.
+4. Bot (melalui event webhook atau n8n automation) dapat langsung mengirim pesan selamat datang:
 
-### A. Node.js (Axios / Baileys / WPPConnect)
+```text
+Hore! Pembayaran sebesar Rp 1.750.000 telah kami terima. 🎉
 
-```typescript
-import axios from 'axios';
+Sewa Kamar 101 Anda kini telah RESMI AKTIF!
+Kwitansi pembayaran Anda telah diterbitkan.
 
-const OPENKOS_API_BASE = 'https://api.domain-anda.com/api/v1/tenant';
+Selamat bergabung di Highlander Stay! Jika ada pertanyaan atau kebutuhan selama tinggal, Anda dapat chat bot ini kapan saja. 🙏
+```
 
-interface InvoiceCheckoutResult {
-  success: boolean;
-  message?: string;
-  checkoutUrl?: string;
-  amount?: number;
-  invoiceRef?: string;
-}
+---
 
-export async function requestPaymentLink(
-  tenantToken: string,
-  invoiceId?: number
-): Promise<InvoiceCheckoutResult> {
+## 3. Alur 2: Penghuni Lama Bayar Tagihan Rutin
+
+### Langkah 1: Cek Tagihan Belum Lunas
+- **Method**: `GET`
+- **URL**: `https://api.domain-anda.com/api/v1/tenant/invoices?status=unpaid`
+- **Header**: `Authorization: Bearer <tenant_token>`
+
+### Langkah 2: Buat Link Checkout Tagihan
+- **Method**: `POST`
+- **URL**: `https://api.domain-anda.com/api/v1/tenant/invoices/{invoiceId}/checkout`
+- **Header**: `Authorization: Bearer <tenant_token>`
+
+Bot mengirim link checkout tagihan ke penghuni. Setelah dibayar, invoice otomatis berubah status menjadi `Paid` tanpa perlu upload bukti transfer atau verifikasi admin manual.
+
+---
+
+## 4. Contoh Kode Bot WhatsApp (Node.js / Baileys / Wwebjs)
+
+```javascript
+const axios = require('axios');
+
+const API_BASE = 'https://api.domain-anda.com/api/v1';
+
+// Handler saat calon penghuni mengetik pesan booking
+async function handleBookingCommand(sock, senderJid, senderName, unitId, startDate) {
+  const cleanPhone = senderJid.replace('@s.whatsapp.net', '');
+
   try {
-    const client = axios.create({
-      baseURL: OPENKOS_API_BASE,
-      headers: {
-        Authorization: `Bearer ${tenantToken}`,
-        Accept: 'application/json',
-      },
-      timeout: 10000,
+    // 1. Simpan pemesanan ke keranjang API OpenKos
+    const response = await axios.post(`${API_BASE}/cart`, {
+      unit_id: parseInt(unitId, 10),
+      name: senderName || 'Tamu WhatsApp',
+      phone: cleanPhone,
+      start_date: startDate,
+      duration_months: 1,
+      notes: 'Pemesanan melalui WhatsApp Bot',
     });
 
-    let targetInvoiceId = invoiceId;
-    let amount = 0;
-    let invoiceRef = '';
+    const order = response.data.order;
 
-    // 1. Jika invoiceId belum ada, cari tagihan belum lunas
-    if (!targetInvoiceId) {
-      const invoicesRes = await client.get('/invoices', {
-        params: { status: 'unpaid' },
-      });
+    // 2. Format pesan ramah pengguna beserta link checkout DOKU
+    const replyMessage = 
+      `*Pemesanan Berhasil Disimpan di Keranjang!* 🛒\n\n` +
+      `Nomor Referensi: *${order.reference}*\n` +
+      `Kamar: *${order.unit.name}* (${order.property.name})\n` +
+      `Check-in: *${order.period.start_date}*\n` +
+      `Total: *Rp ${order.amount.toLocaleString('id-ID')}*\n\n` +
+      `Silakan selesaikan pembayaran untuk mengunci kamar dan mengaktifkan sewa Anda:\n` +
+      `👉 ${order.checkout_url}\n\n` +
+      `_Tersedia pembayaran via QRIS, BCA VA, Mandiri VA, BNI, BRI, OVO, dan ShopeePay._\n` +
+      `_Kontrak sewa kamar akan terbit otomatis setelah pembayaran berhasil diproses._`;
 
-      const unpaidList = invoicesRes.data?.invoices?.data || [];
-      if (unpaidList.length === 0) {
-        return {
-          success: false,
-          message: 'Tidak ada tagihan sewa yang belum lunas untuk akun Anda.',
-        };
-      }
-
-      const firstInvoice = unpaidList[0];
-      targetInvoiceId = firstInvoice.id;
-      amount = firstInvoice.outstanding || firstInvoice.total;
-      invoiceRef = firstInvoice.reference;
-    }
-
-    // 2. Minta sesi DOKU Checkout ke OpenKos API
-    const checkoutRes = await client.post(`/invoices/${targetInvoiceId}/checkout`);
-
-    const checkoutUrl = checkoutRes.data?.checkout_url;
-    if (!checkoutUrl) {
-      return {
-        success: false,
-        message: 'Gagal membuat link pembayaran DOKU. Silakan hubungi pengelola.',
-      };
-    }
-
-    return {
-      success: true,
-      checkoutUrl,
-      amount: checkoutRes.data?.attempt?.amount || amount,
-      invoiceRef,
-    };
-  } catch (error: any) {
-    const errMessage =
-      error.response?.data?.message || error.message || 'Terjadi kesalahan sistem.';
-    return {
-      success: false,
-      message: errMessage,
-    };
-  }
-}
-
-// Handler pesan masuk di Bot WhatsApp
-export async function handleWhatsAppMessage(senderPhone: string, text: string, tenantToken: string) {
-  const normalized = text.toLowerCase();
-
-  if (
-    normalized.includes('bayar') ||
-    normalized.includes('link bayar') ||
-    normalized.includes('tagihan')
-  ) {
-    const result = await requestPaymentLink(tenantToken);
-
-    if (!result.success) {
-      return result.message;
-    }
-
-    return (
-      `Halo Kak! Rincian tagihan Anda:\n` +
-      `💰 Total: Rp ${result.amount?.toLocaleString('id-ID')}\n\n` +
-      `Silakan selesaikan pembayaran melalui link resmi DOKU berikut:\n` +
-      `🔗 ${result.checkoutUrl}\n\n` +
-      `Mendukung QRIS, BCA/Mandiri/BRI/BNI VA, dan E-Wallet.`
-    );
+    await sock.sendMessage(senderJid, { text: replyMessage });
+  } catch (error) {
+    const errorMsg = error.response?.data?.message || 'Maaf, gagal memproses booking kamar.';
+    await sock.sendMessage(senderJid, { text: `⚠️ ${errorMsg}` });
   }
 }
 ```
 
 ---
 
-### B. Python (FastAPI / Requests / WA Cloud API)
+## 5. Ringkasan Endpoint untuk WhatsApp Bot
 
-```python
-import requests
-from typing import Optional, Dict, Any
-
-OPENKOS_BASE = "https://api.domain-anda.com/api/v1/tenant"
-
-def get_doku_payment_link(tenant_token: str, invoice_id: Optional[int] = None) -> Dict[str, Any]:
-    headers = {
-        "Authorization": f"Bearer {tenant_token}",
-        "Accept": "application/json"
-    }
-    
-    # 1. Cek invoice belum lunas jika ID tidak dispesifikasikan
-    if not invoice_id:
-        resp = requests.get(f"{OPENKOS_BASE}/invoices", params={"status": "unpaid"}, headers=headers, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        invoices = data.get("invoices", {}).get("data", [])
-        if not invoices:
-            return {"success": False, "message": "Semua tagihan Anda sudah lunas."}
-        
-        target = invoices[0]
-        invoice_id = target["id"]
-        amount = target.get("outstanding", target.get("total"))
-    
-    # 2. Panggil endpoint checkout
-    checkout_resp = requests.post(f"{OPENKOS_BASE}/invoices/{invoice_id}/checkout", headers=headers, timeout=15)
-    checkout_resp.raise_for_status()
-    checkout_data = checkout_resp.json()
-    
-    return {
-        "success": True,
-        "checkout_url": checkout_data.get("checkout_url"),
-        "amount": checkout_data.get("attempt", {}).get("amount", 0)
-    }
-```
-
----
-
-## 5. Notifikasi Bukti Pembayaran Lunas (Kwitansi Digital)
-
-Setelah tenant menyelesaikan pembayaran pada link DOKU:
-1. DOKU mengirimkan webhook ke `POST /api/webhooks/payment/doku`.
-2. OpenKos memvalidasi signature HMAC-SHA256 dan menandai invoice sebagai **Paid**.
-3. Bot atau OpenKos WhatsApp Driver dapat mengirimkan konfirmasi instan:
-
-```text
-🎉 *PEMBAYARAN BERHASIL DITERIMA*
-
-Halo Kak *Budi Santoso*,
-Pembayaran sewa kos Anda telah berhasil diverifikasi oleh sistem secara otomatis!
-
-📄 *No. Invoice*: INV-2026-0089
-💵 *Jumlah Dibayar*: Rp 1.500.000
-💳 *Metode*: QRIS / Virtual Account (DOKU)
-⏰ *Waktu*: 16 September 2026, 16:15 WIB
-✅ *Status*: LUNAS (PAID)
-
-Kwitansi resmi dapat Anda unduh kapan saja melalui portal penghuni. Terima kasih atas kerja samanya! 🙏
-```
-
----
-
-## 6. Pertanyaan Umum & Troubleshooting
-
-| Pertanyaan / Masalah | Penyebab | Solusi |
-| :--- | :--- | :--- |
-| **HTTP 404 pada endpoint checkout** | ID Invoice bukan milik tenant atau salah nomor. | Pastikan token tenant sesuai dengan penghuni yang memiliki sewa kamar tersebut. |
-| **HTTP 422 "Invoice is already settled"** | Tagihan sudah berstatus lunas (`paid`). | Tagihan sudah lunas. Bot dapat menginfokan bahwa tidak ada tagihan tertunggak. |
-| **HTTP 503 "Online payment is currently unavailable"** | Kredensial DOKU belum diisi di `.env`. | Isi `DOKU_CLIENT_ID` dan `DOKU_SECRET_KEY` di server `.env`. |
-| **Link pembayaran kadaluarsa** | Masa aktif default link adalah 60 menit. | Bot cukup memanggil kembali `POST /invoices/{id}/checkout` untuk mendapatkan link baru. |
+| Endpoint | Method | Keterangan |
+| :--- | :---: | :--- |
+| `/api/v1/available-rooms` | `GET` | Menampilkan daftar kamar kosong yang dapat dipilih. |
+| `/api/v1/cart` | `POST` | Menyimpan kamar ke keranjang & langsung mengembalikan link DOKU Checkout. |
+| `/api/v1/cart?phone={phone}` | `GET` | Melihat daftar booking pending milik nomor WhatsApp tersebut. |
+| `/api/v1/cart/{id}` | `DELETE` | Membatalkan / menghapus booking dari keranjang. |
+| `/api/v1/cart/{id}/checkout` | `POST` | Menerbitkan ulang link checkout DOKU jika sudah kedaluwarsa. |
+| `/api/v1/tenant/invoices?status=unpaid` | `GET` | Melihat tagihan sewa berjalan bagi penghuni terdaftar. |
+| `/api/v1/tenant/invoices/{id}/checkout` | `POST` | Menerbitkan link DOKU untuk tagihan sewa berjalan. |
+| `/api/webhooks/payment/doku` | `POST` | Webhook otomatis dari DOKU: saat pembayaran sukses, otomatis menerbitkan sewa, tagihan, dan pembayaran lunas. |
