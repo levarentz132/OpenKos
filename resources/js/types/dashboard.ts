@@ -217,3 +217,19 @@ export type AttentionData = {
     leases_ending_soon: number;
     pending_payment_verification: number;
 };
+
+export type DashboardBookingOrder = {
+    id: number;
+    reference: string;
+    guest_name: string;
+    guest_phone: string;
+    guest_email?: string | null;
+    unit_name: string;
+    property_name: string;
+    amount: number;
+    status: string;
+    lease_id?: number | null;
+    invoice_id?: number | null;
+    created_at: string;
+    paid_at?: string | null;
+};

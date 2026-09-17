@@ -1,12 +1,15 @@
 import { Head, Link } from '@inertiajs/react';
 import {
     AlertTriangle,
+    ArrowUpRight,
     Banknote,
     Building2,
     CalendarClock,
+    CheckCircle2,
     ChevronDown,
     Clock,
     FileText,
+    ShoppingCart,
     UserCheck,
     UserPlus,
     Wrench,
@@ -36,6 +39,7 @@ import { formatRupiah } from '@/lib/formatters';
 import { dashboard } from '@/routes';
 import type {
     AttentionData,
+    DashboardBookingOrder,
     Finance,
     MaintenanceProperty,
     MaintenanceUnit,
@@ -47,6 +51,7 @@ import type {
 } from '@/types';
 
 export default function Overview({
+    booking_orders = [],
     attention,
     finance,
     monthly_income,
@@ -56,6 +61,7 @@ export default function Overview({
     properties,
     units,
 }: {
+    booking_orders?: DashboardBookingOrder[];
     attention: AttentionData;
     finance: Finance;
     monthly_income: MonthlyIncomeData;
@@ -204,6 +210,112 @@ export default function Overview({
 
                 {/* 6. Occupancy Rate Review & Portfolio Breakdown */}
                 <OccupancyReviewCard data={occupancy_review} />
+
+                {/* 6.5 Online Booking Cart Orders */}
+                <section className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <ShoppingCart className="h-4 w-4 text-primary" />
+                            <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                                Pesanan Keranjang Online (Cart Orders)
+                            </h2>
+                        </div>
+                        <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                            {booking_orders?.length || 0} pesanan
+                        </span>
+                    </div>
+
+                    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-2xs">
+                        {booking_orders && booking_orders.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs">
+                                    <thead>
+                                        <tr className="border-b border-border/70 bg-muted/30 text-muted-foreground">
+                                            <th className="px-4 py-3 font-medium">Referensi</th>
+                                            <th className="px-4 py-3 font-medium">Pemesan (Tamu)</th>
+                                            <th className="px-4 py-3 font-medium">Kamar & Properti</th>
+                                            <th className="px-4 py-3 font-medium">Nominal</th>
+                                            <th className="px-4 py-3 font-medium">Waktu</th>
+                                            <th className="px-4 py-3 font-medium">Status Cart</th>
+                                            <th className="px-4 py-3 text-right font-medium">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border/40">
+                                        {booking_orders.map((order) => {
+                                            const isPaid = order.status === 'paid';
+                                            const isPending = order.status === 'pending';
+                                            const isConflict = order.status === 'payment_conflict';
+
+                                            return (
+                                                <tr key={order.id} className="transition-colors hover:bg-muted/40">
+                                                    <td className="px-4 py-3 font-mono font-semibold text-foreground">
+                                                        {order.reference}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="font-medium text-foreground">{order.guest_name}</div>
+                                                        <div className="text-[11px] text-muted-foreground">{order.guest_phone}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="font-medium text-foreground">{order.unit_name}</div>
+                                                        <div className="text-[11px] text-muted-foreground">{order.property_name}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 font-semibold text-foreground tabular-nums">
+                                                        {formatRupiah(order.amount)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-muted-foreground tabular-nums">
+                                                        {order.paid_at || order.created_at}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        {isPaid && (
+                                                            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                                                <CheckCircle2 className="h-3 w-3" />
+                                                                Lunas (Paid)
+                                                            </span>
+                                                        )}
+                                                        {isPending && (
+                                                            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                                                                <Clock className="h-3 w-3" />
+                                                                Menunggu Bayar
+                                                            </span>
+                                                        )}
+                                                        {isConflict && (
+                                                            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                                                                <AlertTriangle className="h-3 w-3" />
+                                                                Konflik Pembayaran
+                                                            </span>
+                                                        )}
+                                                        {!isPaid && !isPending && !isConflict && (
+                                                            <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground uppercase">
+                                                                {order.status}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        {order.lease_id ? (
+                                                            <Link
+                                                                href={`/leases/${order.lease_id}`}
+                                                                className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition-colors hover:underline"
+                                                            >
+                                                                Lihat Sewa #{order.lease_id}
+                                                                <ArrowUpRight className="h-3.5 w-3.5" />
+                                                            </Link>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">-</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="py-8 text-center text-xs text-muted-foreground">
+                                Belum ada pesanan booking online melalui keranjang.
+                            </div>
+                        )}
+                    </div>
+                </section>
 
                 {/* 7. Lower Dashboard: Operational Workspace (Two-Column Layout) */}
                 <div className="grid gap-8 lg:grid-cols-12">

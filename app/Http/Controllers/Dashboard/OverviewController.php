@@ -182,7 +182,30 @@ class OverviewController extends Controller
         $monthlyIncome = $finance->computeMonthlyPropertyIncome($accessibleProperties, $startDate, $endDate);
         $occupancyReview = $finance->computeOccupancyReview($properties);
 
+        $recentBookingOrders = \App\Models\BookingOrder::query()
+            ->with(['unit.property'])
+            ->latest('id')
+            ->take(8)
+            ->get()
+            ->map(fn (\App\Models\BookingOrder $order) => [
+                'id' => $order->id,
+                'reference' => $order->reference,
+                'guest_name' => $order->guest_name,
+                'guest_phone' => $order->guest_phone,
+                'guest_email' => $order->guest_email,
+                'unit_name' => $order->unit?->name ?? ('Kamar #' . $order->unit_id),
+                'property_name' => $order->unit?->property?->name ?? 'Properti Kos',
+                'amount' => (float) $order->amount,
+                'status' => $order->status,
+                'lease_id' => $order->lease_id,
+                'invoice_id' => $order->invoice_id,
+                'created_at' => $order->created_at?->diffForHumans() ?? '-',
+                'paid_at' => $order->paid_at?->diffForHumans(),
+            ])
+            ->toArray();
+
         return Inertia::render('dashboard/overview', [
+            'booking_orders' => $recentBookingOrders,
             'attention' => $attention,
             'finance' => $financeResult,
             'monthly_income' => $monthlyIncome,

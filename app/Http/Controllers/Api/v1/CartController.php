@@ -34,9 +34,26 @@ class CartController extends Controller
             ]);
         }
 
+        $status = $request->query('status');
         $query = BookingOrder::query()
-            ->with(['unit.property'])
-            ->pending();
+            ->with(['unit.property']);
+
+        if ($status === 'pending') {
+            $query->pending();
+        } elseif ($status && $status !== 'all') {
+            $query->where('status', $status);
+        } else {
+            // Default: show pending items and recently updated/paid items
+            $query->where(function ($q) {
+                $q->pending()->orWhere(function ($q2) {
+                    $q2->whereIn('status', [
+                        BookingOrder::STATUS_PAID,
+                        BookingOrder::STATUS_PAYMENT_CONFLICT,
+                        BookingOrder::STATUS_CANCELLED,
+                    ])->where('updated_at', '>=', now()->subDays(7));
+                });
+            });
+        }
 
         if ($cartToken) {
             $query->where('cart_token', $cartToken);
@@ -54,7 +71,7 @@ class CartController extends Controller
         }
 
         $items = $query->latest('id')->get();
-        $total = $items->sum('amount');
+        $total = $items->where('status', BookingOrder::STATUS_PENDING)->sum('amount');
 
         return response()->json([
             'cart' => [
@@ -68,7 +85,7 @@ class CartController extends Controller
                         && $occupancy->canAccommodate($unit, 1);
 
                     $conflictMessage = null;
-                    if (! $isAvailable) {
+                    if (! $isAvailable && ! $item->isPaid()) {
                         $conflictMessage = 'Kamar ini sudah terisi atau tidak tersedia lagi karena telah dibayar oleh pengguna lain.';
                     }
 
@@ -85,7 +102,11 @@ class CartController extends Controller
                         'amount' => (float) $item->amount,
                         'currency' => $item->currency,
                         'status' => $item->status,
-                        'is_available' => $isAvailable,
+                        'is_paid' => $item->isPaid(),
+                        'lease_id' => $item->lease_id,
+                        'invoice_id' => $item->invoice_id,
+                        'paid_at' => $item->paid_at?->toIso8601String(),
+                        'is_available' => $item->isPaid() ? true : $isAvailable,
                         'conflict_message' => $conflictMessage,
                         'checkout_url' => $item->doku_checkout_url,
                         'expires_at' => $item->expires_at?->toIso8601String(),
