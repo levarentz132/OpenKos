@@ -10,6 +10,7 @@ use App\Models\Unit;
 use App\Services\Payments\PaymentGatewayManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use OpenKOS\Core\Data\Payment\Money;
 use OpenKOS\Core\Data\Payment\PaymentRequest;
 use Throwable;
@@ -19,12 +20,17 @@ class CartController extends Controller
     /**
      * View current active cart / pending booking orders.
      */
-    public function index(Request $request, OccupancyCalculator $occupancy): JsonResponse
-    {
+    public function index(
+        Request $request,
+        OccupancyCalculator $occupancy,
+        ?PaymentGatewayManager $gatewayManager = null,
+    ): JsonResponse {
+        $gatewayManager = $gatewayManager ?? app(PaymentGatewayManager::class);
         $cartToken = $request->header('X-Cart-Token') ?? $request->query('cart_token');
         $phone = $request->query('phone');
+        $user = $request->user('sanctum') ?? $request->user();
 
-        if (! $cartToken && ! $phone && ! $request->user()) {
+        if (! $cartToken && ! $phone && ! $user) {
             return response()->json([
                 'cart' => [
                     'items' => [],
@@ -40,37 +46,97 @@ class CartController extends Controller
 
         if ($status === 'pending') {
             $query->pending();
-        } elseif ($status && $status !== 'all') {
+        } elseif ($status === 'all') {
+            // Include all statuses without filtering
+        } elseif ($status) {
             $query->where('status', $status);
         } else {
-            // Default: show pending items and recently updated/paid items
+            // Default: show pending items and recently updated/paid items (exclude cancelled)
             $query->where(function ($q) {
                 $q->pending()->orWhere(function ($q2) {
                     $q2->whereIn('status', [
                         BookingOrder::STATUS_PAID,
                         BookingOrder::STATUS_PAYMENT_CONFLICT,
-                        BookingOrder::STATUS_CANCELLED,
                     ])->where('updated_at', '>=', now()->subDays(7));
                 });
             });
         }
 
-        if ($cartToken) {
-            $query->where('cart_token', $cartToken);
-        } elseif ($phone) {
-            $query->where('guest_phone', preg_replace('/[^\d]/', '', $phone));
-        } elseif ($user = $request->user()) {
-            $query->where(function ($q) use ($user) {
-                if ($user->phone) {
-                    $q->where('guest_phone', $user->phone);
+        if ($user) {
+            $userPhone = $user->phone ? preg_replace('/[^\d]/', '', $user->phone) : null;
+            $userEmail = $user->email ?? null;
+            $tenantId = null;
+            if ($user instanceof \App\Models\Tenant) {
+                $tenantId = $user->id;
+            } elseif (isset($user->tenant_id) && $user->tenant_id) {
+                $tenantId = $user->tenant_id;
+            }
+
+            $query->where(function ($q) use ($userPhone, $userEmail, $tenantId, $cartToken) {
+                $hasCondition = false;
+                if ($tenantId) {
+                    $q->where('tenant_id', $tenantId);
+                    $hasCondition = true;
                 }
-                if ($user->email) {
-                    $q->orWhere('guest_email', $user->email);
+                if ($userPhone) {
+                    if ($hasCondition) {
+                        $q->orWhere('guest_phone', $userPhone);
+                    } else {
+                        $q->where('guest_phone', $userPhone);
+                        $hasCondition = true;
+                    }
+                }
+                if ($userEmail) {
+                    if ($hasCondition) {
+                        $q->orWhere('guest_email', $userEmail);
+                    } else {
+                        $q->where('guest_email', $userEmail);
+                        $hasCondition = true;
+                    }
+                }
+                if ($cartToken) {
+                    if ($hasCondition) {
+                        $q->orWhere('cart_token', $cartToken);
+                    } else {
+                        $q->where('cart_token', $cartToken);
+                    }
                 }
             });
+        } elseif ($phone) {
+            $normalizedPhone = preg_replace('/[^\d]/', '', $phone);
+            $query->where('guest_phone', $normalizedPhone);
+        } elseif ($cartToken) {
+            $query->where('cart_token', $cartToken);
         }
 
         $items = $query->latest('id')->get();
+
+        // Auto-reconciliation: Query DOKU API directly for pending items with active reference
+        $doku = $gatewayManager->find('doku');
+        if ($doku) {
+            foreach ($items as $item) {
+                if ($item->status === BookingOrder::STATUS_PENDING && $item->reference) {
+                    try {
+                        $lookupReq = new \OpenKOS\Core\Data\Payment\PaymentStatusLookupRequest(
+                            providerReference: $item->reference,
+                            reference: $item->reference
+                        );
+                        $lookupRes = $doku->lookupPaymentStatus($lookupReq);
+                        if ($lookupRes->status === \OpenKOS\Core\Enums\PaymentStatus::Settled) {
+                            $fulfiller = app(\App\Actions\Bookings\FulfillBookingOrder::class);
+                            $fulfiller->execute(
+                                $item,
+                                providerReference: $item->reference,
+                                occurredAt: $lookupRes->occurredAt ?? now()
+                            );
+                            $item->refresh();
+                        }
+                    } catch (\Throwable $e) {
+                        // Skip if inquiry is unsupported or fails
+                    }
+                }
+            }
+        }
         $total = $items->where('status', BookingOrder::STATUS_PENDING)->sum('amount');
 
         return response()->json([
@@ -157,8 +223,17 @@ class CartController extends Controller
     ): JsonResponse {
         if ($bookingOrder->isPaid()) {
             return response()->json([
-                'message' => 'This booking order has already been paid and leased.',
-            ], 422);
+                'code' => 'ORDER_ALREADY_PAID',
+                'message' => 'Pesanan ini sudah berhasil dibayar dan kontrak sewa #' . ($bookingOrder->lease_id ?? 'Aktif') . ' telah aktif.',
+                'order' => [
+                    'id' => $bookingOrder->id,
+                    'reference' => $bookingOrder->reference,
+                    'status' => $bookingOrder->status,
+                    'is_paid' => true,
+                    'lease_id' => $bookingOrder->lease_id,
+                    'invoice_id' => $bookingOrder->invoice_id,
+                ],
+            ], 200);
         }
 
         if ($bookingOrder->isCancelled()) {
@@ -183,6 +258,20 @@ class CartController extends Controller
             ], 422);
         }
 
+        // If checkout session is still active and valid, reuse it to avoid duplicate DOKU invoices
+        if ($bookingOrder->doku_checkout_url && $bookingOrder->expires_at && $bookingOrder->expires_at->isFuture()) {
+            return response()->json([
+                'message' => 'Menggunakan sesi pembayaran aktif.',
+                'checkout_url' => $bookingOrder->doku_checkout_url,
+                'order' => [
+                    'id' => $bookingOrder->id,
+                    'reference' => $bookingOrder->reference,
+                    'amount' => (float) $bookingOrder->amount,
+                    'status' => $bookingOrder->status,
+                ],
+            ]);
+        }
+
         $doku = $gatewayManager->find('doku');
         if (! $doku) {
             return response()->json([
@@ -190,7 +279,22 @@ class CartController extends Controller
             ], 503);
         }
 
+        $frontendUrl = env('FRONTEND_URL')
+            ?? ($request->header('Origin') ? rtrim((string) $request->header('Origin'), '/') : null)
+            ?? config('services.doku.callback_url')
+            ?? 'http://localhost:5173';
+
+        // Generate a fresh unique reference to prevent DOKU's "INVOICE ALREADY USED" error
+        $newReference = 'BK-' . strtoupper(Str::random(10));
+        $bookingOrder->update([
+            'reference' => $newReference,
+            'doku_checkout_url' => null,
+        ]);
+
         try {
+            $callbackUrl = $request->input('callback_url')
+                ?? (rtrim($frontendUrl, '/') . '/?status=finish&order_id=' . $bookingOrder->id . '&reference=' . $bookingOrder->reference);
+
             $paymentRequest = new PaymentRequest(
                 reference: $bookingOrder->reference,
                 amount: new Money((int) $bookingOrder->amount, 'IDR'),
@@ -200,6 +304,7 @@ class CartController extends Controller
                     'unit_id' => $bookingOrder->unit_id,
                     'guest_name' => $bookingOrder->guest_name,
                     'guest_phone' => $bookingOrder->guest_phone,
+                    'callback_url' => $callbackUrl,
                 ],
             );
 

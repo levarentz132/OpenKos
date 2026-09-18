@@ -119,8 +119,8 @@ class TenantController extends Controller
             ->filters([
                 Filter::select('status', 'Status', ['active', 'inactive', 'archived'])
                     ->query(fn (Builder $q, string $value) => match ($value) {
-                        'active' => $q->where('is_active', true),
-                        'inactive' => $q->where('is_active', false),
+                        'active' => $q->where('tenants.is_active', true)->whereNull('tenants.deleted_at'),
+                        'inactive' => $q->where('tenants.is_active', false)->whereNull('tenants.deleted_at'),
                         'archived' => $q->onlyTrashed(),
                         default => $q,
                     }),
@@ -168,12 +168,15 @@ class TenantController extends Controller
             : null;
 
         $query = Tenant::query()
+            ->withTrashed()
             ->with(['user:id,email,email_verified_at,last_login_at,is_active,invited_at', 'documents', 'leases' => fn ($q) => $q->where('status', 'active')->with(['unit.property', 'tenants:id,name,phone', 'primaryTenant:id,name,phone'])])
             ->withCount(['leases as active_leases_count' => fn ($q) => $q->where('status', 'active')])
-            ->when($assignedPropertyIds !== null, fn (Builder $q) => $q->whereHas(
-                'leases',
-                fn (Builder $q) => $q->whereHas('unit', fn (Builder $q) => $q->whereIn('property_id', $assignedPropertyIds)),
-            ));
+            ->when($assignedPropertyIds !== null, fn (Builder $q) => $q->where(function (Builder $q) use ($assignedPropertyIds) {
+                $q->whereHas(
+                    'leases',
+                    fn (Builder $q) => $q->whereHas('unit', fn (Builder $q) => $q->whereIn('property_id', $assignedPropertyIds)),
+                )->orDoesntHave('leases');
+            }));
 
         $result = $table->paginate($query, $request, 'tenants');
 
@@ -338,34 +341,44 @@ class TenantController extends Controller
         return back();
     }
 
-    public function destroy(Tenant $tenant): RedirectResponse
+    public function destroy(Request $request, Tenant $tenant): RedirectResponse
     {
         $this->authorize('delete', $tenant);
 
-        $deleted = DB::transaction(function () use ($tenant) {
-            // ponytail: locking the tenant row serializes with other tenant-row
-            // locks but not with CreateLease::execute, which locks the unit.
-            // A concurrent lease assignment between the exists() check and
-            // delete() could leave an archived tenant on an active lease.
-            // Fixing this would require CreateLease to also lock tenant rows.
-            $locked = Tenant::lockForUpdate()->findOrFail($tenant->id);
+        $force = $request->boolean('force') || $tenant->trashed();
+
+        $deleted = DB::transaction(function () use ($tenant, $force) {
+            // Locking the tenant row for update
+            $locked = Tenant::withTrashed()->lockForUpdate()->findOrFail($tenant->id);
 
             if ($locked->leases()->where('status', LeaseStatus::Active)->exists()) {
                 return false;
             }
 
-            $locked->delete();
+            if ($force) {
+                if ($locked->user_id) {
+                    $user = $locked->user;
+                    if ($user && ! $user->isOwner() && $user->tenants()->where('id', '!=', $locked->id)->doesntExist()) {
+                        $user->tokens()->delete();
+                        $user->delete();
+                    }
+                }
+                $locked->forceDelete();
+            } else {
+                $locked->delete();
+            }
 
             return true;
         });
 
         if (! $deleted) {
-            Inertia::flash('toast', ['type' => 'error', 'message' => __('Cannot archive a tenant with an active lease.')]);
+            Inertia::flash('toast', ['type' => 'error', 'message' => __('Cannot delete a tenant with an active lease.')]);
 
             return back();
         }
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('Tenant archived.')]);
+        $message = $force ? __('Tenant permanently deleted.') : __('Tenant deleted.');
+        Inertia::flash('toast', ['type' => 'success', 'message' => $message]);
 
         return to_route('tenants.index');
     }

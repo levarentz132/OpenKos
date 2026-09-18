@@ -5,6 +5,7 @@ namespace App\Services\Payments\Gateways;
 use App\Exceptions\PaymentGatewayCreationException;
 use App\Models\Invoice;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use OpenKOS\Core\Contracts\PaymentGateway;
@@ -70,14 +71,15 @@ class DokuPaymentGateway implements PaymentGateway, PaymentGatewayStatusLookup
         $baseUrl = $this->baseUrl();
         $target = '/checkout/v1/payment';
         $requestId = 'REQ-' . uniqid() . '-' . time();
-        $timestamp = gmdate('Y-m-d\TH:i:s\Z');
+        $timestamp = $this->getSynchronizedTimestamp();
 
         $customer = $this->resolveCustomer($request);
 
         $callbackUrl = $request->metadata['callback_url']
             ?? $this->config['callback_url']
             ?? config('services.doku.callback_url')
-            ?? (config('app.url') ? rtrim((string) config('app.url'), '/') . '/portal/billing' : 'https://openkos.local');
+            ?? env('FRONTEND_URL')
+            ?? (config('app.url') ? rtrim((string) config('app.url'), '/') . '/portal/billing' : 'http://localhost:5173');
 
         $payload = [
             'order' => array_filter([
@@ -85,7 +87,6 @@ class DokuPaymentGateway implements PaymentGateway, PaymentGatewayStatusLookup
                 'invoice_number' => $request->reference,
                 'currency' => $request->amount->currency,
                 'callback_url' => $callbackUrl,
-                'auto_redirect' => true,
             ]),
             'payment' => [
                 'payment_due_date' => 60,
@@ -271,7 +272,7 @@ class DokuPaymentGateway implements PaymentGateway, PaymentGatewayStatusLookup
         $invoiceNumber = $request->providerReference ?: $request->reference;
         $target = '/orders/v1/status/' . $invoiceNumber;
         $requestId = 'REQ-' . uniqid() . '-' . time();
-        $timestamp = gmdate('Y-m-d\TH:i:s\Z');
+        $timestamp = $this->getSynchronizedTimestamp();
 
         $component = "Client-Id:{$clientId}\n" .
                      "Request-Id:{$requestId}\n" .
@@ -371,8 +372,8 @@ class DokuPaymentGateway implements PaymentGateway, PaymentGatewayStatusLookup
                 'label' => 'Customer Redirect URL',
                 'type' => 'text',
                 'required' => false,
-                'placeholder' => 'https://your-domain.com/portal/billing',
-                'description' => 'Where to redirect the tenant after completing payment on DOKU Checkout.',
+                'placeholder' => 'http://localhost:5173',
+                'description' => 'URL website frontend tempat pelanggan akan diarahkan kembali setelah menyelesaikan pembayaran di DOKU Checkout (misal: http://localhost:5173 atau https://highlanderstay.com).',
             ],
             'webhook_setup' => [
                 'label' => 'DOKU Notification Webhook URL',
@@ -423,5 +424,39 @@ class DokuPaymentGateway implements PaymentGateway, PaymentGatewayStatusLookup
         }
 
         return null;
+    }
+
+    /**
+     * Get synchronized UTC ISO-8601 timestamp to guarantee compatibility with DOKU's 3600s window
+     * even if the server system clock is drifted.
+     */
+    protected function getSynchronizedTimestamp(): string
+    {
+        $offset = Cache::remember('doku_time_offset_seconds', 900, function () {
+            $endpoints = [
+                'http://www.google.com',
+                'https://api-sandbox.doku.com',
+                'https://www.cloudflare.com',
+            ];
+
+            foreach ($endpoints as $url) {
+                try {
+                    $response = Http::withOptions(['verify' => false])->timeout(3)->head($url);
+                    $dateHeader = $response->header('Date');
+                    if ($dateHeader) {
+                        $remoteTime = strtotime($dateHeader);
+                        if ($remoteTime && $remoteTime > 1600000000) {
+                            return $remoteTime - time();
+                        }
+                    }
+                } catch (Throwable) {
+                    continue;
+                }
+            }
+
+            return 0;
+        });
+
+        return gmdate('Y-m-d\TH:i:s\Z', time() + (int) $offset);
     }
 }

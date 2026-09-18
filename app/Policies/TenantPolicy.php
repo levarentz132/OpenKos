@@ -10,6 +10,10 @@ class TenantPolicy
 {
     public function view(User $user, Tenant $tenant): bool
     {
+        if ($tenant->leases()->doesntExist()) {
+            return true;
+        }
+
         return $tenant->leases()
             ->whereHas('unit.property.users', fn ($q) => $q->whereKey($user->id))
             ->exists();
@@ -22,6 +26,10 @@ class TenantPolicy
 
     public function update(User $user, Tenant $tenant): bool
     {
+        if ($tenant->leases()->doesntExist()) {
+            return true;
+        }
+
         return $tenant->leases()
             ->whereHas('unit.property.users', fn ($q) => $q->whereKey($user->id))
             ->exists();
@@ -29,6 +37,10 @@ class TenantPolicy
 
     public function delete(User $user, Tenant $tenant): bool
     {
+        if ($tenant->leases()->doesntExist()) {
+            return true;
+        }
+
         return $tenant->leases()
             ->whereHas('unit.property.users', fn ($q) => $q->whereKey($user->id))
             ->exists();
@@ -41,6 +53,10 @@ class TenantPolicy
 
     public function invite(User $user, Tenant $tenant): bool
     {
+        if ($tenant->leases()->doesntExist()) {
+            return true;
+        }
+
         return $tenant->leases()
             ->whereHas('unit.property.users', fn ($q) => $q->whereKey($user->id))
             ->exists();

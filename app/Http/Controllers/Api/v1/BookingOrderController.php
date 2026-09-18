@@ -68,11 +68,27 @@ class BookingOrderController extends Controller
 
         $reference = 'BK-' . strtoupper(Str::random(10));
 
+        $user = $request->user('sanctum') ?? $request->user();
+        $tenantId = null;
+        if ($user) {
+            if ($user instanceof \App\Models\Tenant) {
+                $tenantId = $user->id;
+            } elseif (isset($user->tenant_id) && $user->tenant_id) {
+                $tenantId = $user->tenant_id;
+            } elseif (isset($user->id)) {
+                $tenantId = \App\Models\Tenant::where('user_id', $user->id)->orWhere('phone', $phone)->value('id');
+            }
+        }
+        if (! $tenantId) {
+            $tenantId = \App\Models\Tenant::where('phone', $phone)->value('id');
+        }
+
         // Create the pre-lease booking order (Cart Item)
         $bookingOrder = BookingOrder::create([
             'cart_token' => $cartToken,
             'reference' => $reference,
             'unit_id' => $unit->id,
+            'tenant_id' => $tenantId,
             'guest_name' => $validated['name'],
             'guest_phone' => $phone,
             'guest_email' => $validated['email'] ?? null,
@@ -91,6 +107,14 @@ class BookingOrderController extends Controller
         try {
             $doku = $gatewayManager->find('doku');
             if ($doku) {
+                $frontendUrl = env('FRONTEND_URL')
+                    ?? ($request->header('Origin') ? rtrim((string) $request->header('Origin'), '/') : null)
+                    ?? config('services.doku.callback_url')
+                    ?? 'http://localhost:5173';
+
+                $callbackUrl = $request->input('callback_url')
+                    ?? (rtrim($frontendUrl, '/') . '/?status=finish&order_id=' . $bookingOrder->id . '&reference=' . $bookingOrder->reference);
+
                 $paymentRequest = new PaymentRequest(
                     reference: $bookingOrder->reference,
                     amount: new Money((int) $bookingOrder->amount, 'IDR'),
@@ -100,6 +124,7 @@ class BookingOrderController extends Controller
                         'unit_id' => $unit->id,
                         'guest_name' => $bookingOrder->guest_name,
                         'guest_phone' => $bookingOrder->guest_phone,
+                        'callback_url' => $callbackUrl,
                     ],
                 );
 

@@ -49,6 +49,7 @@ export default function TenantDetailSheet({
     onDisableAccess?: () => void;
 }) {
     const [archiveConfirm, setArchiveConfirm] = useState(false);
+    const [deleteConfirm, setDeleteConfirm] = useState(false);
 
     function archive() {
         if (!tenant) {
@@ -67,6 +68,28 @@ export default function TenantDetailSheet({
             onSuccess: () => onOpenChange(false),
         });
         setArchiveConfirm(false);
+    }
+
+    function confirmDelete() {
+        if (!tenant) {
+            return;
+        }
+
+        router.delete(tenants.destroy.url(tenant), {
+            data: isArchived ? { force: true } : undefined,
+            onSuccess: () => onOpenChange(false),
+        });
+        setDeleteConfirm(false);
+    }
+
+    function restore() {
+        if (!tenant) {
+            return;
+        }
+
+        router.post(tenants.restore.url(tenant), {}, {
+            onSuccess: () => onOpenChange(false),
+        });
     }
 
     const activeLease = tenant?.leases?.[0];
@@ -282,70 +305,90 @@ export default function TenantDetailSheet({
                             )}
                         </div>
 
-                        <div className="flex flex-wrap items-center justify-end gap-4">
+                        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
                             <Button
                                 variant="outline"
                                 onClick={() => onOpenChange(false)}
                             >
                                 Close
                             </Button>
-                            {!isArchived && tenant && (
+                            {isArchived ? (
                                 <>
-                                    {!tenant.user_id && onInvite && (
-                                        <Button
-                                            variant="outline"
-                                            onClick={onInvite}
-                                        >
-                                            <MailPlus className="size-4" />
-                                            Invite to App
-                                        </Button>
-                                    )}
-                                    {inviteActionLabel(
-                                        appAccessStatus(tenant.user),
-                                    ) &&
-                                        onResend && (
+                                    <Button variant="outline" onClick={restore}>
+                                        Restore
+                                    </Button>
+                                    <Button
+                                        variant="destructive"
+                                        onClick={() => setDeleteConfirm(true)}
+                                    >
+                                        Delete Permanently
+                                    </Button>
+                                </>
+                            ) : (
+                                tenant && (
+                                    <>
+                                        {!tenant.user_id && onInvite && (
                                             <Button
                                                 variant="outline"
-                                                onClick={onResend}
+                                                onClick={onInvite}
                                             >
-                                                <Send className="size-4" />
-                                                {inviteActionLabel(
-                                                    appAccessStatus(
-                                                        tenant.user,
-                                                    ),
-                                                )}
+                                                <MailPlus className="size-4" />
+                                                Invite to App
                                             </Button>
                                         )}
-                                    {['invited', 'active'].includes(
-                                        appAccessStatus(tenant.user),
-                                    ) &&
-                                        onDisableAccess && (
+                                        {inviteActionLabel(
+                                            appAccessStatus(tenant.user),
+                                        ) &&
+                                            onResend && (
+                                                <Button
+                                                    variant="outline"
+                                                    onClick={onResend}
+                                                >
+                                                    <Send className="size-4" />
+                                                    {inviteActionLabel(
+                                                        appAccessStatus(
+                                                            tenant.user,
+                                                        ),
+                                                    )}
+                                                </Button>
+                                            )}
+                                        {['invited', 'active'].includes(
+                                            appAccessStatus(tenant.user),
+                                        ) &&
+                                            onDisableAccess && (
+                                                <Button
+                                                    variant="outline"
+                                                    onClick={onDisableAccess}
+                                                >
+                                                    <UserX className="size-4" />
+                                                    Disable Access
+                                                </Button>
+                                            )}
+                                        {!activeLease && onAssignToUnit && (
+                                            <Button onClick={onAssignToUnit}>
+                                                Assign to Unit
+                                            </Button>
+                                        )}
+                                        {activeLease && onMoveOut && (
                                             <Button
-                                                variant="outline"
-                                                onClick={onDisableAccess}
+                                                variant="destructive"
+                                                onClick={onMoveOut}
                                             >
-                                                <UserX className="size-4" />
-                                                Disable Access
+                                                Move Out
                                             </Button>
                                         )}
-                                    {!activeLease && onAssignToUnit && (
-                                        <Button onClick={onAssignToUnit}>
-                                            Assign to Unit
+                                        <Button variant="outline" onClick={archive}>
+                                            Archive
                                         </Button>
-                                    )}
-                                    {activeLease && onMoveOut && (
                                         <Button
                                             variant="destructive"
-                                            onClick={onMoveOut}
+                                            onClick={() => setDeleteConfirm(true)}
                                         >
-                                            Move Out
+                                            Delete
                                         </Button>
-                                    )}
-                                    <Button variant="outline" onClick={archive}>
-                                        Archive
-                                    </Button>
-                                    <Button onClick={onEdit}>Edit</Button>
-                                </>
+                                        <Button onClick={onEdit}>Edit</Button>
+                                    </>
+                                )
                             )}
                         </div>
                     </div>
@@ -370,6 +413,32 @@ export default function TenantDetailSheet({
                         </Button>
                         <Button variant="destructive" onClick={confirmArchive}>
                             Archive
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            {isArchived ? 'Permanently delete tenant' : 'Delete tenant'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {isArchived
+                                ? `Are you sure you want to permanently delete ${tenant?.name}? This action cannot be undone.`
+                                : `Are you sure you want to delete ${tenant?.name}?`}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteConfirm(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={confirmDelete}>
+                            {isArchived ? 'Delete Permanently' : 'Delete'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

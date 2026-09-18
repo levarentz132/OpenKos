@@ -140,12 +140,12 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
         Route::post('/', [TenantController::class, 'store'])->name('store')->middleware('permission:tenants.create');
 
         Route::prefix('{tenant}')->whereNumber('tenant')->group(function () {
-            Route::get('/', [TenantController::class, 'show'])->name('show')->middleware('permission:tenants.view');
-            Route::put('/', [TenantController::class, 'update'])->name('update')->middleware('permission:tenants.update');
-            Route::delete('/', [TenantController::class, 'destroy'])->name('destroy')->middleware('permission:tenants.delete');
+            Route::get('/', [TenantController::class, 'show'])->name('show')->withTrashed()->middleware('permission:tenants.view');
+            Route::put('/', [TenantController::class, 'update'])->name('update')->withTrashed()->middleware('permission:tenants.update');
+            Route::delete('/', [TenantController::class, 'destroy'])->name('destroy')->withTrashed()->middleware('permission:tenants.delete');
             Route::post('restore', [TenantController::class, 'restore'])->name('restore')->withTrashed()->middleware('permission:tenants.update');
-            Route::get('leases', [TenantController::class, 'leases'])->name('workspace.leases')->middleware('permission:tenants.view');
-            Route::get('documents', [TenantController::class, 'documents'])->name('workspace.documents')->middleware('permission:tenants.view');
+            Route::get('leases', [TenantController::class, 'leases'])->name('workspace.leases')->withTrashed()->middleware('permission:tenants.view');
+            Route::get('documents', [TenantController::class, 'documents'])->name('workspace.documents')->withTrashed()->middleware('permission:tenants.view');
             Route::post('assign-unit', [TenantController::class, 'assignUnit'])->name('assign-unit')->middleware('permission:tenants.update');
             Route::post('invite', [TenantController::class, 'invite'])->name('invite')->middleware('permission:tenants.invite');
             Route::post('resend-invitation', [TenantController::class, 'resendInvitation'])->name('resend-invitation')->middleware('permission:tenants.invite');

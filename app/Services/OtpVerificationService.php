@@ -39,7 +39,7 @@ class OtpVerificationService
             $channel = 'whatsapp';
         }
 
-        $email = strtolower(trim($data['email']));
+        $email = ! empty($data['email']) ? strtolower(trim($data['email'])) : null;
         $phone = ! empty($data['phone']) ? $this->normalizePhoneNumber($data['phone']) : null;
 
         if ($channel === 'whatsapp' && blank($phone)) {
@@ -48,16 +48,58 @@ class OtpVerificationService
             ]);
         }
 
+        // Strict pre-check: ensure phone/email is completely free before sending OTP
+        if ($phone) {
+            $cleaned = preg_replace('/[^0-9]/', '', $phone);
+            $normalized62 = str_starts_with($cleaned, '0') ? '62' . substr($cleaned, 1) : $cleaned;
+            $normalized08 = str_starts_with($cleaned, '62') ? '0' . substr($cleaned, 2) : $cleaned;
+            $phoneVariants = array_unique(array_filter([
+                $phone,
+                $cleaned,
+                $normalized62,
+                $normalized08,
+                "+{$normalized62}",
+                "+{$cleaned}",
+                $data['phone'] ?? null,
+            ]));
+
+            $existingTenant = Tenant::query()->whereIn('phone', $phoneVariants)->first();
+            $existingUser = User::query()->whereIn('phone', $phoneVariants)->first();
+
+            if ($existingTenant || ($existingUser && $existingUser->hasTenantProfile())) {
+                throw ValidationException::withMessages([
+                    'phone' => ['Nomor WhatsApp ini sudah terdaftar sebagai akun penyewa. Silakan langsung masuk / login.'],
+                ]);
+            }
+
+            if ($existingUser) {
+                throw ValidationException::withMessages([
+                    'phone' => ['Nomor WhatsApp ini sudah digunakan oleh akun lain.'],
+                ]);
+            }
+        }
+
+        if ($email) {
+            $existingTenant = Tenant::query()->where('email', $email)->first();
+            $existingUser = User::query()->where('email', $email)->first();
+
+            if ($existingTenant || ($existingUser && $existingUser->hasTenantProfile())) {
+                throw ValidationException::withMessages([
+                    'email' => ['Email ini sudah terdaftar sebagai akun penyewa. Silakan langsung masuk / login.'],
+                ]);
+            }
+
+            if ($existingUser) {
+                throw ValidationException::withMessages([
+                    'email' => ['Email ini sudah digunakan oleh akun lain.'],
+                ]);
+            }
+        }
+
         $target = $channel === 'whatsapp' ? $phone : $email;
 
-        // Rate limit: Cooldown per target to prevent spamming
-        $targetCooldownKey = "pending_cooldown_target_{$channel}_{$target}";
-        if (Cache::has($targetCooldownKey)) {
-            $secondsRemaining = max(1, Cache::get($targetCooldownKey) - time());
-            throw ValidationException::withMessages([
-                'otp' => ["Please wait {$secondsRemaining} seconds before requesting a new registration code."],
-            ]);
-        }
+        // Rate limit: Cooldown per target and IP limiter to prevent spamming
+        $this->enforceRateLimits($target, $channel);
 
         $token = 'reg_' . Str::random(32);
         $otp = (string) random_int(100000, 999999);
@@ -83,13 +125,18 @@ class OtpVerificationService
 
         // Store for 10 minutes
         Cache::put("pending_reg_{$token}", $payload, now()->addMinutes(10));
-        Cache::put("pending_reg_email_{$email}", $token, now()->addMinutes(10));
-        if ($phone) {
+        if ($email) {
+            Cache::put("pending_reg_email_{$email}", $token, now()->addMinutes(10));
+        }
+        if ($phone && isset($phoneVariants)) {
+            foreach ($phoneVariants as $pv) {
+                Cache::put("pending_reg_phone_{$pv}", $token, now()->addMinutes(10));
+            }
+        } elseif ($phone) {
             Cache::put("pending_reg_phone_{$phone}", $token, now()->addMinutes(10));
         }
 
         Cache::put("pending_cooldown_{$token}", time() + 60, now()->addSeconds(60));
-        Cache::put($targetCooldownKey, time() + 60, now()->addSeconds(60));
 
         // Dispatch OTP code
         $dispatch = $this->dispatchOtpCode($target, $channel, $otp);
@@ -134,10 +181,26 @@ class OtpVerificationService
         // Try lookup by email
         $token = Cache::get("pending_reg_email_" . strtolower($identifier));
 
-        // Try lookup by normalized phone
+        // Try lookup by phone and variants
         if (! $token) {
-            $normalized = $this->normalizePhoneNumber($identifier);
-            $token = Cache::get("pending_reg_phone_{$normalized}") ?? Cache::get("pending_reg_phone_{$identifier}");
+            $cleaned = preg_replace('/[^0-9]/', '', $identifier);
+            $normalized62 = str_starts_with($cleaned, '0') ? '62' . substr($cleaned, 1) : $cleaned;
+            $normalized08 = str_starts_with($cleaned, '62') ? '0' . substr($cleaned, 2) : $cleaned;
+            $variants = array_unique(array_filter([
+                $identifier,
+                $cleaned,
+                $normalized62,
+                $normalized08,
+                "+{$normalized62}",
+                "+{$cleaned}",
+            ]));
+
+            foreach ($variants as $v) {
+                $token = Cache::get("pending_reg_phone_{$v}");
+                if ($token) {
+                    break;
+                }
+            }
         }
 
         if ($token) {
@@ -164,13 +227,11 @@ class OtpVerificationService
 
         $token = $pending['token'];
         $target = $pending['target'];
+        $channelToUse = ($channel && in_array(strtolower($channel), ['whatsapp', 'email'], true))
+            ? strtolower($channel)
+            : $pending['otp_channel'];
 
-        if (Cache::has("pending_cooldown_{$token}")) {
-            $secondsRemaining = max(1, Cache::get("pending_cooldown_{$token}") - time());
-            throw ValidationException::withMessages([
-                'otp' => ["Please wait {$secondsRemaining} seconds before requesting a new code."],
-            ]);
-        }
+        $this->enforceRateLimits($target, $channelToUse);
 
         if ($channel && in_array(strtolower($channel), ['whatsapp', 'email'], true)) {
             $pending['otp_channel'] = strtolower($channel);
@@ -263,16 +324,44 @@ class OtpVerificationService
             $pending['email_verified_at'] = now()->toIso8601String();
         }
 
-        // Concurrency safeguard: ensure email or phone was not created while pending
-        $existing = Tenant::query()
-            ->where('email', $pending['email'])
-            ->when(! empty($pending['phone']), fn ($q) => $q->orWhere('phone', $pending['phone']))
-            ->first();
+        // Concurrency safeguard: ensure non-empty email or phone was not created while pending
+        $cleanEmail = ! empty($pending['email']) ? strtolower(trim($pending['email'])) : null;
+        $cleanPhone = ! empty($pending['phone']) ? $pending['phone'] : null;
+        $existing = null;
+
+        if ($cleanEmail || $cleanPhone) {
+            $phoneVariants = [];
+            if ($cleanPhone) {
+                $cleaned = preg_replace('/[^0-9]/', '', $cleanPhone);
+                $normalized62 = str_starts_with($cleaned, '0') ? '62' . substr($cleaned, 1) : $cleaned;
+                $normalized08 = str_starts_with($cleaned, '62') ? '0' . substr($cleaned, 2) : $cleaned;
+                $phoneVariants = array_unique(array_filter([
+                    $cleanPhone,
+                    $cleaned,
+                    $normalized62,
+                    $normalized08,
+                    "+{$normalized62}",
+                    "+{$cleaned}",
+                ]));
+            }
+
+            $existing = Tenant::query()
+                ->where(function ($q) use ($cleanEmail, $phoneVariants) {
+                    if ($cleanEmail && ! empty($phoneVariants)) {
+                        $q->where('email', $cleanEmail)->orWhereIn('phone', $phoneVariants);
+                    } elseif ($cleanEmail) {
+                        $q->where('email', $cleanEmail);
+                    } elseif (! empty($phoneVariants)) {
+                        $q->whereIn('phone', $phoneVariants);
+                    }
+                })
+                ->first();
+        }
 
         if ($existing) {
             $this->clearPendingRegistration($pending);
             throw ValidationException::withMessages([
-                'email' => ['A tenant account with this email or phone number already exists.'],
+                'email' => ['Akun penyewa dengan nomor WhatsApp atau email ini sudah terdaftar. Silakan login.'],
             ]);
         }
 
@@ -281,11 +370,19 @@ class OtpVerificationService
 
         /** @var Tenant $tenant */
         $tenant = DB::transaction(function () use ($pending, $isPhoneVerified, $isEmailVerified) {
+            $uniqueId = $this->generateUniqueTenantId();
+            $rawName = trim((string) ($pending['name'] ?? ''));
+            if (blank($rawName)) {
+                $rawName = 'Penyewa ' . substr((string) ($pending['phone'] ?? ''), -4);
+            }
+            $savedName = str_contains($rawName, 'HLD-') ? $rawName : "{$rawName} #{$uniqueId}";
+
             return Tenant::create([
-                'name' => $pending['name'],
+                'name' => $savedName,
                 'email' => $pending['email'],
                 'phone' => $pending['phone'],
                 'password' => $pending['password'], // Pre-hashed
+                'id_card_number' => $uniqueId,
                 'email_verified_at' => $isEmailVerified ? now() : null,
                 'phone_verified_at' => $isPhoneVerified ? now() : null,
                 'is_active' => true,
@@ -880,12 +977,20 @@ class OtpVerificationService
         // 3. Create new or convert unverified Tenant in database (phone verified)
         /** @var Tenant $tenant */
         $tenant = DB::transaction(function () use ($data, $email, $normalizedPhone, $existing) {
+            $uniqueId = $this->generateUniqueTenantId();
+            $rawName = trim((string) ($data['name'] ?? ''));
+            if (blank($rawName)) {
+                $rawName = $existing?->name ?: 'Penyewa ' . substr($normalizedPhone, -4);
+            }
+            $savedName = str_contains($rawName, 'HLD-') ? $rawName : "{$rawName} #{$uniqueId}";
+
             if ($existing) {
                 $existing->forceFill([
-                    'name' => trim((string) $data['name']) ?: $existing->name,
+                    'name' => $savedName,
                     'email' => $email,
                     'phone' => $normalizedPhone,
                     'password' => Hash::make($data['password']),
+                    'id_card_number' => $existing->id_card_number ?: $uniqueId,
                     'phone_verified_at' => now(),
                     'is_active' => true,
                 ])->save();
@@ -894,10 +999,11 @@ class OtpVerificationService
             }
 
             return Tenant::create([
-                'name' => trim((string) $data['name']),
+                'name' => $savedName,
                 'email' => $email,
                 'phone' => $normalizedPhone,
                 'password' => Hash::make($data['password']),
+                'id_card_number' => $uniqueId,
                 'phone_verified_at' => now(),
                 'email_verified_at' => null,
                 'is_active' => true,
@@ -1105,14 +1211,8 @@ class OtpVerificationService
             }
         }
 
-        // Rate limit: 60 seconds cooldown per target
-        $cooldownKey = "pw_reset_cooldown_{$channel}_{$target}";
-        if (Cache::has($cooldownKey)) {
-            $secondsRemaining = max(1, Cache::get($cooldownKey) - time());
-            throw ValidationException::withMessages([
-                'otp' => ["Please wait {$secondsRemaining} seconds before requesting a new password reset code."],
-            ]);
-        }
+        // Rate limit: 60 seconds cooldown and hourly quota per target & IP
+        $this->enforceRateLimits($target, $channel);
 
         $resetToken = 'pw_reset_' . Str::random(32);
         $otp = (string) random_int(100000, 999999);
@@ -1224,5 +1324,70 @@ class OtpVerificationService
             'channel' => $session['channel'],
             'target' => $session['target'],
         ];
+    }
+
+    /**
+     * Generate a unique tenant ID format (e.g. HLD-A8K92X).
+     */
+    private function generateUniqueTenantId(): string
+    {
+        do {
+            $uniqueId = 'HLD-' . strtoupper(Str::random(6));
+        } while (Tenant::where('id_card_number', $uniqueId)->exists());
+
+        return $uniqueId;
+    }
+
+    /**
+     * Enforce strict IP & phone rate limits for OTP generation.
+     *
+     * @throws ValidationException
+     */
+    protected function enforceRateLimits(string $target, string $channel, ?string $ip = null): void
+    {
+        $ip = $ip ?: request()->ip();
+
+        // 1. IP Rate Limiter (Max 6 OTP dispatches per minute, max 20 per hour)
+        if ($ip) {
+            $ipMinKey = "otp_limit_ip_min_{$ip}";
+            $ipHourKey = "otp_limit_ip_hour_{$ip}";
+
+            $minCount = (int) Cache::get($ipMinKey, 0);
+            if ($minCount >= 6) {
+                throw ValidationException::withMessages([
+                    'otp' => ['Terlalu banyak permintaan OTP dari jaringan/IP ini. Silakan tunggu 1 menit sebelum mencoba lagi.'],
+                ]);
+            }
+
+            $hourCount = (int) Cache::get($ipHourKey, 0);
+            if ($hourCount >= 20) {
+                throw ValidationException::withMessages([
+                    'otp' => ['Batas permintaan OTP per jam untuk jaringan ini telah tercapai. Silakan coba lagi nanti.'],
+                ]);
+            }
+
+            Cache::put($ipMinKey, $minCount + 1, now()->addMinute());
+            Cache::put($ipHourKey, $hourCount + 1, now()->addHour());
+        }
+
+        // 2. Target Rate Limiter (Max 1 per 60s cooldown, max 5 per hour per phone/email)
+        $targetCooldownKey = "pending_cooldown_target_{$channel}_{$target}";
+        if (Cache::has($targetCooldownKey)) {
+            $secondsRemaining = max(1, Cache::get($targetCooldownKey) - time());
+            throw ValidationException::withMessages([
+                'otp' => ["Harap tunggu {$secondsRemaining} detik sebelum meminta kode OTP baru."],
+            ]);
+        }
+
+        $targetHourKey = "otp_limit_target_hour_{$channel}_{$target}";
+        $targetHourCount = (int) Cache::get($targetHourKey, 0);
+        if ($targetHourCount >= 5) {
+            throw ValidationException::withMessages([
+                'otp' => ['Batas pengiriman OTP per jam untuk nomor/email ini telah tercapai (maks. 5 kali). Silakan coba lagi setelah 1 jam.'],
+            ]);
+        }
+
+        Cache::put($targetCooldownKey, time() + 60, now()->addSeconds(60));
+        Cache::put($targetHourKey, $targetHourCount + 1, now()->addHour());
     }
 }

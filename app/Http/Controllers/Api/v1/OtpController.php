@@ -71,6 +71,12 @@ class OtpController extends Controller
             return response()->json($response);
         }
 
+        if (! empty($validated['registration_token'])) {
+            throw ValidationException::withMessages([
+                'registration_token' => ['Sesi pendaftaran telah kadaluarsa. Silakan lakukan pendaftaran kembali.'],
+            ]);
+        }
+
         // 2. Direct registration form OTP request for WhatsApp (prior to account creation)
         if ($validated['channel'] === 'whatsapp' && ! empty($validated['phone']) && ! $request->user('sanctum') && ! $request->user()) {
             $result = $this->otpService->sendRegistrationPhoneOtp($validated['phone']);
@@ -224,6 +230,13 @@ class OtpController extends Controller
             ], 201);
         }
 
+        // If a registration token was passed but session in cache is missing / expired
+        if (! empty($validated['registration_token'])) {
+            throw ValidationException::withMessages([
+                'code' => ['Sesi verifikasi OTP telah kadaluarsa atau tidak valid. Silakan kirim ulang OTP atau daftar kembali.'],
+            ]);
+        }
+
         // 2. Verify existing user or tenant
         $user = $this->resolveTenantUser($request, $validated);
 
@@ -259,11 +272,11 @@ class OtpController extends Controller
         $user = $request->user('sanctum') ?? $request->user();
 
         if (! $user) {
-            $identifier = $validated['login'] ?? $validated['email'] ?? $validated['phone'] ?? null;
+            $identifier = $validated['login'] ?? $validated['email'] ?? $validated['phone'] ?? $validated['registration_token'] ?? null;
 
             if (blank($identifier)) {
                 throw ValidationException::withMessages([
-                    'login' => ['Please provide your email, phone number, or registration token.'],
+                    'login' => ['Harap masukkan email atau nomor WhatsApp akun Anda.'],
                 ]);
             }
 
@@ -289,14 +302,14 @@ class OtpController extends Controller
 
             if (! $user) {
                 throw ValidationException::withMessages([
-                    'login' => ['No tenant account found matching these details.'],
+                    'login' => ['Akun penyewa tidak ditemukan. Silakan periksa kembali email atau nomor WhatsApp Anda.'],
                 ]);
             }
         }
 
         if ($user instanceof User && ($user->isOwner() || ! $user->hasTenantProfile())) {
             throw ValidationException::withMessages([
-                'login' => ['This OTP verification portal is reserved for tenant accounts only.'],
+                'login' => ['Portal verifikasi OTP ini khusus untuk akun penyewa.'],
             ]);
         }
 

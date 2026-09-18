@@ -40,26 +40,31 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
     // Authentication & Verification
     Route::prefix('auth')->name('auth.')->group(function () {
-        Route::post('register', [AuthController::class, 'register'])->name('register');
-        Route::post('login', [AuthController::class, 'login'])->name('login');
-        Route::post('check-status', [AuthController::class, 'checkStatus'])->name('check-status');
+        // Anti-Bot Security Captcha
+        Route::get('captcha', [AuthController::class, 'captcha'])->name('captcha');
 
-        // Email Verification Link
-        Route::get('verify-email', [AuthController::class, 'verifyEmail'])->name('verify-email');
-        Route::post('email/resend', [AuthController::class, 'resendVerificationEmail'])->name('email.resend');
+        Route::middleware('throttle:10,1')->group(function () {
+            Route::post('register', [AuthController::class, 'register'])->name('register');
+            Route::post('login', [AuthController::class, 'login'])->name('login');
+            Route::post('check-status', [AuthController::class, 'checkStatus'])->name('check-status');
 
-        // Password Reset (Forgot Password) via WhatsApp or Email OTP
-        Route::prefix('password')->name('password.')->group(function () {
-            Route::post('forgot', [AuthController::class, 'forgotPassword'])->name('forgot');
-            Route::post('reset', [AuthController::class, 'resetPassword'])->name('reset');
-        });
-        Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->name('forgot-password');
-        Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('reset-password');
+            // Email Verification Link
+            Route::get('verify-email', [AuthController::class, 'verifyEmail'])->name('verify-email');
+            Route::post('email/resend', [AuthController::class, 'resendVerificationEmail'])->name('email.resend');
 
-        // Dual-Channel OTP (WhatsApp or Email) - Supports Bearer Token OR email/phone
-        Route::prefix('otp')->name('otp.')->group(function () {
-            Route::post('send', [OtpController::class, 'send'])->name('send');
-            Route::post('verify', [OtpController::class, 'verify'])->name('verify');
+            // Password Reset (Forgot Password) via WhatsApp or Email OTP
+            Route::prefix('password')->name('password.')->group(function () {
+                Route::post('forgot', [AuthController::class, 'forgotPassword'])->name('forgot');
+                Route::post('reset', [AuthController::class, 'resetPassword'])->name('reset');
+            });
+            Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->name('forgot-password');
+            Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('reset-password');
+
+            // Dual-Channel OTP (WhatsApp or Email) - Supports Bearer Token OR email/phone
+            Route::prefix('otp')->name('otp.')->group(function () {
+                Route::post('send', [OtpController::class, 'send'])->name('send');
+                Route::post('verify', [OtpController::class, 'verify'])->name('verify');
+            });
         });
 
         Route::middleware('auth:sanctum')->group(function () {

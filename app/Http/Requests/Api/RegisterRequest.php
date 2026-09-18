@@ -37,12 +37,20 @@ class RegisterRequest extends FormRequest
             $email = ! empty($email) ? strtolower($email) : null;
             $phone = (string) $this->input('phone');
             $cleaned = preg_replace('/[^0-9]/', '', $phone);
-            if (str_starts_with($cleaned, '0')) {
-                $cleaned = '62' . substr($cleaned, 1);
-            }
+            $normalized62 = str_starts_with($cleaned, '0') ? '62' . substr($cleaned, 1) : $cleaned;
+            $normalized08 = str_starts_with($cleaned, '62') ? '0' . substr($cleaned, 2) : $cleaned;
 
-            $existingTenantPhone = \App\Models\Tenant::where('phone', $phone)->orWhere('phone', $cleaned)->first();
-            $existingPhoneUser = \App\Models\User::where('phone', $phone)->orWhere('phone', $cleaned)->first();
+            $phoneVariants = array_unique(array_filter([
+                $phone,
+                $cleaned,
+                $normalized62,
+                $normalized08,
+                "+{$normalized62}",
+                "+{$cleaned}",
+            ]));
+
+            $existingTenantPhone = \App\Models\Tenant::whereIn('phone', $phoneVariants)->first();
+            $existingPhoneUser = \App\Models\User::whereIn('phone', $phoneVariants)->first();
 
             if (! empty($email)) {
                 $existingTenantEmail = \App\Models\Tenant::where('email', $email)->first();
@@ -52,17 +60,17 @@ class RegisterRequest extends FormRequest
                 if ($existingUser && $existingUser->isOwner()) {
                     $validator->errors()->add(
                         'email',
-                        'This email belongs to an administrator account. Tenant accounts must use a separate email address.'
+                        'Email ini milik akun administrator. Silakan gunakan email lain.'
                     );
-                } elseif ($existingTenantEmail && $existingTenantEmail->hasVerifiedPhone() && (! $existingTenantPhone || $existingTenantPhone->id !== $existingTenantEmail->id)) {
+                } elseif ($existingTenantEmail || ($existingUser && $existingUser->hasTenantProfile())) {
                     $validator->errors()->add(
                         'email',
-                        'A tenant account with this email already exists and is verified. Please log in directly.'
+                        'Email ini sudah terdaftar sebagai akun penyewa. Silakan langsung masuk / login.'
                     );
-                } elseif ($existingUser && ! $existingUser->hasTenantProfile()) {
+                } elseif ($existingUser) {
                     $validator->errors()->add(
                         'email',
-                        'The email has already been taken.'
+                        'Email ini sudah digunakan oleh akun lain.'
                     );
                 }
             }
@@ -70,17 +78,17 @@ class RegisterRequest extends FormRequest
             if ($existingPhoneUser && $existingPhoneUser->isOwner()) {
                 $validator->errors()->add(
                     'phone',
-                    'This phone number belongs to an administrator account. Tenant accounts must use a separate phone number.'
+                    'Nomor WhatsApp ini milik akun administrator. Silakan gunakan nomor lain.'
                 );
-            } elseif ($existingTenantPhone && $existingTenantPhone->hasVerifiedPhone()) {
+            } elseif ($existingTenantPhone || ($existingPhoneUser && $existingPhoneUser->hasTenantProfile())) {
                 $validator->errors()->add(
                     'phone',
-                    'A tenant account with this phone number already exists and is verified. Please log in directly.'
+                    'Nomor WhatsApp ini sudah terdaftar sebagai akun penyewa. Silakan langsung masuk / login.'
                 );
-            } elseif ($existingPhoneUser && ! $existingPhoneUser->hasTenantProfile()) {
+            } elseif ($existingPhoneUser) {
                 $validator->errors()->add(
                     'phone',
-                    'The phone number has already been taken.'
+                    'Nomor WhatsApp ini sudah digunakan oleh akun lain.'
                 );
             }
         });

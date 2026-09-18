@@ -1,5 +1,6 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import {
+    Archive,
     DoorOpen,
     EllipsisVertical,
     ExternalLink,
@@ -103,6 +104,9 @@ export default function Index({
     const [archiveConfirm, setArchiveConfirm] =
         useState<WorkspaceTenant | null>(null);
 
+    const [deleteConfirm, setDeleteConfirm] =
+        useState<{ tenant: WorkspaceTenant; force: boolean } | null>(null);
+
     const [disableConfirm, setDisableConfirm] =
         useState<WorkspaceTenant | null>(null);
 
@@ -190,6 +194,21 @@ export default function Index({
 
         router.delete(tenants.destroy.url(archiveConfirm));
         setArchiveConfirm(null);
+    }
+
+    function deleteTenant(tenant: WorkspaceTenant, force = false) {
+        setDeleteConfirm({ tenant, force });
+    }
+
+    function confirmDelete() {
+        if (!deleteConfirm) {
+            return;
+        }
+
+        router.delete(tenants.destroy.url(deleteConfirm.tenant), {
+            data: deleteConfirm.force ? { force: true } : undefined,
+            onFinish: () => setDeleteConfirm(null),
+        });
     }
 
     function restore(tenant: WorkspaceTenant) {
@@ -369,18 +388,37 @@ export default function Index({
                         <DropdownMenuSeparator />
 
                         {t.deleted_at ? (
-                            <DropdownMenuItem onClick={() => restore(t)}>
-                                <RotateCcw className="size-4" />
-                                Restore
-                            </DropdownMenuItem>
+                            <>
+                                <DropdownMenuItem onClick={() => restore(t)}>
+                                    <RotateCcw className="size-4" />
+                                    Restore
+                                </DropdownMenuItem>
+                                {permissions.includes('tenants.delete') && (
+                                    <DropdownMenuItem
+                                        variant="destructive"
+                                        onClick={() => deleteTenant(t, true)}
+                                    >
+                                        <Trash2 className="size-4" />
+                                        Delete Permanently
+                                    </DropdownMenuItem>
+                                )}
+                            </>
                         ) : (
-                            <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => archive(t)}
-                            >
-                                <Trash2 className="size-4" />
-                                Archive
-                            </DropdownMenuItem>
+                            <>
+                                <DropdownMenuItem onClick={() => archive(t)}>
+                                    <Archive className="size-4" />
+                                    Archive
+                                </DropdownMenuItem>
+                                {permissions.includes('tenants.delete') && (
+                                    <DropdownMenuItem
+                                        variant="destructive"
+                                        onClick={() => deleteTenant(t, false)}
+                                    >
+                                        <Trash2 className="size-4" />
+                                        Delete
+                                    </DropdownMenuItem>
+                                )}
+                            </>
                         )}
                     </DropdownMenuContent>
                 </DropdownMenu>
@@ -591,6 +629,39 @@ export default function Index({
                         </Button>
                         <Button variant="destructive" onClick={confirmDisable}>
                             Disable Access
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={deleteConfirm !== null}
+                onOpenChange={() => setDeleteConfirm(null)}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            {deleteConfirm?.force
+                                ? 'Permanently delete tenant'
+                                : 'Delete tenant'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {deleteConfirm?.force
+                                ? `Are you sure you want to permanently delete ${deleteConfirm?.tenant?.name}? This action cannot be undone.`
+                                : `Are you sure you want to delete ${deleteConfirm?.tenant?.name}?`}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteConfirm(null)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={confirmDelete}>
+                            {deleteConfirm?.force
+                                ? 'Delete Permanently'
+                                : 'Delete'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

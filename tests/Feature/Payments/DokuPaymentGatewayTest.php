@@ -80,12 +80,12 @@ test('doku gateway creates checkout session with valid hmac signature', function
         ->and($result->amount->minorUnits)->toBe(150000);
 
     Http::assertSent(function ($req) {
-        $headers = $req->headers();
+        $headers = array_change_key_case($req->headers(), CASE_LOWER);
 
-        return $headers['Client-Id'][0] === 'BRN-TEST'
-            && isset($headers['Request-Id'][0])
-            && isset($headers['Request-Timestamp'][0])
-            && str_starts_with($headers['Signature'][0], 'HMACSHA256=')
+        return ($headers['client-id'][0] ?? null) === 'BRN-TEST'
+            && isset($headers['request-id'][0])
+            && isset($headers['request-timestamp'][0])
+            && str_starts_with($headers['signature'][0] ?? '', 'HMACSHA256=')
             && $req['order']['amount'] === 150000
             && $req['order']['invoice_number'] === 'INV-TEST-001';
     });

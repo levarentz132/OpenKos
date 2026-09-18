@@ -39,7 +39,7 @@ class CreateLease
                 $existingTenantIds = $existingLease->tenants()->pluck('tenants.id');
                 $newTenantIds = array_diff($tenantIds, $existingTenantIds->all());
 
-                $this->ensureTenantsDoNotHaveActiveLease($newTenantIds);
+                $this->ensureTenantsDoNotHaveActiveLease($newTenantIds, $unit);
 
                 abort_if(! $this->occupancy->canAccommodate($unit, count($newTenantIds)), 422, __('Unit capacity exceeded. Unit can only hold :capacity occupants.', ['capacity' => $unit->capacity]));
 
@@ -54,7 +54,7 @@ class CreateLease
 
             abort_if(! $this->occupancy->canAccommodate($unit, count($tenantIds)), 422, __('Unit capacity exceeded. Unit can only hold :capacity occupants.', ['capacity' => $unit->capacity]));
 
-            $this->ensureTenantsDoNotHaveActiveLease($tenantIds);
+            $this->ensureTenantsDoNotHaveActiveLease($tenantIds, $unit);
 
             $unitRate = $data->unitRateId ? UnitRate::find($data->unitRateId) : null;
             $rentAmount = $data->rentAmount ?? $unitRate?->amount ?? $unit->rates()->where('billing_unit', 'month')->where('billing_interval', 1)->value('amount');
@@ -96,15 +96,16 @@ class CreateLease
     /**
      * @param  array<int, int>  $tenantIds
      */
-    private function ensureTenantsDoNotHaveActiveLease(array $tenantIds): void
+    private function ensureTenantsDoNotHaveActiveLease(array $tenantIds, Unit $unit): void
     {
         abort_if(
             $tenantIds !== [] && Lease::query()
+                ->where('unit_id', $unit->id)
                 ->where('status', LeaseStatus::Active->value)
                 ->whereHas('tenants', fn ($query) => $query->whereIn('tenants.id', $tenantIds))
                 ->exists(),
             422,
-            __('A tenant already has an active lease.'),
+            __('A tenant already has an active lease on this unit.'),
         );
     }
 }

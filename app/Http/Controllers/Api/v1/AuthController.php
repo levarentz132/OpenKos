@@ -10,6 +10,7 @@ use App\Http\Requests\Api\RegisterRequest;
 use App\Http\Requests\Api\ResetPasswordRequest;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\CaptchaService;
 use App\Services\OtpVerificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,16 @@ class AuthController extends Controller
 
     public function __construct(
         protected OtpVerificationService $otpService,
+        protected CaptchaService $captchaService,
     ) {}
+
+    /**
+     * Generate an anti-bot security challenge (Captcha).
+     */
+    public function captcha(): JsonResponse
+    {
+        return response()->json($this->captchaService->generate());
+    }
 
     /**
      * Staged registration via API.
@@ -52,6 +62,12 @@ class AuthController extends Controller
 
             return response()->json($response, 201);
         }
+
+        // Validate Captcha for initial pre-OTP registration request
+        $this->captchaService->validate(
+            $request->input('captcha_key'),
+            $request->input('captcha_answer')
+        );
 
         // 2. Staged Pending Registration (Pre-OTP generation)
         $otpChannel = $validated['otp_channel'] ?? (! empty($validated['phone']) ? 'whatsapp' : 'email');
@@ -125,28 +141,44 @@ class AuthController extends Controller
     public function login(LoginRequest $request): JsonResponse
     {
         $validated = $request->validated();
-        $login = trim($validated['login']);
-        $normalizedPhone = $this->otpService->normalizePhoneNumber($login);
+        $login = trim((string) $validated['login']);
+        $cleaned = preg_replace('/[^0-9]/', '', $login);
+        $normalized62 = str_starts_with($cleaned, '0') ? '62' . substr($cleaned, 1) : $cleaned;
+        $normalized08 = str_starts_with($cleaned, '62') ? '0' . substr($cleaned, 2) : $cleaned;
+        $phoneVariants = array_unique(array_filter([
+            $login,
+            $cleaned,
+            $normalized62,
+            $normalized08,
+            "+{$normalized62}",
+            "+{$cleaned}",
+        ]));
 
         // 1. First check tenants table directly
         /** @var Tenant|null $tenant */
         $tenant = Tenant::query()
-            ->where('email', strtolower($login))
-            ->orWhere('phone', $login)
-            ->orWhere('phone', $normalizedPhone)
+            ->where(function ($q) use ($login, $phoneVariants) {
+                $q->whereIn('phone', $phoneVariants);
+                if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+                    $q->orWhere('email', strtolower($login));
+                }
+            })
             ->first();
 
         // 2. Fallback check on users table for legacy tenant records
         if (! $tenant) {
             $user = User::query()
-                ->where('email', strtolower($login))
-                ->orWhere('phone', $login)
-                ->orWhere('phone', $normalizedPhone)
+                ->where(function ($q) use ($login, $phoneVariants) {
+                    $q->whereIn('phone', $phoneVariants);
+                    if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+                        $q->orWhere('email', strtolower($login));
+                    }
+                })
                 ->first();
 
             if ($user && $user->isOwner()) {
                 throw ValidationException::withMessages([
-                    'login' => ['This login portal is reserved for tenants only. Administrator accounts must log in via the web dashboard.'],
+                    'login' => ['Portal login ini khusus untuk akun penyewa.'],
                 ]);
             }
 
