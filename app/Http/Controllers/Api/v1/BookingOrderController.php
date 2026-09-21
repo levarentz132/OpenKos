@@ -60,7 +60,7 @@ class BookingOrderController extends Controller
             ?? $unit->activeRates()->first()?->amount
             ?? 0;
 
-        $depositAmount = (float) ($unit->property?->deposit_amount ?? 500000);
+        $depositAmount = (float) (($unit->property?->deposit_amount && $unit->property->deposit_amount > 0) ? $unit->property->deposit_amount : 500000);
         $rentAmount = (float) $monthlyRent;
         $amount = (float) ($rentAmount + $depositAmount);
 
