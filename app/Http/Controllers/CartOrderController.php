@@ -28,9 +28,9 @@ class CartOrderController extends Controller
         $baseQuery = BookingOrder::query()
             ->with([
                 'unit.property:id,name,slug',
-                'tenant:id,first_name,last_name,email,phone',
-                'lease:id,lease_number,status,start_date,end_date',
-                'invoice:id,invoice_number,status,total_amount',
+                'tenant:id,name,email,phone',
+                'lease:id,reference,status,start_date,end_date',
+                'invoice:id,reference,status,total',
             ]);
 
         if ($search) {
@@ -89,7 +89,7 @@ class CartOrderController extends Controller
                 $q->select('id', 'property_id', 'name', 'status', 'capacity')
                     ->with(['activeRates:id,unit_id,amount,billing_unit,billing_interval']);
             }])
-            ->select('id', 'name', 'type')
+            ->select('id', 'name', 'slug')
             ->orderBy('name')
             ->get();
 
