@@ -1,5 +1,5 @@
 import { useForm } from '@inertiajs/react';
-import { Info } from 'lucide-react';
+import { Info, CheckCircle2, AlertCircle, ShieldCheck, Copy, Check, ExternalLink, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import { update as updatePaymentGateway } from '@/routes/settings/payment-gatewa
 import type {
     PaymentGateway,
     PaymentGatewayField,
+    PaymentGatewayHealth,
     PaymentGatewaySettingsProps,
 } from '@/types/settings';
 
@@ -35,6 +36,7 @@ export default function PaymentGateway({
     active_key: activeKey,
     active_status: activeStatus,
     active_payment_attempt_count: activePaymentAttemptCount,
+    gateway_health: gatewayHealth,
 }: PaymentGatewaySettingsProps) {
     const hasActivePaymentAttempts = activePaymentAttemptCount > 0;
     const initialKey = gateways.some((gateway) => gateway.key === activeKey)
@@ -102,10 +104,14 @@ export default function PaymentGateway({
             <div>
                 <h2 className="text-lg font-medium">Payment Gateway</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Configure the payment gateway used for online invoice
-                    payments.
+                    Configure the payment gateway used for online invoice payments and customer bookings.
                 </p>
             </div>
+
+            {/* Gateway Health & Live Status Banner */}
+            {gatewayHealth && (
+                <PaymentGatewayHealthCard health={gatewayHealth} />
+            )}
 
             {activeStatus === 'unavailable' && (
                 <Alert variant="destructive">
@@ -486,10 +492,137 @@ function GatewayField({
     );
 }
 
+function PaymentGatewayHealthCard({ health }: { health: PaymentGatewayHealth }) {
+    const [copied, setCopied] = useState(false);
+
+    function copyWebhook() {
+        navigator.clipboard.writeText(health.webhook_url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+    }
+
+    const isProduction = health.environment === 'production';
+
+    return (
+        <Card className={`border shadow-sm ${
+            health.is_configured 
+                ? isProduction
+                    ? 'border-purple-500/30 bg-gradient-to-r from-purple-50/40 via-indigo-50/30 to-purple-50/40 dark:from-purple-950/20 dark:via-indigo-950/10 dark:to-purple-950/20'
+                    : 'border-emerald-500/30 bg-gradient-to-r from-emerald-50/40 via-teal-50/30 to-emerald-50/40 dark:from-emerald-950/20 dark:via-teal-950/10 dark:to-emerald-950/20'
+                : 'border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/20'
+        }`}>
+            <CardHeader className="pb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                        <div className={`p-2 rounded-lg ${
+                            health.is_configured
+                                ? isProduction
+                                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300'
+                                    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300'
+                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300'
+                        }`}>
+                            <ShieldCheck className="size-5" />
+                        </div>
+                        <div>
+                            <CardTitle className="text-base font-semibold flex items-center gap-2">
+                                <span>Status Gateway Pembayaran</span>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold">
+                                    <span className={`size-2 rounded-full animate-pulse ${
+                                        health.is_configured ? (isProduction ? 'bg-purple-500' : 'bg-emerald-500') : 'bg-amber-500'
+                                    }`} />
+                                    {health.is_configured 
+                                        ? (isProduction ? 'AKTIF (LIVE PRODUCTION)' : 'AKTIF (SANDBOX SIMULATION)') 
+                                        : 'BELUM TERKONFIGURASI'
+                                    }
+                                </span>
+                            </CardTitle>
+                            <CardDescription className="text-xs mt-0.5">
+                                {health.is_configured
+                                    ? isProduction
+                                        ? 'Gateway terhubung ke DOKU Live Production. Tamu dapat melakukan pembayaran riil.'
+                                        : 'Gateway terhubung ke DOKU Sandbox mode. Pembayaran dalam mode simulasi.'
+                                    : 'Kredensial DOKU (Client ID & Secret Key) belum lengkap di file .env server.'
+                                }
+                            </CardDescription>
+                        </div>
+                    </div>
+                    <span className={`text-xs font-mono font-bold px-3 py-1 rounded-md uppercase tracking-wider ${
+                        isProduction
+                            ? 'bg-purple-600 text-white shadow-sm'
+                            : 'bg-emerald-600 text-white shadow-sm'
+                    }`}>
+                        {health.environment}
+                    </span>
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                    <div className="p-2.5 bg-white/80 dark:bg-zinc-900/80 rounded-lg border border-zinc-200/80 dark:border-zinc-800">
+                        <span className="text-muted-foreground block text-[11px] mb-1">API Endpoint:</span>
+                        <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100 block truncate" title={health.endpoint}>
+                            {health.endpoint}
+                        </span>
+                    </div>
+                    <div className="p-2.5 bg-white/80 dark:bg-zinc-900/80 rounded-lg border border-zinc-200/80 dark:border-zinc-800">
+                        <span className="text-muted-foreground block text-[11px] mb-1">Client ID:</span>
+                        <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100 block truncate">
+                            {health.client_id_masked || '(Belum diset)'}
+                        </span>
+                    </div>
+                    <div className="p-2.5 bg-white/80 dark:bg-zinc-900/80 rounded-lg border border-zinc-200/80 dark:border-zinc-800">
+                        <span className="text-muted-foreground block text-[11px] mb-1">Secret Key Status:</span>
+                        <span className={`font-semibold inline-flex items-center gap-1 ${
+                            health.secret_key_set ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
+                        }`}>
+                            {health.secret_key_set ? <CheckCircle2 className="size-3.5" /> : <AlertCircle className="size-3.5" />}
+                            {health.secret_key_set ? 'Terkonfigurasi' : 'Belum Terisi'}
+                        </span>
+                    </div>
+                    <div className="p-2.5 bg-white/80 dark:bg-zinc-900/80 rounded-lg border border-zinc-200/80 dark:border-zinc-800">
+                        <span className="text-muted-foreground block text-[11px] mb-1">Callback URL:</span>
+                        <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100 block truncate" title={health.callback_url}>
+                            {health.callback_url}
+                        </span>
+                    </div>
+                </div>
+
+                {/* Webhook notification URL box with copy */}
+                <div className="p-2.5 bg-white/90 dark:bg-zinc-900/90 rounded-lg border border-zinc-200/80 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-medium text-zinc-700 dark:text-zinc-300 shrink-0">DOKU Webhook / Notification URL:</span>
+                        <code className="font-mono text-xs bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded text-zinc-800 dark:text-zinc-200 truncate">
+                            {health.webhook_url}
+                        </code>
+                    </div>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={copyWebhook}
+                        className="h-7 text-xs gap-1.5 shrink-0"
+                    >
+                        {copied ? (
+                            <>
+                                <Check className="size-3 text-emerald-600" />
+                                <span className="text-emerald-600 font-medium">Tersalin!</span>
+                            </>
+                        ) : (
+                            <>
+                                <Copy className="size-3" />
+                                <span>Salin URL Webhook</span>
+                            </>
+                        )}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
 function SandboxTrialCard({ gateway }: { gateway: PaymentGateway }) {
     const [amount, setAmount] = useState('10000');
     const [loadingTrial, setLoadingTrial] = useState(false);
-    const [trialData, setTrialData] = useState<{ checkout_url: string; reference: string; amount: number } | null>(null);
+    const [trialData, setTrialData] = useState<{ checkout_url: string; reference: string; amount: number; environment?: string } | null>(null);
     const [trialError, setTrialError] = useState<string | null>(null);
 
     const [loadingSim, setLoadingSim] = useState(false);
@@ -511,10 +644,10 @@ function SandboxTrialCard({ gateway }: { gateway: PaymentGateway }) {
             if (result.success && result.checkout_url) {
                 setTrialData(result);
             } else {
-                setTrialError(result.message || 'Failed to create trial checkout session.');
+                setTrialError(result.message || 'Gagal membuat sesi checkout test.');
             }
         } catch (e: any) {
-            setTrialError(e.message || 'Network error');
+            setTrialError(e.message || 'Terjadi kesalahan jaringan.');
         } finally {
             setLoadingTrial(false);
         }
@@ -538,33 +671,36 @@ function SandboxTrialCard({ gateway }: { gateway: PaymentGateway }) {
             if (result.success) {
                 setSimMessage(result.message);
             } else {
-                setSimMessage('Simulation failed: ' + result.message);
+                setSimMessage('Simulasi gagal: ' + result.message);
             }
         } catch (e: any) {
-            setSimMessage('Network error: ' + e.message);
+            setSimMessage('Kesalahan jaringan: ' + e.message);
         } finally {
             setLoadingSim(false);
         }
     }
 
+    const isProd = trialData?.environment === 'production';
+
     return (
-        <Card className="border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/20">
+        <Card className="border-indigo-500/30 bg-indigo-50/20 dark:bg-indigo-950/20 shadow-sm">
             <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                    <CardTitle className="text-base font-semibold text-emerald-900 dark:text-emerald-300 flex items-center gap-2">
-                        <span>⚡ DOKU Sandbox Trial & Testing</span>
+                    <CardTitle className="text-base font-semibold text-indigo-950 dark:text-indigo-200 flex items-center gap-2">
+                        <Zap className="size-4 text-indigo-600 dark:text-indigo-400" />
+                        <span>Pengujian Checkout DOKU</span>
                     </CardTitle>
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
-                        SANDBOX
+                    <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300">
+                        LIVE TEST
                     </span>
                 </div>
                 <CardDescription className="text-xs">
-                    Test live checkout URL creation on DOKU Sandbox and simulate webhook fulfillment without real money.
+                    Tombol ini otomatis mengikuti mode environment di server (<strong>Production</strong> untuk link checkout riil DOKU, atau <strong>Sandbox</strong> untuk link simulasi).
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="trial_amount" className="text-xs font-medium">Trial Amount (IDR)</Label>
+                    <Label htmlFor="trial_amount" className="text-xs font-medium">Nominal Test (IDR)</Label>
                     <div className="flex gap-2">
                         <Input
                             id="trial_amount"
@@ -578,54 +714,61 @@ function SandboxTrialCard({ gateway }: { gateway: PaymentGateway }) {
                             type="button"
                             onClick={handleCreateTrial}
                             disabled={loadingTrial}
-                            className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 text-xs"
+                            className="h-9 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 text-xs font-medium gap-1.5"
                         >
-                            {loadingTrial ? 'Connecting...' : 'Generate Trial Link'}
+                            {loadingTrial ? 'Menghubungkan...' : 'Generate Test Link'}
                         </Button>
                     </div>
                 </div>
 
                 {trialError && (
-                    <p className="text-xs text-red-600 bg-red-50 dark:bg-red-950/40 p-2 rounded border border-red-200">
+                    <p className="text-xs text-red-600 bg-red-50 dark:bg-red-950/40 p-2.5 rounded-lg border border-red-200">
                         {trialError}
                     </p>
                 )}
 
                 {trialData && (
-                    <div className="p-3 bg-white dark:bg-zinc-900 rounded-lg border space-y-2.5">
+                    <div className="p-3.5 bg-white dark:bg-zinc-900 rounded-lg border space-y-3 shadow-xs">
                         <div className="flex justify-between items-center text-xs">
-                            <span className="text-muted-foreground">Reference:</span>
+                            <span className="text-muted-foreground">Nomor Invoice:</span>
                             <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{trialData.reference}</span>
                         </div>
                         <div className="flex justify-between items-center text-xs">
-                            <span className="text-muted-foreground">Amount:</span>
-                            <span className="font-semibold text-emerald-600">Rp {Number(trialData.amount).toLocaleString('id-ID')}</span>
+                            <span className="text-muted-foreground">Nominal:</span>
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">Rp {Number(trialData.amount).toLocaleString('id-ID')}</span>
                         </div>
-                        <div className="pt-2 flex gap-2">
+                        <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">Mode Endpoint:</span>
+                            <span className="font-mono uppercase font-bold text-indigo-600 dark:text-indigo-400">
+                                {trialData.environment || 'DOKU'}
+                            </span>
+                        </div>
+                        <div className="pt-2 flex flex-wrap gap-2">
                             <a
                                 href={trialData.checkout_url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="flex-1 text-center py-1.5 px-3 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition"
+                                className="flex-1 text-center py-2 px-3 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-xs"
                             >
-                                Open DOKU Checkout ↗
+                                <span>Buka Halaman DOKU Checkout</span>
+                                <ExternalLink className="size-3.5" />
                             </a>
                             <Button
                                 type="button"
                                 variant="outline"
                                 onClick={handleSimulateWebhook}
                                 disabled={loadingSim}
-                                className="h-8 text-xs shrink-0"
+                                className="h-8.5 text-xs shrink-0 gap-1"
                             >
-                                {loadingSim ? 'Simulating...' : 'Simulate SUCCESS ⚡'}
+                                {loadingSim ? 'Memproses...' : 'Simulasi Lunas Webhook ⚡'}
                             </Button>
                         </div>
                     </div>
                 )}
 
                 {simMessage && (
-                    <Alert className="bg-emerald-100/70 border-emerald-300 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
-                        <AlertTitle className="text-xs font-bold">Simulator Result</AlertTitle>
+                    <Alert className="bg-emerald-100/80 border-emerald-300 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
+                        <AlertTitle className="text-xs font-bold">Hasil Simulasi</AlertTitle>
                         <AlertDescription className="text-xs">{simMessage}</AlertDescription>
                     </Alert>
                 )}

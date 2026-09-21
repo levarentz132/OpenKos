@@ -40,9 +40,11 @@ class PaymentGatewayTrialController extends Controller
             ], 503);
         }
 
+        $isProduction = method_exists($doku, 'baseUrl') && str_contains($doku->baseUrl(), 'api.doku.com') && ! str_contains($doku->baseUrl(), 'api-sandbox');
+        $environment = $isProduction ? 'production' : 'sandbox';
         $amount = (int) ($validated['amount'] ?? 10000);
         $reference = $validated['reference'] ?? ('TRIAL-' . strtoupper(Str::random(8)));
-        $description = $validated['description'] ?? 'DOKU Sandbox Trial Payment (OpenKos Testing)';
+        $description = $validated['description'] ?? ($isProduction ? 'DOKU Live Production Test Payment (HighlanderStay)' : 'DOKU Sandbox Trial Payment (OpenKos Testing)');
 
         try {
             $paymentRequest = new PaymentRequest(
@@ -59,18 +61,20 @@ class PaymentGatewayTrialController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'DOKU Sandbox trial checkout session created successfully.',
+                'message' => $isProduction
+                    ? 'DOKU Live Production checkout session created successfully.'
+                    : 'DOKU Sandbox trial checkout session created successfully.',
                 'checkout_url' => $result->instructions->url,
                 'reference' => $reference,
                 'amount' => $amount,
                 'currency' => 'IDR',
-                'environment' => 'sandbox',
+                'environment' => $environment,
                 'expires_at' => $result->expiresAt?->format(\DateTimeInterface::ATOM),
             ]);
         } catch (Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to initialize DOKU Sandbox session: ' . $e->getMessage(),
+                'message' => 'Failed to initialize DOKU session: ' . $e->getMessage(),
             ], 502);
         }
     }

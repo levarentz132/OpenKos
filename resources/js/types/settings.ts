@@ -70,9 +70,21 @@ export type PaymentGateway = {
     error: string | null;
 };
 
+export type PaymentGatewayHealth = {
+    is_configured: boolean;
+    environment: 'production' | 'sandbox';
+    endpoint: string;
+    client_id_masked: string | null;
+    secret_key_set: boolean;
+    webhook_url: string;
+    callback_url: string;
+};
+
 export type PaymentGatewaySettingsProps = {
     gateways: PaymentGateway[];
     active_key: string | null;
     active_status: 'none' | 'active' | 'incomplete' | 'unavailable';
     active_payment_attempt_count: number;
+    gateway_health?: PaymentGatewayHealth;
 };
+

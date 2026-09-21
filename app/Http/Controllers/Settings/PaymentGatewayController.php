@@ -28,6 +28,22 @@ class PaymentGatewayController extends Controller
         $activeKey = $this->gateways->activeKey();
         $activeGateway = collect($gateways)->firstWhere('key', $activeKey);
 
+        $dokuInstance = $this->gateways->find('doku');
+        $clientId = method_exists($dokuInstance, 'clientId') ? $dokuInstance->clientId() : config('services.doku.client_id');
+        $secretKey = method_exists($dokuInstance, 'secretKey') ? $dokuInstance->secretKey() : config('services.doku.secret_key');
+        $baseUrl = method_exists($dokuInstance, 'baseUrl') ? $dokuInstance->baseUrl() : 'https://api-sandbox.doku.com';
+        $isProduction = strtolower(config('services.doku.environment', env('DOKU_ENVIRONMENT', 'sandbox'))) === 'production';
+
+        $gatewayHealth = [
+            'is_configured' => filled($clientId) && filled($secretKey),
+            'environment' => $isProduction ? 'production' : 'sandbox',
+            'endpoint' => $baseUrl,
+            'client_id_masked' => filled($clientId) ? (substr($clientId, 0, 8) . '...' . substr($clientId, -4)) : null,
+            'secret_key_set' => filled($secretKey),
+            'webhook_url' => url('/api/v1/payments/webhook/doku'),
+            'callback_url' => config('services.doku.callback_url') ?? env('FRONTEND_URL', 'https://highlanderstay.com'),
+        ];
+
         return Inertia::render('settings/payment-gateway', [
             'gateways' => $gateways,
             'active_key' => $activeKey,
@@ -38,6 +54,7 @@ class PaymentGatewayController extends Controller
                 default => 'active',
             },
             'active_payment_attempt_count' => $this->activePaymentAttemptCount(),
+            'gateway_health' => $gatewayHealth,
         ]);
     }
 
