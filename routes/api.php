@@ -17,6 +17,13 @@ Route::post('webhooks/payment/{gateway}', PaymentWebhookController::class)
     ->where('gateway', '.+')
     ->name('webhooks.payment');
 
+Route::post('payments/webhook/{gateway}', PaymentWebhookController::class)
+    ->where('gateway', '.+');
+
+Route::post('v1/payments/webhook/{gateway}', PaymentWebhookController::class)
+    ->where('gateway', '.+');
+
+
 Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::get('available-rooms', [AvailableRoomsController::class, 'index'])->name('available-rooms');
     Route::get('properties/{property:slug}/available-rooms', [AvailableRoomsController::class, 'forProperty'])->name('properties.available-rooms');
