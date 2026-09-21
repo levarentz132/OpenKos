@@ -68,6 +68,8 @@ class TenantLeaseController extends TenantBaseController
             'billing_label' => $lease->billing_label,
             'billing_cycle' => $lease->billing_cycle?->value,
             'status' => $lease->status->value,
+            'deposit_amount' => (float) ($lease->deposit_amount ?? 0),
+            'deposit_paid_at' => $lease->deposit_paid_at?->toIso8601String(),
             'unit' => $lease->unit ? [
                 'id' => $lease->unit->id,
                 'name' => $lease->unit->name,

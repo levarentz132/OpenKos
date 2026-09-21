@@ -1233,7 +1233,7 @@ class OtpVerificationService
         if ($normalizedPhone) {
             Cache::put("pw_reset_target_{$normalizedPhone}", $resetToken, now()->addMinutes(10));
         }
-        Cache::put($cooldownKey, time() + 60, now()->addSeconds(60));
+        Cache::put("pw_reset_cooldown_{$resetToken}", time() + 60, now()->addSeconds(60));
 
         // Dispatch OTP code
         $dispatch = $this->dispatchOtpCode($target, $channel, $otp);

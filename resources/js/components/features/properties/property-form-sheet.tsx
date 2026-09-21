@@ -76,6 +76,7 @@ export default function PropertyFormSheet({
         address: property?.address ?? '',
         address_url: property?.address_url ?? '',
         description: property?.description ?? '',
+        deposit_amount: property?.deposit_amount ?? 500000,
         region_id: property?.region_id ?? property?.region?.id ?? null,
         city_id: property?.city_id ?? city?.id ?? null,
         kecamatan: property?.kecamatan ?? '',
@@ -639,6 +640,27 @@ export default function PropertyFormSheet({
                                 placeholder="https://maps.google.com/..."
                             />
                             <InputError message={errors.address_url} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="deposit_amount">
+                                Deposit Jaminan / Security Deposit (Rp)
+                            </Label>
+                            <Input
+                                id="deposit_amount"
+                                type="number"
+                                min="0"
+                                step="10000"
+                                value={data.deposit_amount}
+                                onChange={(e) =>
+                                    setData('deposit_amount', Number(e.target.value))
+                                }
+                                placeholder="500000"
+                            />
+                            <p className="text-[11px] text-muted-foreground">
+                                Nilai deposit awal yang akan ditagihkan ke penyewa saat checkout pertama kali dan dicatat lunas pada kontrak sewa.
+                            </p>
+                            <InputError message={errors.deposit_amount} />
                         </div>
 
                         <div className="grid gap-2">

@@ -28,6 +28,27 @@ class TenantInvoiceController extends TenantBaseController
         $tenant = $this->requireTenant($request);
         $leaseIds = $tenant->leases()->pluck('leases.id');
 
+        // Auto-reconcile any pending gateway attempts for tenant's unpaid invoices
+        try {
+            $pendingInvoiceIds = Invoice::whereIn('lease_id', $leaseIds)
+                ->whereIn('status', [InvoiceStatus::Pending, InvoiceStatus::Partial])
+                ->pluck('id');
+
+            if ($pendingInvoiceIds->isNotEmpty()) {
+                $pendingAttempts = \App\Models\PaymentAttempt::whereIn('invoice_id', $pendingInvoiceIds)
+                    ->where('status', \OpenKOS\Core\Enums\PaymentStatus::Pending)
+                    ->whereNotNull('provider_reference')
+                    ->get();
+
+                if ($pendingAttempts->isNotEmpty()) {
+                    $reconciler = app(\App\Actions\Payments\ReconcilePaymentAttempt::class);
+                    foreach ($pendingAttempts as $pendingAttempt) {
+                        $reconciler->execute($pendingAttempt);
+                    }
+                }
+            }
+        } catch (\Throwable) {}
+
         $query = Invoice::query()
             ->whereIn('lease_id', $leaseIds)
             ->with(['lease.unit.property:id,name']);
@@ -81,6 +102,24 @@ class TenantInvoiceController extends TenantBaseController
 
         // Security check: invoice must belong to a lease owned by the tenant
         abort_unless($tenant->leases()->whereKey($invoice->lease_id)->exists(), 404);
+
+        // Auto-reconcile pending payment attempts for this invoice
+        if (in_array($invoice->status, [InvoiceStatus::Pending, InvoiceStatus::Partial], true)) {
+            try {
+                $pendingAttempts = $invoice->paymentAttempts()
+                    ->where('status', \OpenKOS\Core\Enums\PaymentStatus::Pending)
+                    ->whereNotNull('provider_reference')
+                    ->get();
+
+                if ($pendingAttempts->isNotEmpty()) {
+                    $reconciler = app(\App\Actions\Payments\ReconcilePaymentAttempt::class);
+                    foreach ($pendingAttempts as $pendingAttempt) {
+                        $reconciler->execute($pendingAttempt);
+                    }
+                    $invoice->refresh();
+                }
+            } catch (\Throwable) {}
+        }
 
         $invoice->load([
             'lease.unit.property.city',

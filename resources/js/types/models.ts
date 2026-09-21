@@ -72,6 +72,7 @@ export type Property = {
     postal_code?: string | null;
     phone?: string | null;
     description?: string | null;
+    deposit_amount?: number | string | null;
     image?: string | null;
     image_url?: string | null;
     images?: string[] | null;

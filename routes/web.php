@@ -24,6 +24,7 @@ use App\Http\Controllers\TenantPortal\PaymentController as TenantPortalPaymentCo
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AdditionalIncomeController;
+use App\Http\Controllers\CartOrderController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/login');
@@ -197,6 +198,15 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
         Route::post('/', [AdditionalIncomeController::class, 'store'])->name('store');
         Route::put('{additionalIncome}', [AdditionalIncomeController::class, 'update'])->name('update');
         Route::delete('{additionalIncome}', [AdditionalIncomeController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::prefix('cart-orders')->name('cart-orders.')->group(function () {
+        Route::get('/', [CartOrderController::class, 'index'])->name('index');
+        Route::post('/', [CartOrderController::class, 'store'])->name('store');
+        Route::post('bulk-delete', [CartOrderController::class, 'bulkDestroy'])->name('bulk-delete');
+        Route::put('{bookingOrder}', [CartOrderController::class, 'update'])->name('update');
+        Route::delete('{bookingOrder}', [CartOrderController::class, 'destroy'])->name('destroy');
+        Route::post('{bookingOrder}/fulfill', [CartOrderController::class, 'fulfill'])->name('fulfill');
     });
 
     Route::prefix('maintenance-tickets')->name('maintenance-tickets.')->group(function () {

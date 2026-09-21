@@ -55,18 +55,33 @@ class GenerateInvoices
         $candidates = [];
 
         foreach ($leases as $lockedLease) {
+            $leaseDeposit = (float) ($lockedLease->deposit_amount ?? 0);
+            $hasExistingDeposit = $leaseDeposit <= 0 || InvoiceLineItem::query()
+                ->whereHas('invoice', fn ($q) => $q->where('lease_id', $lockedLease->getKey()))
+                ->where('type', 'deposit')
+                ->exists();
+
             foreach ($lockedLease->schedule() as $period) {
                 if ($period->period_start->gt($horizon)) {
                     continue;
                 }
+
+                $isInitialPeriod = $period->period_start->format('Y-m') === \Carbon\Carbon::parse($lockedLease->start_date)->format('Y-m');
+                $includeDeposit = ! $hasExistingDeposit && $isInitialPeriod && $leaseDeposit > 0;
 
                 $candidates[] = [
                     'lease_id' => $lockedLease->getKey(),
                     'period_start' => $period->period_start,
                     'period_end' => $period->period_end,
                     'due_date' => $period->due_date,
-                    'amount' => $period->amount,
+                    'amount' => $includeDeposit ? ($period->amount + $leaseDeposit) : $period->amount,
+                    'rent_amount' => $period->amount,
+                    'deposit_amount' => $includeDeposit ? $leaseDeposit : 0,
                 ];
+
+                if ($includeDeposit) {
+                    $hasExistingDeposit = true;
+                }
             }
         }
 
@@ -131,18 +146,35 @@ class GenerateInvoices
             throw new \LogicException('Invoice batch did not persist all generated periods.');
         }
 
-        $lineItemRows = $createdInvoices->map(function (Invoice $invoice) use ($candidateKeys, $timestamp): array {
+        $lineItemRows = [];
+        foreach ($createdInvoices as $invoice) {
             $candidate = $candidateKeys->get($this->periodKey($invoice->lease_id, $invoice->period_start));
+            if (! $candidate) {
+                continue;
+            }
 
-            return [
+            // 1. Rent Line Item
+            $lineItemRows[] = [
                 'invoice_id' => $invoice->getKey(),
                 'type' => 'rent',
                 'description' => 'Rent '.$invoice->period_start->format('F Y'),
-                'amount' => $candidate['amount'],
+                'amount' => $candidate['rent_amount'] ?? $candidate['amount'],
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
             ];
-        })->all();
+
+            // 2. Deposit Line Item (if included)
+            if (! empty($candidate['deposit_amount']) && (float) $candidate['deposit_amount'] > 0) {
+                $lineItemRows[] = [
+                    'invoice_id' => $invoice->getKey(),
+                    'type' => 'deposit',
+                    'description' => 'Security Deposit',
+                    'amount' => (float) $candidate['deposit_amount'],
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
+            }
+        }
 
         InvoiceLineItem::query()->insert($lineItemRows);
 

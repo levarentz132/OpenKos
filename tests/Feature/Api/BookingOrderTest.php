@@ -40,7 +40,7 @@ test('guest can create booking order saved in cart without creating lease immedi
         ], 200),
     ]);
 
-    $property = Property::factory()->create(['name' => 'Highlander Stay Grogol']);
+    $property = Property::factory()->create(['name' => 'Highlander Stay Grogol', 'deposit_amount' => 0]);
     $unit = Unit::factory()->withRate(1750000)->create([
         'property_id' => $property->id,
         'name' => 'Kamar 101',
@@ -97,7 +97,7 @@ test('cart endpoints support viewing, checkout, and removing items', function ()
         ], 200),
     ]);
 
-    $property = Property::factory()->create(['name' => 'Highlander Stay']);
+    $property = Property::factory()->create(['name' => 'Highlander Stay', 'deposit_amount' => 0]);
     $unit = Unit::factory()->withRate(2000000)->create([
         'property_id' => $property->id,
         'status' => UnitStatus::Available,
@@ -134,7 +134,7 @@ test('cart endpoints support viewing, checkout, and removing items', function ()
     // 4. Remove from cart
     $deleteResponse = $this->deleteJson("/api/v1/cart/{$orderId}");
     $deleteResponse->assertOk()
-        ->assertJsonPath('message', 'Booking item removed from cart.');
+        ->assertJsonPath('message', 'Pesanan kamar berhasil dibatalkan.');
 
     // 5. Verify cart is empty now
     $emptyCartResponse = $this->getJson("/api/v1/cart?cart_token={$cartToken}");
@@ -156,7 +156,7 @@ test('booking order payment webhook automatically creates lease, occupies unit, 
         ], 200),
     ]);
 
-    $property = Property::factory()->create();
+    $property = Property::factory()->create(['deposit_amount' => 0]);
     $unit = Unit::factory()->withRate(1500000)->create([
         'property_id' => $property->id,
         'status' => UnitStatus::Available,

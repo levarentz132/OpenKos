@@ -51,15 +51,10 @@ class CartController extends Controller
         } elseif ($status) {
             $query->where('status', $status);
         } else {
-            // Default: show pending items and recently updated/paid items (exclude cancelled)
-            $query->where(function ($q) {
-                $q->pending()->orWhere(function ($q2) {
-                    $q2->whereIn('status', [
-                        BookingOrder::STATUS_PAID,
-                        BookingOrder::STATUS_PAYMENT_CONFLICT,
-                    ])->where('updated_at', '>=', now()->subDays(7));
-                });
-            });
+            // Default: Active user cart ONLY shows pending (unpaid) booking orders.
+            // When an order is paid, it has successfully transitioned to an active Lease and Invoice,
+            // so the active cart becomes empty (0 items).
+            $query->pending();
         }
 
         if ($user) {
@@ -166,6 +161,8 @@ class CartController extends Controller
                         'end_date' => $item->end_date?->toDateString(),
                         'duration_months' => $item->duration_months,
                         'amount' => (float) $item->amount,
+                        'deposit_amount' => (float) ($item->deposit_amount ?? $unit?->property?->deposit_amount ?? 500000),
+                        'rent_amount' => (float) ($item->rent_amount ?? (($item->amount) - ($item->deposit_amount ?? $unit?->property?->deposit_amount ?? 500000))),
                         'currency' => $item->currency,
                         'status' => $item->status,
                         'is_paid' => $item->isPaid(),
@@ -207,7 +204,7 @@ class CartController extends Controller
         $bookingOrder->update(['status' => BookingOrder::STATUS_CANCELLED]);
 
         return response()->json([
-            'message' => 'Booking item removed from cart.',
+            'message' => 'Pesanan kamar berhasil dibatalkan.',
         ]);
     }
 

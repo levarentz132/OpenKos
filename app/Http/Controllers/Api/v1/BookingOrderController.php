@@ -60,7 +60,9 @@ class BookingOrderController extends Controller
             ?? $unit->activeRates()->first()?->amount
             ?? 0;
 
-        $amount = (float) $monthlyRent;
+        $depositAmount = (float) ($unit->property?->deposit_amount ?? 500000);
+        $rentAmount = (float) $monthlyRent;
+        $amount = (float) ($rentAmount + $depositAmount);
 
         $cartToken = $request->header('X-Cart-Token')
             ?? $validated['cart_token']
@@ -83,7 +85,7 @@ class BookingOrderController extends Controller
             $tenantId = \App\Models\Tenant::where('phone', $phone)->value('id');
         }
 
-        // Create the pre-lease booking order (Cart Item)
+        // Create the pre-lease booking order (Cart Item) with Rent + Security Deposit
         $bookingOrder = BookingOrder::create([
             'cart_token' => $cartToken,
             'reference' => $reference,
@@ -96,6 +98,8 @@ class BookingOrderController extends Controller
             'end_date' => $endDate,
             'duration_months' => $durationMonths,
             'amount' => $amount,
+            'deposit_amount' => $depositAmount,
+            'rent_amount' => $rentAmount,
             'currency' => 'IDR',
             'status' => BookingOrder::STATUS_PENDING,
             'notes' => $validated['notes'] ?? null,

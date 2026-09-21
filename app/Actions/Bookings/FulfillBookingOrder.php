@@ -121,21 +121,30 @@ class FulfillBookingOrder
                 ]);
             }
 
-            // 2. Prepare lease data
+            // 2. Prepare lease data (Monthly Rent + Security Deposit)
             $startDate = $lockedOrder->start_date;
             $endDate = $lockedOrder->end_date?->toDateString();
+            $settledDateObj = $occurredAt ? (is_string($occurredAt) ? new \DateTimeImmutable($occurredAt) : $occurredAt) : now();
+            $settledDateStr = $settledDateObj instanceof \DateTimeInterface ? $settledDateObj->format('Y-m-d H:i:s') : (string) $settledDateObj;
+
+            $depositAmount = (float) ($lockedOrder->deposit_amount ?? $unit->property?->deposit_amount ?? 500000);
+            $rentAmount = (float) ($lockedOrder->rent_amount ?? (($lockedOrder->amount - $depositAmount) / max(1, $lockedOrder->duration_months)));
+            if ($rentAmount <= 0) {
+                $rentAmount = (float) $lockedOrder->amount;
+                $depositAmount = 0;
+            }
 
             $leaseData = new CreateLeaseData(
                 tenantIds: [$tenant->id],
                 startDate: $startDate->toDateString(),
                 endDate: $endDate,
-                rentAmount: $lockedOrder->amount,
+                rentAmount: $rentAmount,
                 billingInterval: 1,
                 billingUnit: 'month',
                 billingStrategy: 'advance',
                 unitRateId: null,
-                depositAmount: 0,
-                depositPaidAt: null,
+                depositAmount: $depositAmount,
+                depositPaidAt: $depositAmount > 0 ? $settledDateStr : null,
                 depositRefundAmount: null,
                 depositRefundedAt: null,
                 rentDueDay: (int) $startDate->format('j'),
@@ -145,15 +154,14 @@ class FulfillBookingOrder
             // 3. Create Lease (occupies Unit and calls GenerateInvoices)
             $lease = $this->createLease->execute($unit, $leaseData);
 
-            // 4. Retrieve generated initial Invoice
+            // 4. Retrieve generated initial Invoice (earliest pending billing period)
             $invoice = $lease->invoices()
                 ->where('status', InvoiceStatus::Pending->value)
-                ->latest('id')
+                ->orderBy('due_date', 'asc')
+                ->orderBy('id', 'asc')
                 ->first();
 
             if ($invoice) {
-                $settledAt = $occurredAt ?? now();
-
                 // Create PaymentAttempt record
                 $attempt = $invoice->paymentAttempts()->create([
                     'gateway_key' => 'doku',
@@ -163,7 +171,7 @@ class FulfillBookingOrder
                     'currency' => $lockedOrder->currency,
                     'status' => PaymentStatus::Settled,
                     'initiated_at' => $lockedOrder->created_at ?? now(),
-                    'settled_at' => $settledAt,
+                    'settled_at' => $settledDateObj,
                     'metadata' => [
                         'booking_order_id' => $lockedOrder->id,
                         'booking_reference' => $lockedOrder->reference,
@@ -173,7 +181,7 @@ class FulfillBookingOrder
                 // Create confirmed Payment record
                 $payment = $invoice->payments()->create([
                     'amount' => $lockedOrder->amount,
-                    'payment_date' => $settledAt->format('Y-m-d'),
+                    'payment_date' => $settledDateObj->format('Y-m-d'),
                     'payment_method' => PaymentMethod::Gateway->value,
                     'reference_number' => $lockedOrder->reference,
                     'status' => ApplicationPaymentStatus::Confirmed,

@@ -30,6 +30,7 @@ use Illuminate\Support\Str;
     'postal_code',
     'phone',
     'description',
+    'deposit_amount',
     'image',
     'images',
     'video',
@@ -47,6 +48,7 @@ class Property extends Model
     {
         return [
             'is_active' => 'boolean',
+            'deposit_amount' => 'decimal:2',
             'images' => 'array',
         ];
     }

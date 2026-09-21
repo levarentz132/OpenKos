@@ -9,6 +9,7 @@ import {
     PlusCircle,
     Receipt,
     Shield,
+    ShoppingCart,
     Tags,
     UserCog,
     Users,
@@ -131,6 +132,11 @@ export function AppSidebar() {
                                               title: 'Billing',
                                               icon: DollarSign,
                                               href: dashboardRent(),
+                                          },
+                                          {
+                                              title: 'Cart Orders',
+                                              icon: ShoppingCart,
+                                              href: '/cart-orders',
                                           },
                                           {
                                               title: 'Additional Income',
