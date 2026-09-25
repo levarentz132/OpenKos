@@ -132,6 +132,7 @@ class AvailableRoomsController extends Controller
                 : 'Kamar full';
 
             $canonicalSlug = Str::slug($property->name);
+            $canonicalId = 'LOC_' . strtoupper(str_replace('-', '_', $canonicalSlug));
             $coords = $this->resolveCoordinatesFromUrl($property->address_url, $property->id);
 
             return [
