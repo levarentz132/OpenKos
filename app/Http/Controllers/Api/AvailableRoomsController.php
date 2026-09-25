@@ -132,7 +132,7 @@ class AvailableRoomsController extends Controller
                 : 'Kamar full';
 
             $canonicalSlug = Str::slug($property->name);
-            $canonicalId = 'LOC_'.strtoupper(Str::slug($property->name, '_'));
+            $coords = $this->resolveCoordinatesFromUrl($property->address_url, $property->id);
 
             return [
                 'name' => $property->name,
@@ -140,7 +140,10 @@ class AvailableRoomsController extends Controller
                 'canonical_slug' => $canonicalSlug,
                 'canonical_id' => $canonicalId,
                 'description' => $property->description,
+                'address' => $property->address,
                 'address_url' => $property->address_url,
+                'latitude' => $coords['lat'] ?? null,
+                'longitude' => $coords['lng'] ?? null,
                 'kecamatan' => $property->kecamatan,
                 'phone' => $property->phone,
                 'image_url' => $property->image_url,
@@ -158,6 +161,50 @@ class AvailableRoomsController extends Controller
             'success' => true,
             'data' => $data,
         ]);
+    }
+
+    /**
+     * Resolve latitude and longitude automatically from Google Maps URL (supporting short links with cache).
+     */
+    private function resolveCoordinatesFromUrl(?string $url, int|string $propertyId): ?array
+    {
+        if (empty($url)) {
+            return null;
+        }
+
+        return \Illuminate\Support\Facades\Cache::remember('prop_coords_'.$propertyId.'_'.md5($url), 86400 * 30, function () use ($url) {
+            // 1. Direct regex check (!3d, @, q=)
+            if (preg_match('/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/', $url, $m)) {
+                return ['lat' => (float) $m[1], 'lng' => (float) $m[2]];
+            }
+            if (preg_match('/@(-?\d+\.\d+),(-?\d+\.\d+)/', $url, $m)) {
+                return ['lat' => (float) $m[1], 'lng' => (float) $m[2]];
+            }
+            if (preg_match('/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/', $url, $m)) {
+                return ['lat' => (float) $m[1], 'lng' => (float) $m[2]];
+            }
+
+            // 2. If short link (maps.app.goo.gl / goo.gl), resolve HTTP redirect
+            if (str_contains($url, 'maps.app.goo.gl') || str_contains($url, 'goo.gl')) {
+                try {
+                    $client = new \GuzzleHttp\Client(['allow_redirects' => false, 'timeout' => 3]);
+                    $res = $client->get($url);
+                    $location = $res->getHeaderLine('Location');
+                    if ($location) {
+                        if (preg_match('/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/', $location, $m)) {
+                            return ['lat' => (float) $m[1], 'lng' => (float) $m[2]];
+                        }
+                        if (preg_match('/@(-?\d+\.\d+),(-?\d+\.\d+)/', $location, $m)) {
+                            return ['lat' => (float) $m[1], 'lng' => (float) $m[2]];
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // ignore network error
+                }
+            }
+
+            return null;
+        });
     }
 
     /**
