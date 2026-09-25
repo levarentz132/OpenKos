@@ -1,5 +1,6 @@
 import { Head, router } from '@inertiajs/react';
 import {
+    Archive,
     Building2,
     EllipsisVertical,
     ExternalLink,
@@ -66,6 +67,10 @@ export default function Index({
         useState<ManagedProperty | null>(null);
     const [archiveConfirm, setArchiveConfirm] =
         useState<ManagedProperty | null>(null);
+    const [deleteConfirm, setDeleteConfirm] = useState<{
+        property: ManagedProperty;
+        force: boolean;
+    } | null>(null);
 
     const table = useTable({
         routeFn: () => properties.index(),
@@ -117,6 +122,21 @@ export default function Index({
 
         router.delete(properties.destroy.url(archiveConfirm));
         setArchiveConfirm(null);
+    }
+
+    function deleteProperty(property: ManagedProperty, force = false) {
+        setDeleteConfirm({ property, force });
+    }
+
+    function confirmDelete() {
+        if (!deleteConfirm) {
+            return;
+        }
+
+        router.delete(properties.destroy.url(deleteConfirm.property), {
+            data: deleteConfirm.force ? { force: true } : undefined,
+            onFinish: () => setDeleteConfirm(null),
+        });
     }
 
     function restore(property: ManagedProperty) {
@@ -191,61 +211,97 @@ export default function Index({
         {
             key: '_status',
             label: 'Status',
-            render: (p) => (
-                <StatusBadge
-                    domain="property"
-                    value={p.is_active ? 'active' : 'archived'}
-                />
-            ),
+            render: (p) => {
+                const status =
+                    p.deleted_at || !p.is_active ? 'archived' : 'active';
+                return <StatusBadge domain="property" value={status} />;
+            },
         },
         {
             key: '_actions',
             label: '',
-            render: (p) => (
-                <DropdownMenu>
-                    <DropdownMenuTrigger
-                        asChild
-                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                    >
-                        <Button variant="ghost" size="icon" className="size-8">
-                            <EllipsisVertical className="size-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                        align="end"
-                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                    >
-                        <DropdownMenuItem
-                            onClick={() => router.get(properties.show.url(p))}
+            render: (p) => {
+                const isArchived = Boolean(p.deleted_at || !p.is_active);
+
+                return (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger
+                            asChild
+                            onClick={(e: React.MouseEvent) =>
+                                e.stopPropagation()
+                            }
                         >
-                            <ExternalLink className="size-4" />
-                            Open Workspace
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openDetail(p)}>
-                            <Eye className="size-4" />
-                            View
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openEdit(p)}>
-                            <Pencil className="size-4" />
-                            Edit
-                        </DropdownMenuItem>
-                        {p.is_active ? (
-                            <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => archive(p)}
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8"
                             >
-                                <Trash2 className="size-4" />
-                                Archive
+                                <EllipsisVertical className="size-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            onClick={(e: React.MouseEvent) =>
+                                e.stopPropagation()
+                            }
+                        >
+                            {!isArchived && (
+                                <DropdownMenuItem
+                                    onClick={() =>
+                                        router.get(properties.show.url(p))
+                                    }
+                                >
+                                    <ExternalLink className="size-4" />
+                                    Open Workspace
+                                </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={() => openDetail(p)}>
+                                <Eye className="size-4" />
+                                View
                             </DropdownMenuItem>
-                        ) : (
-                            <DropdownMenuItem onClick={() => restore(p)}>
-                                <RotateCcw className="size-4" />
-                                Restore
+                            <DropdownMenuItem onClick={() => openEdit(p)}>
+                                <Pencil className="size-4" />
+                                Edit
                             </DropdownMenuItem>
-                        )}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            ),
+                            {isArchived ? (
+                                <>
+                                    <DropdownMenuItem
+                                        onClick={() => restore(p)}
+                                    >
+                                        <RotateCcw className="size-4" />
+                                        Restore
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        variant="destructive"
+                                        onClick={() => deleteProperty(p, true)}
+                                    >
+                                        <Trash2 className="size-4" />
+                                        Delete Permanently
+                                    </DropdownMenuItem>
+                                </>
+                            ) : (
+                                <>
+                                    <DropdownMenuItem
+                                        onClick={() => archive(p)}
+                                    >
+                                        <Archive className="size-4" />
+                                        Archive
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        variant="destructive"
+                                        onClick={() =>
+                                            deleteProperty(p, false)
+                                        }
+                                    >
+                                        <Trash2 className="size-4" />
+                                        Delete
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                );
+            },
         },
     ];
 
@@ -337,6 +393,39 @@ export default function Index({
                         </Button>
                         <Button variant="destructive" onClick={confirmArchive}>
                             Archive
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={deleteConfirm !== null}
+                onOpenChange={() => setDeleteConfirm(null)}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            {deleteConfirm?.force
+                                ? 'Permanently delete property'
+                                : 'Delete property'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {deleteConfirm?.force
+                                ? `Are you sure you want to permanently delete ${deleteConfirm?.property.name}? This action cannot be undone.`
+                                : `Are you sure you want to delete ${deleteConfirm?.property.name}?`}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteConfirm(null)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={confirmDelete}>
+                            {deleteConfirm?.force
+                                ? 'Delete Permanently'
+                                : 'Delete'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

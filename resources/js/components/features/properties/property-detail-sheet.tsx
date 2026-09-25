@@ -35,7 +35,12 @@ export default function PropertyDetailSheet({
     onEdit: () => void;
 }) {
     const [archiveConfirm, setArchiveConfirm] = useState(false);
+    const [deleteConfirm, setDeleteConfirm] = useState(false);
     const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
+
+    const isArchived = Boolean(
+        property?.deleted_at || (property && !property.is_active),
+    );
 
     function archive() {
         if (!property) {
@@ -54,6 +59,32 @@ export default function PropertyDetailSheet({
             onSuccess: () => onOpenChange(false),
         });
         setArchiveConfirm(false);
+    }
+
+    function confirmDelete() {
+        if (!property) {
+            return;
+        }
+
+        router.delete(properties.destroy.url(property), {
+            data: isArchived ? { force: true } : undefined,
+            onSuccess: () => onOpenChange(false),
+        });
+        setDeleteConfirm(false);
+    }
+
+    function restore() {
+        if (!property) {
+            return;
+        }
+
+        router.post(
+            properties.restore.url(property),
+            {},
+            {
+                onSuccess: () => onOpenChange(false),
+            },
+        );
     }
 
     const city =
@@ -151,11 +182,7 @@ export default function PropertyDetailSheet({
                                 <span>Status:</span>
                                 <StatusBadge
                                     domain="property"
-                                    value={
-                                        property.is_active
-                                            ? 'active'
-                                            : 'archived'
-                                    }
+                                    value={isArchived ? 'archived' : 'active'}
                                 />
                                 {property.type && (
                                     <Badge variant="outline">
@@ -282,10 +309,38 @@ export default function PropertyDetailSheet({
                             >
                                 Close
                             </Button>
-                            <Button variant="destructive" onClick={archive}>
-                                Archive
-                            </Button>
-                            <Button onClick={onEdit}>Edit</Button>
+                            {isArchived ? (
+                                <>
+                                    <Button
+                                        variant="outline"
+                                        onClick={restore}
+                                    >
+                                        Restore
+                                    </Button>
+                                    <Button
+                                        variant="destructive"
+                                        onClick={() => setDeleteConfirm(true)}
+                                    >
+                                        Delete Permanently
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <Button
+                                        variant="outline"
+                                        onClick={archive}
+                                    >
+                                        Archive
+                                    </Button>
+                                    <Button
+                                        variant="destructive"
+                                        onClick={() => setDeleteConfirm(true)}
+                                    >
+                                        Delete
+                                    </Button>
+                                    <Button onClick={onEdit}>Edit</Button>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
@@ -312,6 +367,34 @@ export default function PropertyDetailSheet({
                         </Button>
                         <Button variant="destructive" onClick={confirmArchive}>
                             Archive
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            {isArchived
+                                ? 'Permanently delete property'
+                                : 'Delete property'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {isArchived
+                                ? `Are you sure you want to permanently delete ${property?.name}? This action cannot be undone.`
+                                : `Are you sure you want to delete ${property?.name}?`}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteConfirm(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={confirmDelete}>
+                            {isArchived ? 'Delete Permanently' : 'Delete'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

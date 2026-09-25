@@ -57,8 +57,8 @@ class PropertyController extends Controller
             ->filters([
                 Filter::select('status', 'Status', ['active', 'archived'])
                     ->query(fn (Builder $q, string $value) => match ($value) {
-                        'active' => $q->where('is_active', true),
-                        'archived' => $q->where('is_active', false),
+                        'active' => $q->where('properties.is_active', true)->whereNull('properties.deleted_at'),
+                        'archived' => $q->onlyTrashed(),
                         default => $q,
                     }),
                 Filter::select('type', 'Type', PropertyType::ordered()->pluck('slug')->all())
@@ -67,6 +67,7 @@ class PropertyController extends Controller
             ->defaultSort('name');
 
         $query = Property::query()
+            ->withTrashed()
             ->when(! $request->user()->isOwner(), fn (Builder $q) => $q->whereHas(
                 'users',
                 fn (Builder $q) => $q->whereKey($request->user()->id),
@@ -191,31 +192,85 @@ class PropertyController extends Controller
         return back();
     }
 
-    public function destroy(Property $property): RedirectResponse
+    public function destroy(Request $request, Property $property): RedirectResponse
     {
         $this->authorize('delete', $property);
 
-        if (Lease::whereHas('unit', fn ($q) => $q->withTrashed()->where('property_id', $property->id))
-            ->where('status', LeaseStatus::Active)
-            ->exists()
-        ) {
-            Inertia::flash('toast', ['type' => 'error', 'message' => __('Cannot archive a property with active leases.')]);
+        $force = $request->boolean('force') || $property->trashed();
+
+        $deleted = DB::transaction(function () use ($property, $force) {
+            $locked = Property::withTrashed()->lockForUpdate()->findOrFail($property->id);
+
+            if (Lease::whereHas('unit', fn ($q) => $q->withTrashed()->where('property_id', $locked->id))
+                ->where('status', LeaseStatus::Active)
+                ->exists()
+            ) {
+                return false;
+            }
+
+            if ($force) {
+                if ($locked->image && ! str_starts_with($locked->image, 'http')) {
+                    Storage::disk('public')->delete($locked->image);
+                }
+                $images = $locked->images ?? [];
+                if (is_string($images)) {
+                    $images = json_decode($images, true) ?? [];
+                }
+                if (is_array($images)) {
+                    foreach ($images as $img) {
+                        if ($img && ! str_starts_with($img, 'http')) {
+                            Storage::disk('public')->delete($img);
+                        }
+                    }
+                }
+                if ($locked->video && ! str_starts_with($locked->video, 'http')) {
+                    Storage::disk('public')->delete($locked->video);
+                }
+
+                foreach ($locked->units()->withTrashed()->get() as $unit) {
+                    if ($unit->image && ! str_starts_with($unit->image, 'http')) {
+                        Storage::disk('public')->delete($unit->image);
+                    }
+                    if ($unit->video && ! str_starts_with($unit->video, 'http')) {
+                        Storage::disk('public')->delete($unit->video);
+                    }
+                    $unit->rates()->delete();
+                    $unit->forceDelete();
+                }
+
+                $locked->users()->detach();
+                $locked->forceDelete();
+            } else {
+                $locked->update(['is_active' => false]);
+                $locked->units()->delete();
+                $locked->delete();
+            }
+
+            return true;
+        });
+
+        if (! $deleted) {
+            Inertia::flash('toast', ['type' => 'error', 'message' => __('Cannot delete a property with active leases.')]);
 
             return back();
         }
 
-        Property::query()->whereKey($property->id)->update(['is_active' => false]);
-
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('Property archived.')]);
+        $message = $force ? __('Property permanently deleted.') : __('Property deleted.');
+        Inertia::flash('toast', ['type' => 'success', 'message' => $message]);
 
         return to_route('properties.index');
     }
 
     public function restore(Property $property): RedirectResponse
     {
-        $this->authorize('update', $property);
+        $this->authorize('restore', $property);
 
-        Property::query()->whereKey($property->id)->update(['is_active' => true]);
+        DB::transaction(function () use ($property) {
+            $locked = Property::withTrashed()->lockForUpdate()->findOrFail($property->id);
+            $locked->restore();
+            $locked->update(['is_active' => true]);
+            $locked->units()->onlyTrashed()->restore();
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Property restored.')]);
 

@@ -9,7 +9,7 @@ class PropertyPolicy
 {
     public function view(User $user, Property $property): bool
     {
-        return $user->properties->contains($property);
+        return $user->canAccessProperty($property);
     }
 
     public function create(User $user): bool
@@ -19,11 +19,16 @@ class PropertyPolicy
 
     public function update(User $user, Property $property): bool
     {
-        return $user->properties->contains($property);
+        return $user->canAccessProperty($property);
     }
 
     public function delete(User $user, Property $property): bool
     {
-        return $user->properties->contains($property);
+        return $user->canAccessProperty($property);
+    }
+
+    public function restore(User $user, Property $property): bool
+    {
+        return $this->delete($user, $property);
     }
 }

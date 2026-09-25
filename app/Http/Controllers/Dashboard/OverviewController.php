@@ -31,6 +31,7 @@ class OverviewController extends Controller
     public function __invoke(Request $request, OverviewStatsCalculator $finance): Response
     {
         $properties = Property::query()
+            ->where('is_active', true)
             ->when(! $request->user()->isOwner(), fn (Builder $q) => $q->whereHas(
                 'users',
                 fn (Builder $q) => $q->whereKey($request->user()->id),
@@ -58,6 +59,7 @@ class OverviewController extends Controller
         $unavailableUnits = $properties->sum('unavailable_units_count');
 
         $accessibleProperties = Property::query()
+            ->where('is_active', true)
             ->when(! $request->user()->isOwner(), fn (Builder $q) => $q->whereHas(
                 'users',
                 fn (Builder $q) => $q->whereKey($request->user()->id),

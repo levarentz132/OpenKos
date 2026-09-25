@@ -33,7 +33,11 @@ export default function PropertyOverview({ property }: { property: Property }) {
                 <span className="text-sm text-muted-foreground">Status:</span>
                 <StatusBadge
                     domain="property"
-                    value={property.is_active ? 'active' : 'archived'}
+                    value={
+                        property.deleted_at || !property.is_active
+                            ? 'archived'
+                            : 'active'
+                    }
                 />
                 {property.type && (
                     <Badge variant="outline">

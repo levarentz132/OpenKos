@@ -97,12 +97,12 @@ Route::middleware(['auth', 'verified', 'permission:dashboard.view'])->group(func
 
         Route::scopeBindings()->group(function () {
             Route::prefix('{property}')->group(function () {
-                Route::get('/', [PropertyController::class, 'show'])->name('show')->middleware('permission:properties.view');
-                Route::put('/', [PropertyController::class, 'update'])->name('update')->middleware('permission:properties.update');
-                Route::delete('/', [PropertyController::class, 'destroy'])->name('destroy')->middleware('permission:properties.delete');
-                Route::post('restore', [PropertyController::class, 'restore'])->name('restore')->middleware('permission:properties.update');
-                Route::get('leases', PropertyLeasesController::class)->name('workspace.leases')->middleware('permission:properties.view');
-                Route::get('documents', PropertyDocumentsController::class)->name('workspace.documents')->middleware('permission:properties.view');
+                Route::get('/', [PropertyController::class, 'show'])->name('show')->withTrashed()->middleware('permission:properties.view');
+                Route::put('/', [PropertyController::class, 'update'])->name('update')->withTrashed()->middleware('permission:properties.update');
+                Route::delete('/', [PropertyController::class, 'destroy'])->name('destroy')->withTrashed()->middleware('permission:properties.delete');
+                Route::post('restore', [PropertyController::class, 'restore'])->name('restore')->withTrashed()->middleware('permission:properties.update');
+                Route::get('leases', PropertyLeasesController::class)->name('workspace.leases')->withTrashed()->middleware('permission:properties.view');
+                Route::get('documents', PropertyDocumentsController::class)->name('workspace.documents')->withTrashed()->middleware('permission:properties.view');
 
                 Route::prefix('units')->name('units.')->group(function () {
                     Route::get('/', [UnitController::class, 'index'])->name('index')->middleware('permission:units.view');

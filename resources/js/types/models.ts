@@ -80,6 +80,7 @@ export type Property = {
     video?: string | null;
     video_url?: string | null;
     is_active?: boolean;
+    deleted_at?: string | null;
     city?: string | { id: number; name: string } | null;
     region?: { id: number; name: string } | null;
     units_count?: number;
@@ -430,6 +431,7 @@ export type ManagedProperty = {
     image?: string | null;
     image_url?: string | null;
     is_active: boolean;
+    deleted_at?: string | null;
     units_count: number;
     occupied_units_count: number;
     tenants_count: number;

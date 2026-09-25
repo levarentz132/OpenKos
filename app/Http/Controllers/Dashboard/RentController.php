@@ -29,6 +29,7 @@ class RentController extends Controller
         $now = now();
 
         $accessiblePropertyIds = Property::query()
+            ->where('is_active', true)
             ->when(! $request->user()->isOwner(), fn (Builder $q) => $q->whereHas(
                 'users',
                 fn (Builder $q) => $q->whereKey($request->user()->id),
@@ -250,6 +251,7 @@ class RentController extends Controller
             'properties' => $request->query('properties', ''),
             'tenant_id' => $request->query('tenant_id', ''),
             'property_options' => Property::query()
+                ->where('is_active', true)
                 ->when(! $request->user()->isOwner(), fn (Builder $q) => $q->whereHas(
                     'users',
                     fn (Builder $q) => $q->whereKey($request->user()->id),
