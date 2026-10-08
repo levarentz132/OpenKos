@@ -39,6 +39,7 @@ const settingsGroupIconMap: Record<string, LucideIcon> = {
 
 const settingsPageIconMap: Record<string, LucideIcon> = {
     general: Settings,
+    banners: Blocks,
     profile: User,
     security: KeyRound,
     reminders: BellRing,

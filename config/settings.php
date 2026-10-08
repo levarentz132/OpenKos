@@ -20,5 +20,14 @@ return [
     'late_fee_type' => ['default' => 'flat', 'cast' => 'string'],
     'late_fee_amount' => ['default' => 50000, 'cast' => 'integer'],
     'late_fee_grace_days' => ['default' => 3, 'cast' => 'integer'],
-
+    'banner_enabled' => ['default' => true, 'cast' => 'boolean'],
+    'banner_eyebrow' => ['default' => 'Promo Spesial', 'cast' => 'string'],
+    'banner_title' => ['default' => 'Diskon Early Bird 20%', 'cast' => 'string'],
+    'banner_description' => ['default' => 'Pesan ruang impian Anda bulan ini dan nikmati potongan harga eksklusif untuk 3 bulan pertama.', 'cast' => 'string'],
+    'banner_cta' => ['default' => 'Klaim Promo', 'cast' => 'string'],
+    'banner_image' => ['default' => 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1920&q=80', 'cast' => 'string'],
+    'banner_autoplay_interval' => ['default' => 5000, 'cast' => 'integer'],
+    'banners' => ['default' => [], 'cast' => 'array'],
+    'promo_enabled' => ['default' => false, 'cast' => 'boolean'],
+    'promo_text' => ['default' => '', 'cast' => 'string'],
 ];

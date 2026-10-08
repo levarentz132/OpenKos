@@ -30,7 +30,7 @@ class SettingManager
 
     public function set(string $key, mixed $value, ?string $cast = null): Setting
     {
-        $cast ??= $this->registry->get($key)['cast'] ?? 'string';
+        $cast ??= $this->registry->get($key)['cast'] ?? (is_array($value) ? 'array' : (is_bool($value) ? 'boolean' : (is_int($value) ? 'integer' : 'string')));
 
         $stored = $this->caster->serialize($value, $cast);
 
