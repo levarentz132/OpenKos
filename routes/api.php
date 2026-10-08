@@ -24,7 +24,14 @@ Route::post('v1/payments/webhook/{gateway}', PaymentWebhookController::class)
     ->where('gateway', '.+');
 
 
+Route::get('settings', [\App\Http\Controllers\Api\v1\WebsiteSettingController::class, 'index']);
+Route::get('banners', [\App\Http\Controllers\Api\v1\WebsiteSettingController::class, 'banners']);
+
 Route::prefix('v1')->name('api.v1.')->group(function () {
+    // Website Branding, Banner, & General Settings
+    Route::get('settings', [\App\Http\Controllers\Api\v1\WebsiteSettingController::class, 'index'])->name('settings.index');
+    Route::get('banners', [\App\Http\Controllers\Api\v1\WebsiteSettingController::class, 'banners'])->name('banners.index');
+
     Route::get('available-rooms', [AvailableRoomsController::class, 'index'])->name('available-rooms');
     Route::get('properties/{property:slug}/available-rooms', [AvailableRoomsController::class, 'forProperty'])->name('properties.available-rooms');
 
