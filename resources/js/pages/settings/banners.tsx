@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useForm } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,7 +11,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Trash2, Image as ImageIcon, Sparkles, Megaphone, Eye } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Sparkles, Megaphone, Eye, Upload, Loader2, Check } from 'lucide-react';
 
 interface BannerSettingsProps {
     settings: {
@@ -30,6 +30,10 @@ interface BannerSettingsProps {
 
 export default function Banners({ settings }: BannerSettingsProps) {
     const [newBannerUrl, setNewBannerUrl] = useState('');
+    const [uploadingCover, setUploadingCover] = useState(false);
+    const [uploadingSlide, setUploadingSlide] = useState(false);
+    const coverInputRef = useRef<HTMLInputElement>(null);
+    const slideInputRef = useRef<HTMLInputElement>(null);
 
     const form = useForm({
         banner_enabled: settings.banner_enabled ?? true,
@@ -44,7 +48,86 @@ export default function Banners({ settings }: BannerSettingsProps) {
         promo_text: settings.promo_text || '',
     });
 
-    const handleAddSlide = () => {
+    const handleCoverFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingCover(true);
+        const formData = new FormData();
+        formData.append('image', file);
+
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const res = await fetch('/settings/banners/upload', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken || '',
+                    'Accept': 'application/json',
+                },
+                body: formData,
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.url) {
+                    form.setData('banner_image', data.url);
+                }
+            } else {
+                alert('Gagal mengunggah gambar cover banner. Pastikan ukuran file < 10MB.');
+            }
+        } catch (err) {
+            console.error('Error uploading banner cover:', err);
+            alert('Terjadi kesalahan saat mengunggah gambar.');
+        } finally {
+            setUploadingCover(false);
+            if (coverInputRef.current) coverInputRef.current.value = '';
+        }
+    };
+
+    const handleSlideFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        setUploadingSlide(true);
+        const uploadedUrls: string[] = [];
+
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const formData = new FormData();
+                formData.append('image', file);
+
+                const res = await fetch('/settings/banners/upload', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken || '',
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.url) {
+                        uploadedUrls.push(data.url);
+                    }
+                }
+            }
+
+            if (uploadedUrls.length > 0) {
+                form.setData('banners', [...form.data.banners, ...uploadedUrls]);
+            }
+        } catch (err) {
+            console.error('Error uploading slide images:', err);
+            alert('Terjadi kesalahan saat mengunggah gambar slide.');
+        } finally {
+            setUploadingSlide(false);
+            if (slideInputRef.current) slideInputRef.current.value = '';
+        }
+    };
+
+    const handleAddSlideUrl = () => {
         if (!newBannerUrl.trim()) return;
         form.setData('banners', [...form.data.banners, newBannerUrl.trim()]);
         setNewBannerUrl('');
@@ -63,11 +146,11 @@ export default function Banners({ settings }: BannerSettingsProps) {
     };
 
     return (
-        <div className="space-y-6 max-w-4xl">
+        <div className="space-y-6 max-w-4xl pb-10">
             <div>
                 <h2 className="text-xl font-semibold tracking-tight">Banner & Promo Website</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Atur konten promosi, gambar slide carousel, teks diskon, dan banner di halaman utama aplikasi & web.
+                    Atur konten promosi, upload gambar banner/slide, teks diskon, dan banner di halaman utama aplikasi & web.
                 </p>
             </div>
 
@@ -82,7 +165,7 @@ export default function Banners({ settings }: BannerSettingsProps) {
                                     <span>Banner Promosi Utama (Home Carousel)</span>
                                 </CardTitle>
                                 <CardDescription>
-                                    Konfigurasi teks, tombol aksi (CTA), dan gambar cover utama yang tampil di beranda.
+                                    Konfigurasi teks, tombol aksi (CTA), dan foto cover utama yang tampil di beranda depan.
                                 </CardDescription>
                             </div>
                             <div className="flex items-center gap-2">
@@ -103,9 +186,9 @@ export default function Banners({ settings }: BannerSettingsProps) {
                         <div className="rounded-xl border border-muted bg-muted/30 p-4 overflow-hidden">
                             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-3">
                                 <Eye className="w-4 h-4" />
-                                <span>Live Preview Tampilan Banner</span>
+                                <span>Live Preview Tampilan Banner Utama</span>
                             </div>
-                            <div className="relative rounded-xl overflow-hidden min-h-[160px] flex flex-col justify-end p-5 bg-zinc-900 text-white shadow-inner">
+                            <div className="relative rounded-xl overflow-hidden min-h-[180px] sm:min-h-[220px] flex flex-col justify-end p-5 bg-zinc-900 text-white shadow-inner">
                                 {form.data.banner_image ? (
                                     <img
                                         src={form.data.banner_image}
@@ -120,21 +203,77 @@ export default function Banners({ settings }: BannerSettingsProps) {
                                 )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
                                 <div className="relative z-10 space-y-1.5 max-w-lg">
-                                    <span className="inline-block px-2 py-0.5 rounded-full bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold">
+                                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold">
                                         {form.data.banner_eyebrow || 'Promo'}
                                     </span>
-                                    <h3 className="text-base sm:text-lg font-bold line-clamp-1">
+                                    <h3 className="text-base sm:text-xl font-bold line-clamp-1">
                                         {form.data.banner_title || 'Judul Promosi'}
                                     </h3>
                                     <p className="text-xs text-zinc-300 line-clamp-2">
                                         {form.data.banner_description || 'Deskripsi promo akan muncul di sini.'}
                                     </p>
                                     <div className="pt-1">
-                                        <span className="inline-flex px-3 py-1 rounded-full bg-amber-500 text-black text-xs font-bold shadow">
+                                        <span className="inline-flex px-3.5 py-1 rounded-full bg-amber-500 text-black text-xs font-bold shadow">
                                             {form.data.banner_cta || 'Klaim Promo'} →
                                         </span>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Image Upload for Cover */}
+                        <div className="p-4 rounded-xl border border-dashed bg-muted/20 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                    <Label className="text-sm font-semibold flex items-center gap-1.5">
+                                        <ImageIcon className="w-4 h-4 text-primary" />
+                                        <span>Upload Foto / Gambar Cover Banner</span>
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        Upload gambar dari komputer/HP Anda (format JPG, PNG, WEBP max 10MB)
+                                    </p>
+                                </div>
+                                <div>
+                                    <input
+                                        type="file"
+                                        ref={coverInputRef}
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={handleCoverFileUpload}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={uploadingCover}
+                                        onClick={() => coverInputRef.current?.click()}
+                                        className="flex items-center gap-2 shrink-0 bg-background"
+                                    >
+                                        {uploadingCover ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <span>Mengunggah...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload className="w-4 h-4" />
+                                                <span>Pilih Foto dari Perangkat</span>
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <Label htmlFor="banner_image" className="text-xs text-muted-foreground">
+                                    Atau gunakan URL Gambar Langsung:
+                                </Label>
+                                <Input
+                                    id="banner_image"
+                                    value={form.data.banner_image}
+                                    onChange={(e) => form.setData('banner_image', e.target.value)}
+                                    placeholder="https://images.unsplash.com/... atau /storage/banners/..."
+                                    className="text-xs font-mono"
+                                />
                             </div>
                         </div>
 
@@ -181,16 +320,6 @@ export default function Banners({ settings }: BannerSettingsProps) {
                                 />
                             </div>
 
-                            <div className="space-y-1.5 md:col-span-2">
-                                <Label htmlFor="banner_image">URL Foto / Gambar Cover Banner Utama</Label>
-                                <Input
-                                    id="banner_image"
-                                    value={form.data.banner_image}
-                                    onChange={(e) => form.setData('banner_image', e.target.value)}
-                                    placeholder="https://images.unsplash.com/... atau /uploads/banner.jpg"
-                                />
-                            </div>
-
                             <div className="space-y-1.5">
                                 <Label htmlFor="banner_autoplay_interval">Kecepatan Putar Otomatis (Detik)</Label>
                                 <div className="flex items-center gap-3">
@@ -218,10 +347,10 @@ export default function Banners({ settings }: BannerSettingsProps) {
                             <span>Daftar Slide Banner Tambahan (Carousel)</span>
                         </CardTitle>
                         <CardDescription>
-                            Tambahkan beberapa gambar banner untuk diputar otomatis di carousel halaman depan.
+                            Tambahkan foto-foto banner tambahan untuk diputar otomatis di carousel halaman depan.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="space-y-5">
                         {/* Existing Slides */}
                         {form.data.banners.length > 0 ? (
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -238,7 +367,7 @@ export default function Banners({ settings }: BannerSettingsProps) {
                                             />
                                         </div>
                                         <div className="p-2 flex items-center justify-between text-xs bg-background/90 backdrop-blur">
-                                            <span className="font-semibold truncate max-w-[120px]">Slide #{index + 1}</span>
+                                            <span className="font-semibold truncate max-w-[140px]">Slide #{index + 1}</span>
                                             <Button
                                                 type="button"
                                                 variant="ghost"
@@ -254,27 +383,72 @@ export default function Banners({ settings }: BannerSettingsProps) {
                             </div>
                         ) : (
                             <div className="text-center py-6 text-sm text-muted-foreground border border-dashed rounded-lg">
-                                Belum ada slide banner tambahan. (Sistem akan menggunakan cover banner utama & default high-quality slide).
+                                Belum ada slide banner tambahan. (Sistem akan menampilkan cover banner utama).
                             </div>
                         )}
 
-                        {/* Add Slide Input */}
-                        <div className="flex gap-2 pt-2">
-                            <Input
-                                value={newBannerUrl}
-                                onChange={(e) => setNewBannerUrl(e.target.value)}
-                                placeholder="Masukkan URL gambar banner baru (https://...)"
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleAddSlide();
-                                    }
-                                }}
-                            />
-                            <Button type="button" variant="secondary" onClick={handleAddSlide} className="shrink-0 flex items-center gap-1.5">
-                                <Plus className="w-4 h-4" />
-                                <span>Tambah Slide</span>
-                            </Button>
+                        {/* Upload Slide Images Box */}
+                        <div className="p-4 rounded-xl border border-dashed bg-muted/20 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                    <Label className="text-sm font-semibold flex items-center gap-1.5">
+                                        <Upload className="w-4 h-4 text-indigo-500" />
+                                        <span>Upload Slide Baru dari Perangkat</span>
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        Pilih satu atau beberapa file foto banner untuk ditambahkan ke slide carousel
+                                    </p>
+                                </div>
+                                <div>
+                                    <input
+                                        type="file"
+                                        ref={slideInputRef}
+                                        multiple
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={handleSlideFilesUpload}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={uploadingSlide}
+                                        onClick={() => slideInputRef.current?.click()}
+                                        className="flex items-center gap-2 shrink-0 bg-background"
+                                    >
+                                        {uploadingSlide ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <span>Mengunggah Slide...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload className="w-4 h-4" />
+                                                <span>Upload Foto Slide</span>
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Add Slide via URL */}
+                            <div className="flex gap-2 pt-1">
+                                <Input
+                                    value={newBannerUrl}
+                                    onChange={(e) => setNewBannerUrl(e.target.value)}
+                                    placeholder="Atau masukkan URL gambar langsung (https://...)"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleAddSlideUrl();
+                                        }
+                                    }}
+                                    className="text-xs"
+                                />
+                                <Button type="button" variant="secondary" onClick={handleAddSlideUrl} className="shrink-0 flex items-center gap-1.5 text-xs">
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Tambah URL</span>
+                                </Button>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -319,8 +493,18 @@ export default function Banners({ settings }: BannerSettingsProps) {
 
                 {/* Save Button */}
                 <div className="flex items-center justify-end gap-3 pt-2">
-                    <Button type="submit" disabled={form.processing} className="min-w-[160px]">
-                        {form.processing ? 'Menyimpan...' : 'Simpan Pengaturan'}
+                    <Button type="submit" disabled={form.processing || uploadingCover || uploadingSlide} className="min-w-[180px]">
+                        {form.processing ? (
+                            <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                <span>Menyimpan...</span>
+                            </>
+                        ) : (
+                            <>
+                                <Check className="w-4 h-4 mr-1.5" />
+                                <span>Simpan Pengaturan</span>
+                            </>
+                        )}
                     </Button>
                 </div>
             </form>
@@ -331,3 +515,4 @@ export default function Banners({ settings }: BannerSettingsProps) {
 Banners.layout = {
     breadcrumbs: [{ title: 'Banner & Promo', href: '/settings/banners' }],
 };
+

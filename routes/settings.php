@@ -36,6 +36,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('settings/banners', [\App\Http\Controllers\Settings\BannerSettingController::class, 'edit'])->name('settings.banners.edit');
         Route::patch('settings/banners', [\App\Http\Controllers\Settings\BannerSettingController::class, 'update'])->name('settings.banners.update');
+        Route::post('settings/banners', [\App\Http\Controllers\Settings\BannerSettingController::class, 'update']);
+        Route::post('settings/banners/upload', [\App\Http\Controllers\Settings\BannerSettingController::class, 'uploadImage'])->name('settings.banners.upload');
 
         Route::get('settings/payment-gateway', [PaymentGatewayController::class, 'edit'])->name('settings.payment-gateway.edit');
         Route::patch('settings/payment-gateway', [PaymentGatewayController::class, 'update'])->name('settings.payment-gateway.update');

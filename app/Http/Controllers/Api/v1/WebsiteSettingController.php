@@ -59,6 +59,21 @@ class WebsiteSettingController extends Controller
                         }
                         $defaults[$row->k] = $val;
                     }
+
+                    // Format image URLs
+                    if (! empty($defaults['banner_image']) && is_string($defaults['banner_image'])) {
+                        if (! str_starts_with($defaults['banner_image'], 'http') && ! str_starts_with($defaults['banner_image'], '/storage') && ! str_starts_with($defaults['banner_image'], '/uploads')) {
+                            $defaults['banner_image'] = \Illuminate\Support\Facades\Storage::disk('public')->url($defaults['banner_image']);
+                        }
+                    }
+                    if (! empty($defaults['banners']) && is_array($defaults['banners'])) {
+                        $defaults['banners'] = array_map(function ($b) {
+                            if (is_string($b) && $b && ! str_starts_with($b, 'http') && ! str_starts_with($b, '/storage') && ! str_starts_with($b, '/uploads')) {
+                                return \Illuminate\Support\Facades\Storage::disk('public')->url($b);
+                            }
+                            return $b;
+                        }, $defaults['banners']);
+                    }
                 }
             } catch (\Throwable $e) {
                 // Fallback to safe defaults if DB is temporarily unreachable
