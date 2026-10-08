@@ -34,6 +34,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('settings/general', [GeneralController::class, 'edit'])->name('settings.general.edit');
         Route::patch('settings/general', [GeneralController::class, 'update'])->name('settings.general.update');
 
+        Route::get('settings/banners', [\App\Http\Controllers\Settings\BannerSettingController::class, 'edit'])->name('settings.banners.edit');
+        Route::patch('settings/banners', [\App\Http\Controllers\Settings\BannerSettingController::class, 'update'])->name('settings.banners.update');
+
         Route::get('settings/payment-gateway', [PaymentGatewayController::class, 'edit'])->name('settings.payment-gateway.edit');
         Route::patch('settings/payment-gateway', [PaymentGatewayController::class, 'update'])->name('settings.payment-gateway.update');
         Route::post('settings/payment-gateway/trial', [\App\Http\Controllers\Settings\PaymentGatewayTrialController::class, 'trialSession'])->name('settings.payment-gateway.trial');
