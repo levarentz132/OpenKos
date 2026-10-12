@@ -53,9 +53,18 @@ class AiRoomController extends Controller
             ->with([
                 'units' => function ($unitQuery) use ($minPrice, $maxPrice) {
                     $unitQuery->when($minPrice || $maxPrice, function (Builder $rq) use ($minPrice, $maxPrice) {
-                        $rq->whereHas('activeRates', function (Builder $subRate) use ($minPrice, $maxPrice) {
-                            $subRate->when($minPrice, fn ($p) => $p->where('amount', '>=', (float) $minPrice))
-                                ->when($maxPrice, fn ($p) => $p->where('amount', '<=', (float) $maxPrice));
+                        $rq->where(function (Builder $uq) use ($minPrice, $maxPrice) {
+                            $uq->whereHas('activeRates', function (Builder $subRate) use ($minPrice, $maxPrice) {
+                                $subRate->where('billing_unit', 'month')
+                                    ->when($minPrice, fn ($p) => $p->where('amount', '>=', (float) $minPrice))
+                                    ->when($maxPrice, fn ($p) => $p->where('amount', '<=', (float) $maxPrice));
+                            })->orWhere(function (Builder $uq2) use ($minPrice, $maxPrice) {
+                                $uq2->whereDoesntHave('activeRates', fn ($sub) => $sub->where('billing_unit', 'month'))
+                                    ->whereHas('activeRates', function (Builder $subRate) use ($minPrice, $maxPrice) {
+                                        $subRate->when($minPrice, fn ($p) => $p->where('amount', '>=', (float) $minPrice))
+                                            ->when($maxPrice, fn ($p) => $p->where('amount', '<=', (float) $maxPrice));
+                                    });
+                            });
                         });
                     })
                     ->with('activeRates')
@@ -89,9 +98,8 @@ class AiRoomController extends Controller
             $targetUnits = $availableUnits->isNotEmpty() ? $availableUnits : $property->units;
 
             $allPrices = $targetUnits
-                ->flatMap(fn (Unit $unit) => $unit->activeRates->pluck('amount'))
-                ->map(fn ($amt) => (float) $amt)
-                ->filter(fn ($amt) => $amt > 0)
+                ->map(fn (Unit $unit) => $unit->getMonthlyRate())
+                ->filter(fn ($amt) => $amt !== null && $amt > 0)
                 ->values();
 
             $minPrice = $allPrices->isNotEmpty() ? $allPrices->min() : 1500000;
@@ -191,9 +199,8 @@ class AiRoomController extends Controller
         $targetUnits = $availableUnits->isNotEmpty() ? $availableUnits : $property->units;
 
         $allPrices = $targetUnits
-            ->flatMap(fn (Unit $unit) => $unit->activeRates->pluck('amount'))
-            ->map(fn ($amt) => (float) $amt)
-            ->filter(fn ($amt) => $amt > 0)
+            ->map(fn (Unit $unit) => $unit->getMonthlyRate())
+            ->filter(fn ($amt) => $amt !== null && $amt > 0)
             ->values();
 
         $minPrice = $allPrices->isNotEmpty() ? $allPrices->min() : 1500000;
@@ -208,8 +215,8 @@ class AiRoomController extends Controller
 
         $allPhotos = $property->image_urls ?: ($property->image_url ? [$property->image_url] : []);
 
-        $roomUnitsData = $availableUnits->map(function (Unit $unit) use ($allPhotos, $property) {
-            $monthlyRate = (float) ($unit->activeRates->first()?->amount ?: 1500000);
+        $roomUnitsData = $availableUnits->map(function (Unit $unit) use ($allPhotos, $property, $frontendBase) {
+            $monthlyRate = (float) ($unit->getMonthlyRate() ?: 1500000);
 
             return [
                 'room_id' => $unit->id,
@@ -219,6 +226,12 @@ class AiRoomController extends Controller
                 'bathroom' => 'Kamar Mandi Dalam',
                 'monthly_rate' => $monthlyRate,
                 'monthly_rate_display' => 'Rp ' . number_format($monthlyRate, 0, ',', '.') . ' / bulan',
+                'rates' => $unit->activeRates->map(fn ($r) => [
+                    'id' => $r->id,
+                    'amount' => (float) $r->amount,
+                    'billing_interval' => (int) $r->billing_interval,
+                    'billing_unit' => $r->billing_unit instanceof \App\Enums\BillingUnit ? $r->billing_unit->value : (string) $r->billing_unit,
+                ])->values()->all(),
                 'photo_url' => $unit->image_url ?: ($allPhotos[0] ?? null),
                 'video_url' => $unit->video_url ?: $property->video_url,
                 'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?room=" . urlencode($unit->name) . "&book=true",

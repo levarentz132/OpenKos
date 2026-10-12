@@ -316,10 +316,41 @@ export default function Index({
             key: '_pricing',
             label: 'Pricing',
             className: 'tabular-nums',
-            render: (r) =>
-                r.active_rates?.[0]
-                    ? formatPrice(r.active_rates[0].amount)
-                    : '\u2014',
+            render: (r) => {
+                const primaryRate =
+                    r.active_rates?.find(
+                        (rate) =>
+                            rate.billing_unit === 'month' &&
+                            Number(rate.billing_interval) === 1,
+                    ) ??
+                    r.active_rates?.find(
+                        (rate) => rate.billing_unit === 'month',
+                    ) ??
+                    r.active_rates?.[0];
+
+                if (!primaryRate) return '\u2014';
+
+                const unitLabel =
+                    Number(primaryRate.billing_interval) === 1
+                        ? `/${primaryRate.billing_unit}`
+                        : `/${primaryRate.billing_interval} ${primaryRate.billing_unit}s`;
+
+                const extraCount = (r.active_rates?.length ?? 0) - 1;
+
+                return (
+                    <div className="flex flex-col">
+                        <span>
+                            {formatPrice(primaryRate.amount)}{' '}
+                            <span className="text-xs text-muted-foreground">{unitLabel}</span>
+                        </span>
+                        {extraCount > 0 && (
+                            <span className="text-[10px] text-muted-foreground">
+                                +{extraCount} other {extraCount === 1 ? 'rate' : 'rates'}
+                            </span>
+                        )}
+                    </div>
+                );
+            },
         },
         {
             key: '_tenant',

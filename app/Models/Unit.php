@@ -124,6 +124,64 @@ class Unit extends Model
             ->orderBy('id');
     }
 
+    /**
+     * Get the primary rate for this unit, prioritizing standard 1-month rate,
+     * followed by any monthly rate, and falling back to the first active rate.
+     */
+    public function getPrimaryRate(): ?UnitRate
+    {
+        $rates = $this->relationLoaded('activeRates') ? $this->activeRates : $this->activeRates()->get();
+
+        return $rates->first(function (UnitRate $r) {
+            $unit = $r->billing_unit instanceof \App\Enums\BillingUnit ? $r->billing_unit->value : (string) $r->billing_unit;
+            return $unit === 'month' && (int) $r->billing_interval === 1;
+        }) ?? $rates->first(function (UnitRate $r) {
+            $unit = $r->billing_unit instanceof \App\Enums\BillingUnit ? $r->billing_unit->value : (string) $r->billing_unit;
+            return $unit === 'month';
+        }) ?? $rates->first();
+    }
+
+    /**
+     * Get the monthly rent rate (amount in IDR) for this unit.
+     * Prioritizes exact 1-month rate. If only multi-month (e.g. 3 months) or yearly rates exist,
+     * it calculates the normalized per-month amount. Falls back to first active rate amount.
+     */
+    public function getMonthlyRate(): ?float
+    {
+        $rates = $this->relationLoaded('activeRates') ? $this->activeRates : $this->activeRates()->get();
+
+        // 1. Direct 1-month rate
+        $month1 = $rates->first(function (UnitRate $r) {
+            $unit = $r->billing_unit instanceof \App\Enums\BillingUnit ? $r->billing_unit->value : (string) $r->billing_unit;
+            return $unit === 'month' && (int) $r->billing_interval === 1;
+        });
+        if ($month1) {
+            return (float) $month1->amount;
+        }
+
+        // 2. Any month-based rate normalized per month (e.g. 3 months / 3)
+        $anyMonth = $rates->first(function (UnitRate $r) {
+            $unit = $r->billing_unit instanceof \App\Enums\BillingUnit ? $r->billing_unit->value : (string) $r->billing_unit;
+            return $unit === 'month';
+        });
+        if ($anyMonth && (int) $anyMonth->billing_interval > 0) {
+            return (float) round((float) $anyMonth->amount / (int) $anyMonth->billing_interval, 2);
+        }
+
+        // 3. Year-based rate normalized per month (e.g. 1 year / 12)
+        $yearRate = $rates->first(function (UnitRate $r) {
+            $unit = $r->billing_unit instanceof \App\Enums\BillingUnit ? $r->billing_unit->value : (string) $r->billing_unit;
+            return $unit === 'year';
+        });
+        if ($yearRate && (int) $yearRate->billing_interval > 0) {
+            return (float) round((float) $yearRate->amount / ((int) $yearRate->billing_interval * 12), 2);
+        }
+
+        // 4. Fallback to first active rate amount
+        $first = $rates->first();
+        return $first ? (float) $first->amount : null;
+    }
+
     public function scopeAvailableForAssignment(Builder $query): void
     {
         $query->whereNull('deleted_at')

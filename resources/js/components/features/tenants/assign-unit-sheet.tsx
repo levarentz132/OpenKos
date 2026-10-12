@@ -84,7 +84,13 @@ export default function AssignUnitSheet({
             return;
         }
 
-        const defaultRate = selectedUnit?.active_rates?.[0] ?? null;
+        const defaultRate =
+            selectedUnit?.active_rates?.find(
+                (r) => r.billing_unit === 'month' && Number(r.billing_interval) === 1,
+            ) ??
+            selectedUnit?.active_rates?.find((r) => r.billing_unit === 'month') ??
+            selectedUnit?.active_rates?.[0] ??
+            null;
 
         setData((prev) => ({
             ...prev,

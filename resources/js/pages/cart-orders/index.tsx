@@ -246,16 +246,33 @@ export default function CartOrdersIndex({
         router.get('/cart-orders', {}, { preserveState: true });
     };
 
+    const getUnitMonthlyRate = (unit?: { active_rates?: UnitRate[] } | null): number => {
+        if (!unit?.active_rates?.length) return 0;
+        const directMonth = unit.active_rates.find(
+            (r) => r.billing_unit === 'month' && Number(r.billing_interval) === 1,
+        );
+        if (directMonth) return Number(directMonth.amount);
+
+        const anyMonth = unit.active_rates.find((r) => r.billing_unit === 'month');
+        if (anyMonth && Number(anyMonth.billing_interval) > 0) {
+            return Math.round(Number(anyMonth.amount) / Number(anyMonth.billing_interval));
+        }
+
+        const anyYear = unit.active_rates.find((r) => r.billing_unit === 'year');
+        if (anyYear && Number(anyYear.billing_interval) > 0) {
+            return Math.round(Number(anyYear.amount) / (Number(anyYear.billing_interval) * 12));
+        }
+
+        return Number(unit.active_rates[0].amount);
+    };
+
     const handleOpenCreate = () => {
         const firstProp = properties[0];
         const firstUnit = firstProp?.units?.[0];
         const initialPropId = firstProp ? firstProp.id : '';
         const initialUnitId = firstUnit ? String(firstUnit.id) : '';
 
-        let calculatedAmount = '';
-        if (firstUnit?.active_rates?.[0]?.amount) {
-            calculatedAmount = String(Number(firstUnit.active_rates[0].amount));
-        }
+        const calculatedAmount = firstUnit ? String(getUnitMonthlyRate(firstUnit)) : '';
 
         setSelectedPropertyId(initialPropId);
         setFormData({
@@ -277,12 +294,9 @@ export default function CartOrdersIndex({
         const prop = properties.find((p) => p.id === pId);
         const firstUnit = prop?.units?.[0];
         const newUnitId = firstUnit ? String(firstUnit.id) : '';
-        let calculatedAmount = '';
-        if (firstUnit?.active_rates?.[0]?.amount) {
-            calculatedAmount = String(
-                Number(firstUnit.active_rates[0].amount) * Number(formData.duration_months || 1),
-            );
-        }
+        const calculatedAmount = firstUnit
+            ? String(getUnitMonthlyRate(firstUnit) * Number(formData.duration_months || 1))
+            : '';
         setFormData((prev) => ({
             ...prev,
             unit_id: newUnitId,
@@ -293,12 +307,9 @@ export default function CartOrdersIndex({
     const handleUnitChange = (uId: string) => {
         const prop = properties.find((p) => p.id === selectedPropertyId);
         const unit = prop?.units?.find((u) => String(u.id) === uId);
-        let calculatedAmount = formData.amount;
-        if (unit?.active_rates?.[0]?.amount) {
-            calculatedAmount = String(
-                Number(unit.active_rates[0].amount) * Number(formData.duration_months || 1),
-            );
-        }
+        const calculatedAmount = unit
+            ? String(getUnitMonthlyRate(unit) * Number(formData.duration_months || 1))
+            : formData.amount;
         setFormData((prev) => ({
             ...prev,
             unit_id: uId,
@@ -309,10 +320,9 @@ export default function CartOrdersIndex({
     const handleDurationChange = (months: number) => {
         const prop = properties.find((p) => p.id === selectedPropertyId);
         const unit = prop?.units?.find((u) => String(u.id) === formData.unit_id);
-        let calculatedAmount = formData.amount;
-        if (unit?.active_rates?.[0]?.amount) {
-            calculatedAmount = String(Number(unit.active_rates[0].amount) * Number(months || 1));
-        }
+        const calculatedAmount = unit
+            ? String(getUnitMonthlyRate(unit) * Number(months || 1))
+            : formData.amount;
         setFormData((prev) => ({
             ...prev,
             duration_months: months,
@@ -996,7 +1006,7 @@ export default function CartOrdersIndex({
                                     >
                                         <option value="" disabled>Pilih Kamar</option>
                                         {availableUnits.map((u) => {
-                                            const rate = u.active_rates?.[0]?.amount;
+                                            const rate = getUnitMonthlyRate(u);
                                             return (
                                                 <option key={u.id} value={u.id}>
                                                     {u.name} {rate ? `(${formatRupiah(Number(rate))}/bln)` : ''}

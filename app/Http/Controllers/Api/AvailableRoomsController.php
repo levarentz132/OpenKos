@@ -60,9 +60,18 @@ class AvailableRoomsController extends Controller
                 'units' => function ($q) use ($minPrice, $maxPrice, $search) {
                     $q->when($search, fn (Builder $sq) => $sq->where('name', 'like', "%{$search}%"))
                         ->when($minPrice || $maxPrice, function (Builder $rq) use ($minPrice, $maxPrice) {
-                            $rq->whereHas('activeRates', function (Builder $subRate) use ($minPrice, $maxPrice) {
-                                $subRate->when($minPrice, fn ($p) => $p->where('amount', '>=', (float) $minPrice))
-                                    ->when($maxPrice, fn ($p) => $p->where('amount', '<=', (float) $maxPrice));
+                            $rq->where(function (Builder $uq) use ($minPrice, $maxPrice) {
+                                $uq->whereHas('activeRates', function (Builder $subRate) use ($minPrice, $maxPrice) {
+                                    $subRate->where('billing_unit', 'month')
+                                        ->when($minPrice, fn ($p) => $p->where('amount', '>=', (float) $minPrice))
+                                        ->when($maxPrice, fn ($p) => $p->where('amount', '<=', (float) $maxPrice));
+                                })->orWhere(function (Builder $uq2) use ($minPrice, $maxPrice) {
+                                    $uq2->whereDoesntHave('activeRates', fn ($sub) => $sub->where('billing_unit', 'month'))
+                                        ->whereHas('activeRates', function (Builder $subRate) use ($minPrice, $maxPrice) {
+                                            $subRate->when($minPrice, fn ($p) => $p->where('amount', '>=', (float) $minPrice))
+                                                ->when($maxPrice, fn ($p) => $p->where('amount', '<=', (float) $maxPrice));
+                                        });
+                                });
                             });
                         })
                         ->with('activeRates')
@@ -89,7 +98,7 @@ class AvailableRoomsController extends Controller
             })->values();
 
             $availableRoomsData = $availableUnits->map(function (Unit $unit) {
-                $rate = $unit->activeRates->first()?->amount;
+                $monthlyRate = $unit->getMonthlyRate();
 
                 return [
                     'id' => $unit->id,
@@ -98,7 +107,13 @@ class AvailableRoomsController extends Controller
                     'floor' => $unit->floor,
                     'capacity' => $unit->capacity,
                     'size_sqm' => $unit->size_sqm ? (float) $unit->size_sqm : null,
-                    'monthly_rate' => $rate ? (float) $rate : null,
+                    'monthly_rate' => $monthlyRate ? (float) $monthlyRate : null,
+                    'rates' => $unit->activeRates->map(fn ($r) => [
+                        'id' => $r->id,
+                        'amount' => (float) $r->amount,
+                        'billing_interval' => (int) $r->billing_interval,
+                        'billing_unit' => $r->billing_unit instanceof \App\Enums\BillingUnit ? $r->billing_unit->value : (string) $r->billing_unit,
+                    ])->values()->all(),
                     'image_url' => $unit->image_url,
                     'video_url' => $unit->video_url,
                 ];
@@ -107,12 +122,11 @@ class AvailableRoomsController extends Controller
             $availableRoomNames = $availableUnits->pluck('name')->values()->all();
             $availableCount = count($availableRoomNames);
 
-            // Collect all active price rates (prefer available units, fallback to all units)
+            // Collect monthly price rates (prefer available units, fallback to all units)
             $targetUnits = $availableUnits->isNotEmpty() ? $availableUnits : $property->units;
             $allPrices = $targetUnits
-                ->flatMap(fn (Unit $unit) => $unit->activeRates->pluck('amount'))
-                ->map(fn ($amt) => (float) $amt)
-                ->filter(fn ($amt) => $amt > 0)
+                ->map(fn (Unit $unit) => $unit->getMonthlyRate())
+                ->filter(fn ($amt) => $amt !== null && $amt > 0)
                 ->values();
 
             $priceRange = null;

@@ -56,9 +56,7 @@ class BookingOrderController extends Controller
         $durationMonths = (int) ($validated['duration_months'] ?? 1);
         $endDate = $startDate->copy()->addMonthsNoOverflow($durationMonths)->format('Y-m-d');
 
-        $monthlyRent = $unit->rates()->where('billing_unit', 'month')->where('billing_interval', 1)->value('amount')
-            ?? $unit->activeRates()->first()?->amount
-            ?? 0;
+        $monthlyRent = $unit->getMonthlyRate() ?? 0;
 
         $depositAmount = (float) (($unit->property?->deposit_amount && $unit->property->deposit_amount > 0) ? $unit->property->deposit_amount : 500000);
         $rentAmount = (float) $monthlyRent;
