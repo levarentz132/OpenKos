@@ -188,7 +188,9 @@ class AiRoomController extends Controller
             return $isStatusAvailable && empty($unit->has_active_lease);
         })->values();
 
-        $allPrices = $property->units
+        $targetUnits = $availableUnits->isNotEmpty() ? $availableUnits : $property->units;
+
+        $allPrices = $targetUnits
             ->flatMap(fn (Unit $unit) => $unit->activeRates->pluck('amount'))
             ->map(fn ($amt) => (float) $amt)
             ->filter(fn ($amt) => $amt > 0)
@@ -444,14 +446,24 @@ class AiRoomController extends Controller
             $availCount = $availableUnits->count();
             $totalAvailableRoomsGlobal += $availCount;
 
-            $allPrices = $property->units
+            // Harga sewa khusus untuk kamar yang statusnya READY / AVAILABLE
+            $availableRates = $availableUnits
                 ->flatMap(fn (Unit $unit) => $unit->activeRates->pluck('amount'))
                 ->map(fn ($amt) => (float) $amt)
                 ->filter(fn ($amt) => $amt > 0)
                 ->values();
 
-            $minPrice = $allPrices->isNotEmpty() ? (int) $allPrices->min() : 1500000;
-            $maxPrice = $allPrices->isNotEmpty() ? (int) $allPrices->max() : 1500000;
+            // Semua harga sewa katalog properti (fallback jika semua kamar di properti ini penuh)
+            $allCatalogRates = $property->units
+                ->flatMap(fn (Unit $unit) => $unit->activeRates->pluck('amount'))
+                ->map(fn ($amt) => (float) $amt)
+                ->filter(fn ($amt) => $amt > 0)
+                ->values();
+
+            // Untuk tampilan kartu properti: prioritaskan rate kamar yang available jika ada
+            $displayRates = ($availCount > 0 && $availableRates->isNotEmpty()) ? $availableRates : $allCatalogRates;
+            $propMinPrice = $displayRates->isNotEmpty() ? (int) $displayRates->min() : 1500000;
+            $propMaxPrice = $displayRates->isNotEmpty() ? (int) $displayRates->max() : 1500000;
 
             if (! isset($areasGrouped[$areaName])) {
                 $areasGrouped[$areaName] = [
@@ -459,17 +471,26 @@ class AiRoomController extends Controller
                     'city' => $cityName,
                     'total_properties' => 0,
                     'total_available_rooms' => 0,
-                    'min_price_numeric' => $minPrice,
-                    'price_starts_from' => 'Rp ' . number_format($minPrice, 0, ',', '.') . '/bulan',
+                    'available_prices' => [],
+                    'all_catalog_prices' => [],
                     'properties' => [],
                 ];
             }
 
             $areasGrouped[$areaName]['total_properties']++;
             $areasGrouped[$areaName]['total_available_rooms'] += $availCount;
-            if ($minPrice < $areasGrouped[$areaName]['min_price_numeric']) {
-                $areasGrouped[$areaName]['min_price_numeric'] = $minPrice;
-                $areasGrouped[$areaName]['price_starts_from'] = 'Rp ' . number_format($minPrice, 0, ',', '.') . '/bulan';
+
+            // WAJIB: Hanya masukkan harga ke available_prices jika properti memiliki kamar kosong (available_rooms > 0)
+            if ($availCount > 0 && $availableRates->isNotEmpty()) {
+                foreach ($availableRates as $rate) {
+                    $areasGrouped[$areaName]['available_prices'][] = (int) $rate;
+                }
+            }
+
+            if ($allCatalogRates->isNotEmpty()) {
+                foreach ($allCatalogRates as $rate) {
+                    $areasGrouped[$areaName]['all_catalog_prices'][] = (int) $rate;
+                }
             }
 
             $areasGrouped[$areaName]['properties'][] = [
@@ -479,13 +500,34 @@ class AiRoomController extends Controller
                 'type' => $property->type,
                 'available_rooms_count' => $availCount,
                 'status' => $availCount > 0 ? "Ready {$availCount} kamar" : 'Kamar full',
-                'price_display' => $minPrice === $maxPrice
-                    ? 'Rp ' . number_format($minPrice, 0, ',', '.') . '/bulan'
-                    : 'Rp ' . number_format($minPrice, 0, ',', '.') . ' - Rp ' . number_format($maxPrice, 0, ',', '.') . '/bulan',
+                'min_price_numeric' => $propMinPrice,
+                'price_display' => $propMinPrice === $propMaxPrice
+                    ? 'Rp ' . number_format($propMinPrice, 0, ',', '.') . '/bulan'
+                    : 'Rp ' . number_format($propMinPrice, 0, ',', '.') . ' - Rp ' . number_format($propMaxPrice, 0, ',', '.') . '/bulan',
                 'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}",
                 'direct_booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?book=true",
             ];
         }
+
+        // Kalkulasi harga mulai dari (min_price_numeric) per wilayah secara akurat:
+        // HANYA ambil min(price) dari kamar/properti yang memiliki available_rooms > 0
+        foreach ($areasGrouped as $areaName => &$areaData) {
+            if ($areaData['total_available_rooms'] > 0 && ! empty($areaData['available_prices'])) {
+                $minPriceNumeric = min($areaData['available_prices']);
+                $priceStartsFrom = 'Rp ' . number_format($minPriceNumeric, 0, ',', '.') . '/bulan';
+            } elseif (! empty($areaData['all_catalog_prices'])) {
+                $minPriceNumeric = min($areaData['all_catalog_prices']);
+                $priceStartsFrom = 'Rp ' . number_format($minPriceNumeric, 0, ',', '.') . '/bulan (full)';
+            } else {
+                $minPriceNumeric = 1500000;
+                $priceStartsFrom = 'Rp 1.500.000/bulan';
+            }
+
+            $areaData['min_price_numeric'] = $minPriceNumeric;
+            $areaData['price_starts_from'] = $priceStartsFrom;
+            unset($areaData['available_prices'], $areaData['all_catalog_prices']);
+        }
+        unset($areaData);
 
         $areaList = array_values($areasGrouped);
 

@@ -159,8 +159,8 @@ curl -X GET "https://dashboard.highlanderstay.com/api/v1/ai/locations?only_avail
     "Tangerang",
     "Palembang"
   ],
-  "ai_answer_suggestion": "Saat ini Highlanderstay menyediakan kamar kosong di area: Grogol (3 kamar ready, mulai Rp 1.400.000/bulan), Kebon Jeruk (2 kamar ready, mulai Rp 2.000.000/bulan), Kemayoran (2 kamar ready, mulai Rp 1.800.000/bulan), Tangerang (1 kamar ready, mulai Rp 1.300.000/bulan). Kakak berminat cari kamar di area mana atau dekat kampus/kantor apa?",
-  "ai_summary_text": "Cakupan wilayah Highlanderstay: Grogol (2 properti, 3 kamar ready, mulai Rp 1.400.000/bulan); Kebon Jeruk (5 properti, 2 kamar ready, mulai Rp 2.000.000/bulan); ...",
+  "ai_answer_suggestion": "Saat ini Highlanderstay menyediakan kamar kosong di area: Grogol (3 kamar ready, mulai Rp 1.400.000/bulan), Kebon Jeruk (2 kamar ready, mulai Rp 1.700.000/bulan), Kemayoran (2 kamar ready, mulai Rp 1.800.000/bulan), Tangerang (1 kamar ready, mulai Rp 1.300.000/bulan). Kakak berminat cari kamar di area mana atau dekat kampus/kantor apa?",
+  "ai_summary_text": "Cakupan wilayah Highlanderstay: Grogol (2 properti, 3 kamar ready, mulai Rp 1.400.000/bulan); Kebon Jeruk (5 properti, 2 kamar ready, mulai Rp 1.700.000/bulan); ...",
   "areas": [
     {
       "area": "Grogol",
@@ -187,8 +187,8 @@ curl -X GET "https://dashboard.highlanderstay.com/api/v1/ai/locations?only_avail
       "city": "Jakarta Barat",
       "total_properties": 5,
       "total_available_rooms": 2,
-      "min_price_numeric": 2000000,
-      "price_starts_from": "Rp 2.000.000/bulan",
+      "min_price_numeric": 1700000,
+      "price_starts_from": "Rp 1.700.000/bulan",
       "properties": [
         {
           "id": 4,
@@ -197,7 +197,7 @@ curl -X GET "https://dashboard.highlanderstay.com/api/v1/ai/locations?only_avail
           "type": "kos",
           "available_rooms_count": 1,
           "status": "Ready 1 kamar",
-          "price_display": "Rp 2.000.000/bulan",
+          "price_display": "Rp 1.700.000/bulan",
           "booking_url": "https://highlanderstay.com/property/4-mangga"
         }
       ]
@@ -205,6 +205,9 @@ curl -X GET "https://dashboard.highlanderstay.com/api/v1/ai/locations?only_avail
   ]
 }
 ```
+
+> **Aturan Akurasi Harga (`min_price`)**:
+> Sistem backend secara otomatis memfilter kalkulasi harga termurah (`min_price_numeric` & `price_starts_from`) hanya dari kamar pada properti yang berstatus **tersedia / ready (`available_rooms_count > 0`)**. Unit/properti yang sedang terisi penuh (seperti Pesing Lama) **tidak diikutsertakan** dalam perhitungan harga mulai dari wilayah tersebut, sehingga harga yang ditawarkan AI ke calon penyewa adalah harga riil kamar yang memang bisa dibooking.
 
 ---
 
