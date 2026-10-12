@@ -39,6 +39,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::prefix('ai')->name('ai.')->group(function () {
         Route::get('search', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'search'])->name('search');
         Route::get('rooms', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'search'])->name('rooms');
+        Route::get('locations', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'locations'])->name('locations');
+        Route::get('areas', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'locations'])->name('areas');
         Route::get('rooms/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'show'])->name('rooms.show');
         Route::get('properties/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'show'])->name('properties.show');
         Route::get('schema', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'schema'])->name('schema');

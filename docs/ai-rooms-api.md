@@ -105,9 +105,110 @@ curl -X GET "https://dashboard.highlanderstay.com/api/v1/ai/search?location=Kebo
 }
 ```
 
+```
+
 ---
 
-## 4. Level 2: Endpoint Detail Lengkap Properti & Kamar (`get_room_details`)
+## 4. Endpoint Ringkasan Wilayah & Lokasi (`get_available_locations`)
+
+Endpoint ini dirancang khusus untuk pertanyaan awal percakapan pengguna, seperti:
+> *"Kak, kos Highlanderstay ada di lokasi mana saja?"*  
+> *"Mau cari kamar kosong, lokasinya di daerah mana aja ya?"*
+
+Dengan memanggil endpoint ini, AI langsung mendapatkan rekapitulasi seluruh area properti, jumlah kamar kosong di setiap area, harga termurah, serta kalimat ringkasan (`ai_summary_text`) yang bisa langsung dibacakan ke pengguna.
+
+- **Method**: `GET`
+- **URL**: `/api/v1/ai/locations` (alias: `/api/v1/ai/areas`)
+- **Headers**: `Accept: application/json`
+
+### Parameter Query (Opsional)
+
+| Parameter | Tipe | Default | Keterangan |
+|---|---|---|---|
+| `only_available` | `boolean` | `false` | Jika `true` / `1`, hanya mengembalikan wilayah yang memiliki kamar kosong tersedia (`total_available_rooms > 0`). |
+| `type` | `string` | `all` | Filter tipe properti: `all`, `kos`, atau `apartment`. |
+| `city` | `string` | - | Filter nama kota (contoh: `Jakarta`, `Tangerang`, `Palembang`). |
+
+### Contoh Request (cURL)
+
+```bash
+# Ambil hanya lokasi yang memiliki kamar kosong ready
+curl -X GET "https://dashboard.highlanderstay.com/api/v1/ai/locations?only_available=true" \
+  -H "Accept: application/json"
+```
+
+### Contoh Response (`200 OK`)
+
+```json
+{
+  "success": true,
+  "total_active_properties": 15,
+  "total_available_rooms": 9,
+  "available_areas_with_vacant_rooms": [
+    "Grogol",
+    "Kebon Jeruk",
+    "Kemayoran",
+    "Cengkareng",
+    "Tangerang"
+  ],
+  "all_coverage_areas": [
+    "Grogol",
+    "Kebon Jeruk",
+    "Kemayoran",
+    "Cengkareng",
+    "Tangerang",
+    "Palembang"
+  ],
+  "ai_answer_suggestion": "Saat ini Highlanderstay menyediakan kamar kosong di area: Grogol (3 kamar ready, mulai Rp 1.400.000/bulan), Kebon Jeruk (2 kamar ready, mulai Rp 2.000.000/bulan), Kemayoran (2 kamar ready, mulai Rp 1.800.000/bulan), Tangerang (1 kamar ready, mulai Rp 1.300.000/bulan). Kakak berminat cari kamar di area mana atau dekat kampus/kantor apa?",
+  "ai_summary_text": "Cakupan wilayah Highlanderstay: Grogol (2 properti, 3 kamar ready, mulai Rp 1.400.000/bulan); Kebon Jeruk (5 properti, 2 kamar ready, mulai Rp 2.000.000/bulan); ...",
+  "areas": [
+    {
+      "area": "Grogol",
+      "city": "Jakarta Barat",
+      "total_properties": 2,
+      "total_available_rooms": 3,
+      "min_price_numeric": 1400000,
+      "price_starts_from": "Rp 1.400.000/bulan",
+      "properties": [
+        {
+          "id": 1,
+          "name": "Alpukat",
+          "slug": "alpukat",
+          "type": "kos",
+          "available_rooms_count": 2,
+          "status": "Ready 2 kamar",
+          "price_display": "Rp 1.400.000/bulan",
+          "booking_url": "https://highlanderstay.com/property/1-alpukat"
+        }
+      ]
+    },
+    {
+      "area": "Kebon Jeruk",
+      "city": "Jakarta Barat",
+      "total_properties": 5,
+      "total_available_rooms": 2,
+      "min_price_numeric": 2000000,
+      "price_starts_from": "Rp 2.000.000/bulan",
+      "properties": [
+        {
+          "id": 4,
+          "name": "GREENVILLE",
+          "slug": "mangga",
+          "type": "kos",
+          "available_rooms_count": 1,
+          "status": "Ready 1 kamar",
+          "price_display": "Rp 2.000.000/bulan",
+          "booking_url": "https://highlanderstay.com/property/4-mangga"
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## 5. Level 2: Endpoint Detail Lengkap Properti & Kamar (`get_room_details`)
 
 Endpoint ini dipanggil ketika AI membutuhkan media lengkap (foto HD, video tur, alamat rute, rincian tiap nomor kamar, lantai, dan fasilitas).
 

@@ -336,7 +336,177 @@ class AiRoomController extends Controller
                     ],
                     'endpoint' => url('/api/v1/ai/rooms/{id}'),
                 ],
+                [
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'get_available_locations',
+                        'description' => 'Mendapatkan ringkasan seluruh wilayah/lokasi properti Highlanderstay beserta jumlah kamar kosong dan range harga awal untuk menjawab pertanyaan user seperti "mau cari kamar kosong, lokasinya ada di mana saja" atau "lokasi apa saja yang tersedia".',
+                        'parameters' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'only_available' => [
+                                    'type' => 'boolean',
+                                    'description' => 'Set true jika user menanyakan lokasi yang memiliki kamar kosong saja (default: true).',
+                                ],
+                                'type' => [
+                                    'type' => 'string',
+                                    'enum' => ['all', 'kos', 'apartment'],
+                                    'description' => 'Tipe akomodasi: "kos" atau "apartment" (default: all)',
+                                ],
+                            ],
+                        ],
+                    ],
+                    'endpoint' => url('/api/v1/ai/locations'),
+                ],
             ],
+        ]);
+    }
+
+    /**
+     * Locations & Coverage Overview:
+     * Returns all active areas, how many units/rooms are available, price range, and an AI-friendly summary text.
+     */
+    public function locations(Request $request): JsonResponse
+    {
+        $this->verifyApiAccess($request);
+
+        $onlyAvailable = $request->boolean('only_available', false);
+        $type = $request->query('type', 'all');
+
+        $query = Property::query()
+            ->where('is_active', true);
+
+        if ($type === 'kos') {
+            $query->where(fn (Builder $q) => $q->whereNull('type')->orWhere('type', 'kos'));
+        } elseif ($type === 'apartment') {
+            $query->where('type', 'apartment');
+        }
+
+        if ($request->filled('city')) {
+            $cityParam = $request->query('city');
+            $query->whereHas('city', fn (Builder $cq) => $cq->where('name', 'like', "%{$cityParam}%"));
+        }
+
+        $properties = $query
+            ->with([
+                'units' => function ($unitQuery) {
+                    $unitQuery->with('activeRates')
+                        ->withExists(['leases as has_active_lease' => fn (Builder $lq) => $lq->where('status', 'active')])
+                        ->orderBy('name');
+                },
+                'city',
+            ])
+            ->orderBy('name')
+            ->get();
+
+        $areasGrouped = [];
+        $totalAvailableRoomsGlobal = 0;
+        $frontendBase = config('app.frontend_url', env('FRONTEND_URL', 'https://highlanderstay.com'));
+
+        foreach ($properties as $property) {
+            $areaName = trim((string) ($property->kecamatan ?: ($property->city?->name ?: 'Jakarta Barat')));
+            $cityName = $property->city?->name ?: 'Jakarta';
+
+            $availableUnits = $property->units->filter(function (Unit $unit) {
+                $isStatusAvailable = $unit->status === UnitStatus::Available
+                    || (is_string($unit->status) && $unit->status === 'available');
+
+                return $isStatusAvailable && empty($unit->has_active_lease);
+            })->values();
+
+            $availCount = $availableUnits->count();
+            $totalAvailableRoomsGlobal += $availCount;
+
+            $allPrices = $property->units
+                ->flatMap(fn (Unit $unit) => $unit->activeRates->pluck('amount'))
+                ->map(fn ($amt) => (float) $amt)
+                ->filter(fn ($amt) => $amt > 0)
+                ->values();
+
+            $minPrice = $allPrices->isNotEmpty() ? (int) $allPrices->min() : 1500000;
+            $maxPrice = $allPrices->isNotEmpty() ? (int) $allPrices->max() : 1500000;
+
+            if (! isset($areasGrouped[$areaName])) {
+                $areasGrouped[$areaName] = [
+                    'area' => $areaName,
+                    'city' => $cityName,
+                    'total_properties' => 0,
+                    'total_available_rooms' => 0,
+                    'min_price_numeric' => $minPrice,
+                    'price_starts_from' => 'Rp ' . number_format($minPrice, 0, ',', '.') . '/bulan',
+                    'properties' => [],
+                ];
+            }
+
+            $areasGrouped[$areaName]['total_properties']++;
+            $areasGrouped[$areaName]['total_available_rooms'] += $availCount;
+            if ($minPrice < $areasGrouped[$areaName]['min_price_numeric']) {
+                $areasGrouped[$areaName]['min_price_numeric'] = $minPrice;
+                $areasGrouped[$areaName]['price_starts_from'] = 'Rp ' . number_format($minPrice, 0, ',', '.') . '/bulan';
+            }
+
+            $areasGrouped[$areaName]['properties'][] = [
+                'id' => $property->id,
+                'name' => $property->name,
+                'slug' => $property->slug,
+                'type' => $property->type,
+                'available_rooms_count' => $availCount,
+                'status' => $availCount > 0 ? "Ready {$availCount} kamar" : 'Kamar full',
+                'price_display' => $minPrice === $maxPrice
+                    ? 'Rp ' . number_format($minPrice, 0, ',', '.') . '/bulan'
+                    : 'Rp ' . number_format($minPrice, 0, ',', '.') . ' - Rp ' . number_format($maxPrice, 0, ',', '.') . '/bulan',
+                'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}",
+            ];
+        }
+
+        $areaList = array_values($areasGrouped);
+
+        // Separate areas with available rooms vs full
+        $areasWithVacant = array_values(array_filter($areaList, fn ($a) => $a['total_available_rooms'] > 0));
+
+        // Generate natural conversational answer suggestion for AI
+        $vacantAreaSummaries = array_map(
+            fn ($a) => "{$a['area']} ({$a['total_available_rooms']} kamar ready, mulai {$a['price_starts_from']})",
+            $areasWithVacant
+        );
+
+        if (! empty($vacantAreaSummaries)) {
+            $aiAnswerSuggestion = 'Saat ini Highlanderstay menyediakan kamar kosong di area: '
+                . implode(', ', $vacantAreaSummaries)
+                . '. Kakak berminat cari kamar di area mana atau dekat kampus/kantor apa?';
+        } else {
+            $aiAnswerSuggestion = 'Mohon maaf, saat ini seluruh kamar di properti Highlanderstay sedang terisi penuh.';
+        }
+
+        $summaryParts = [];
+        foreach ($areaList as $item) {
+            $statusStr = $item['total_available_rooms'] > 0
+                ? "{$item['total_available_rooms']} kamar ready"
+                : 'kamar penuh';
+            $summaryParts[] = "{$item['area']} ({$item['total_properties']} properti, {$statusStr}, mulai {$item['price_starts_from']})";
+        }
+        $aiTextSummary = 'Cakupan wilayah Highlanderstay: ' . implode('; ', $summaryParts) . '.';
+
+        $outputAreas = $onlyAvailable ? $areasWithVacant : $areaList;
+        if ($onlyAvailable) {
+            foreach ($outputAreas as &$areaItem) {
+                $areaItem['properties'] = array_values(array_filter(
+                    $areaItem['properties'],
+                    fn ($p) => $p['available_rooms_count'] > 0
+                ));
+            }
+            unset($areaItem);
+        }
+
+        return response()->json([
+            'success' => true,
+            'total_active_properties' => $properties->count(),
+            'total_available_rooms' => $totalAvailableRoomsGlobal,
+            'available_areas_with_vacant_rooms' => array_column($areasWithVacant, 'area'),
+            'all_coverage_areas' => array_keys($areasGrouped),
+            'ai_answer_suggestion' => $aiAnswerSuggestion,
+            'ai_summary_text' => $aiTextSummary,
+            'areas' => $outputAreas,
         ]);
     }
 
