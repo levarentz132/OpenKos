@@ -121,6 +121,8 @@ class AiRoomController extends Controller
                 'video_url' => $property->video_url,
                 'google_maps_url' => $property->address_url,
                 'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}",
+                'direct_booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?book=true",
+                'booking_message_cta' => "Untuk melihat kamar dan langsung booking di {$property->name}, silakan buka link berikut: " . rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?book=true",
                 'keeper_contact' => $property->phone,
                 'detail_api_url' => url("/api/v1/ai/rooms/{$property->id}"),
             ];
@@ -217,6 +219,7 @@ class AiRoomController extends Controller
                 'monthly_rate_display' => 'Rp ' . number_format($monthlyRate, 0, ',', '.') . ' / bulan',
                 'photo_url' => $unit->image_url ?: ($allPhotos[0] ?? null),
                 'video_url' => $unit->video_url ?: $property->video_url,
+                'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?room=" . urlencode($unit->name) . "&book=true",
             ];
         })->values()->all();
 
@@ -250,6 +253,8 @@ class AiRoomController extends Controller
                 'keeper_phone' => $property->phone,
                 'keeper_whatsapp_url' => $cleanPhone ? "https://wa.me/{$cleanPhone}" : null,
                 'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}",
+                'direct_booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?book=true",
+                'booking_message_cta' => "Untuk langsung melakukan booking kamar di {$property->name}, silakan klik link resmi kami berikut: " . rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?book=true",
                 'facilities' => [
                     'AC Dingin',
                     'WiFi Fiber Cepat',
@@ -358,6 +363,28 @@ class AiRoomController extends Controller
                     ],
                     'endpoint' => url('/api/v1/ai/locations'),
                 ],
+                [
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'get_booking_link',
+                        'description' => 'Mendapatkan link/tautan halaman booking properti Highlanderstay untuk dikirimkan ke pengguna saat pengguna ingin memesan atau booking kamar.',
+                        'parameters' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'id' => [
+                                    'type' => 'string',
+                                    'description' => 'ID properti atau slug properti yang ingin dibooking (contoh: "4" atau "mangga")',
+                                ],
+                                'room' => [
+                                    'type' => 'string',
+                                    'description' => 'Nama atau nomor kamar spesifik jika pengguna sudah memilih unit tertentu (opsional).',
+                                ],
+                            ],
+                            'required' => ['id'],
+                        ],
+                    ],
+                    'endpoint' => url('/api/v1/ai/booking-link/{id}'),
+                ],
             ],
         ]);
     }
@@ -456,6 +483,7 @@ class AiRoomController extends Controller
                     ? 'Rp ' . number_format($minPrice, 0, ',', '.') . '/bulan'
                     : 'Rp ' . number_format($minPrice, 0, ',', '.') . ' - Rp ' . number_format($maxPrice, 0, ',', '.') . '/bulan',
                 'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}",
+                'direct_booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?book=true",
             ];
         }
 
@@ -507,6 +535,67 @@ class AiRoomController extends Controller
             'ai_answer_suggestion' => $aiAnswerSuggestion,
             'ai_summary_text' => $aiTextSummary,
             'areas' => $outputAreas,
+        ]);
+    }
+
+    /**
+     * Dedicated Booking Link Generator for AI Assistant:
+     * Generates official frontend booking link, direct booking modal link, WhatsApp fallback, and ready-to-send AI text.
+     */
+    public function bookingLink(Request $request, string|int $id): JsonResponse
+    {
+        $this->verifyApiAccess($request);
+
+        $property = Property::query()
+            ->where('is_active', true)
+            ->where(function (Builder $q) use ($id) {
+                if (is_numeric($id)) {
+                    $q->where('id', $id);
+                } else {
+                    $clean = strtolower(str_replace(['LOC_', '_'], ['', '-'], $id));
+                    $q->where('slug', $id)->orWhere('slug', $clean);
+                }
+            })
+            ->with(['city'])
+            ->first();
+
+        if (! $property) {
+            return response()->json([
+                'success' => false,
+                'error' => "Property '{$id}' not found.",
+            ], 404);
+        }
+
+        $frontendBase = config('app.frontend_url', env('FRONTEND_URL', 'https://highlanderstay.com'));
+        $roomParam = $request->query('room');
+
+        $basePropertyUrl = rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}";
+
+        $queryParams = ['book' => 'true'];
+        if ($roomParam) {
+            $queryParams['room'] = $roomParam;
+        }
+        $directBookingUrl = $basePropertyUrl . '?' . http_build_query($queryParams);
+
+        $cleanPhone = preg_replace('/\D/', '', (string) $property->phone);
+        if (str_starts_with($cleanPhone, '0')) {
+            $cleanPhone = '62' . substr($cleanPhone, 1);
+        }
+
+        $waText = "Halo Pengelola, saya ingin booking kamar di {$property->name}" . ($roomParam ? " ({$roomParam})" : '') . ". Apakah masih tersedia?";
+        $whatsappUrl = $cleanPhone ? "https://wa.me/{$cleanPhone}?text=" . urlencode($waText) : null;
+
+        $roomText = $roomParam ? " tipe {$roomParam}" : '';
+        $suggestedReply = "Baik kak! Untuk langsung memesan kamar{$roomText} di *{$property->name}*, silakan klik link resmi kami berikut:\n\n👉 {$directBookingUrl}\n\nDi halaman tersebut Kakak bisa langsung cek foto kamar, memilih unit, dan menyelesaikan pemesanan.";
+
+        return response()->json([
+            'success' => true,
+            'property_id' => $property->id,
+            'property_name' => $property->name,
+            'property_page_url' => $basePropertyUrl,
+            'direct_booking_url' => $directBookingUrl,
+            'whatsapp_booking_url' => $whatsappUrl,
+            'suggested_ai_message' => $suggestedReply,
         ]);
     }
 

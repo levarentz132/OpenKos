@@ -252,6 +252,8 @@ curl -X GET "https://dashboard.highlanderstay.com/api/v1/ai/rooms/4" \
     "keeper_phone": "+628211065298",
     "keeper_whatsapp_url": "https://wa.me/628211065298",
     "booking_url": "https://highlanderstay.com/property/4-mangga",
+    "direct_booking_url": "https://highlanderstay.com/property/4-mangga?book=true",
+    "booking_message_cta": "Untuk langsung melakukan booking kamar di GREENVILLE, silakan klik link resmi kami berikut: https://highlanderstay.com/property/4-mangga?book=true",
     "facilities": [
       "AC Dingin",
       "WiFi Fiber Cepat",
@@ -277,7 +279,8 @@ curl -X GET "https://dashboard.highlanderstay.com/api/v1/ai/rooms/4" \
         "monthly_rate": 2000000,
         "monthly_rate_display": "Rp 2.000.000 / bulan",
         "photo_url": "https://dashboard.highlanderstay.com/storage/properties/wn7vq9Mw9aSPBCgA0XNmDRvjFm0PoGFN1VawXwFO.jpg",
-        "video_url": "https://dashboard.highlanderstay.com/storage/properties/videos/MPNwsUFLPur6LeMQEaGUDYSiRzH0rJpQ0zMogbOB.mp4"
+        "video_url": "https://dashboard.highlanderstay.com/storage/properties/videos/MPNwsUFLPur6LeMQEaGUDYSiRzH0rJpQ0zMogbOB.mp4",
+        "booking_url": "https://highlanderstay.com/property/4-mangga?room=Kamar+301&book=true"
       }
     ]
   }
@@ -286,7 +289,44 @@ curl -X GET "https://dashboard.highlanderstay.com/api/v1/ai/rooms/4" \
 
 ---
 
-## 5. Level 3: Function Calling Schema (`/api/v1/ai/schema`)
+## 6. Endpoint Khusus Link Booking (`get_booking_link`)
+
+Digunakan saat percakapan bot mencapai tahap konfirmasi booking atau saat pengguna berkata:
+> *"Saya mau booking yang di Greenville dong kak"*  
+> *"Gimana cara pesannya?"*  
+> *"Minta link booking untuk kamar 301 ya"*
+
+Endpoint ini mengembalikan tautan resmi properti yang jika diklik pengguna, akan langsung membuka halaman properti dan secara otomatis memunculkan pop-up formulir booking (dengan kamar yang sudah terpilih).
+
+- **Method**: `GET`
+- **URL**: `/api/v1/ai/booking-link/{id}` (alias: `/api/v1/ai/rooms/{id}/booking-link`)
+- **Query Parameter (Opsional)**:
+  - `room` : Nama tipe atau nomor kamar spesifik (contoh: `Kamar 301`).
+
+### Contoh Request (cURL)
+
+```bash
+curl -X GET "https://dashboard.highlanderstay.com/api/v1/ai/booking-link/4?room=Kamar%20301" \
+  -H "Accept: application/json"
+```
+
+### Contoh Response (`200 OK`)
+
+```json
+{
+  "success": true,
+  "property_id": 4,
+  "property_name": "GREENVILLE",
+  "property_page_url": "https://highlanderstay.com/property/4-mangga",
+  "direct_booking_url": "https://highlanderstay.com/property/4-mangga?book=true&room=Kamar+301",
+  "whatsapp_booking_url": "https://wa.me/628211065298?text=Halo+Pengelola%2C+saya+ingin+booking+kamar+di+GREENVILLE+%28Kamar+301%29.+Apakah+masih+tersedia%3F",
+  "suggested_ai_message": "Baik kak! Untuk langsung memesan kamar tipe Kamar 301 di *GREENVILLE*, silakan klik link resmi kami berikut:\n\n👉 https://highlanderstay.com/property/4-mangga?book=true&room=Kamar+301\n\nDi halaman tersebut Kakak bisa langsung cek foto kamar, memilih unit, dan menyelesaikan pemesanan."
+}
+```
+
+---
+
+## 7. Level 3: Function Calling Schema (`/api/v1/ai/schema`)
 
 Endpoint ini menyediakan JSON schema function calling standar OpenAPI yang bisa langsung digunakan oleh **OpenAI (GPT-4o)**, **Google Gemini**, **LangChain**, maupun **n8n AI Agent**.
 

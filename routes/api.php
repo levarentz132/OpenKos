@@ -43,6 +43,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('areas', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'locations'])->name('areas');
         Route::get('rooms/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'show'])->name('rooms.show');
         Route::get('properties/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'show'])->name('properties.show');
+        Route::get('booking-link/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'bookingLink'])->name('booking_link');
+        Route::get('rooms/{id}/booking-link', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'bookingLink'])->name('rooms.booking_link');
         Route::get('schema', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'schema'])->name('schema');
     });
 
