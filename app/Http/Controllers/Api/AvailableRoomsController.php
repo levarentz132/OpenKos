@@ -150,6 +150,7 @@ class AvailableRoomsController extends Controller
             $coords = $this->resolveCoordinatesFromUrl($property->address_url, $property->id);
 
             return [
+                'id' => $property->id,
                 'name' => $property->name,
                 'slug' => $property->slug,
                 'canonical_slug' => $canonicalSlug,

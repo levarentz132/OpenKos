@@ -128,9 +128,9 @@ class AiRoomController extends Controller
                 'thumbnail_url' => $property->image_url,
                 'video_url' => $property->video_url,
                 'google_maps_url' => $property->address_url,
-                'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}",
-                'direct_booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?book=true",
-                'booking_message_cta' => "Untuk melihat kamar dan langsung booking di {$property->name}, silakan buka link berikut: " . rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?book=true",
+                'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->slug}",
+                'direct_booking_url' => rtrim($frontendBase, '/') . "/property/{$property->slug}?book=true",
+                'booking_message_cta' => "Untuk melihat kamar dan langsung booking di {$property->name}, silakan buka link berikut: " . rtrim($frontendBase, '/') . "/property/{$property->slug}?book=true",
                 'keeper_contact' => $property->phone,
                 'detail_api_url' => url("/api/v1/ai/rooms/{$property->id}"),
             ];
@@ -234,7 +234,7 @@ class AiRoomController extends Controller
                 ])->values()->all(),
                 'photo_url' => $unit->image_url ?: ($allPhotos[0] ?? null),
                 'video_url' => $unit->video_url ?: $property->video_url,
-                'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?room=" . urlencode($unit->name) . "&book=true",
+                'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->slug}?room=" . urlencode($unit->name) . "&book=true",
             ];
         })->values()->all();
 
@@ -267,9 +267,9 @@ class AiRoomController extends Controller
                 'available_rooms_count' => $availableUnits->count(),
                 'keeper_phone' => $property->phone,
                 'keeper_whatsapp_url' => $cleanPhone ? "https://wa.me/{$cleanPhone}" : null,
-                'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}",
-                'direct_booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?book=true",
-                'booking_message_cta' => "Untuk langsung melakukan booking kamar di {$property->name}, silakan klik link resmi kami berikut: " . rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?book=true",
+                'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->slug}",
+                'direct_booking_url' => rtrim($frontendBase, '/') . "/property/{$property->slug}?book=true",
+                'booking_message_cta' => "Untuk langsung melakukan booking kamar di {$property->name}, silakan klik link resmi kami berikut: " . rtrim($frontendBase, '/') . "/property/{$property->slug}?book=true",
                 'facilities' => [
                     'AC Dingin',
                     'WiFi Fiber Cepat',
@@ -517,8 +517,8 @@ class AiRoomController extends Controller
                 'price_display' => $propMinPrice === $propMaxPrice
                     ? 'Rp ' . number_format($propMinPrice, 0, ',', '.') . '/bulan'
                     : 'Rp ' . number_format($propMinPrice, 0, ',', '.') . ' - Rp ' . number_format($propMaxPrice, 0, ',', '.') . '/bulan',
-                'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}",
-                'direct_booking_url' => rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}?book=true",
+                'booking_url' => rtrim($frontendBase, '/') . "/property/{$property->slug}",
+                'direct_booking_url' => rtrim($frontendBase, '/') . "/property/{$property->slug}?book=true",
             ];
         }
 
@@ -624,7 +624,7 @@ class AiRoomController extends Controller
         $frontendBase = config('app.frontend_url', env('FRONTEND_URL', 'https://highlanderstay.com'));
         $roomParam = $request->query('room');
 
-        $basePropertyUrl = rtrim($frontendBase, '/') . "/property/{$property->id}-{$property->slug}";
+        $basePropertyUrl = rtrim($frontendBase, '/') . "/property/{$property->slug}";
 
         $queryParams = ['book' => 'true'];
         if ($roomParam) {
