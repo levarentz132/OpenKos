@@ -8,6 +8,7 @@ Welcome to the OpenKos developer documentation.
 - **[Auth API Reference](auth-api.md)** — Detailed specification of all `/api/v1/auth/*` endpoints and error formats.
 - **[Tenant Portal API](tenant-api.md)** — Leases, Invoices, Payments, and Maintenance Ticket endpoints for authenticated tenants.
 - **[Available Rooms API](available-rooms-api.md)** — Public room availability search and property filtering endpoints.
+- **[AI Room Catalog API](ai-rooms-api.md)** — 2-Level API specialized for AI Agents (LangChain, n8n, OpenAI, Gemini) with media, video tour, coordinates, and Function Calling schema.
 
 ## Architecture & Workflows
 

@@ -35,6 +35,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::get('available-rooms', [AvailableRoomsController::class, 'index'])->name('available-rooms');
     Route::get('properties/{property:slug}/available-rooms', [AvailableRoomsController::class, 'forProperty'])->name('properties.available-rooms');
 
+    // AI Specialized Endpoints (Search, Full Details, & Function Calling Schema)
+    Route::prefix('ai')->name('ai.')->group(function () {
+        Route::get('search', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'search'])->name('search');
+        Route::get('rooms', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'search'])->name('rooms');
+        Route::get('rooms/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'show'])->name('rooms.show');
+        Route::get('properties/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'show'])->name('properties.show');
+        Route::get('schema', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'schema'])->name('schema');
+    });
+
     // Room Booking Orders & Cart
     Route::post('orders', [BookingOrderController::class, 'store'])->name('orders.store');
     Route::post('bookings', [BookingOrderController::class, 'store'])->name('bookings.store');
