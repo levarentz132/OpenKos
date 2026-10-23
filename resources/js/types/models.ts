@@ -72,7 +72,14 @@ export type Property = {
     postal_code?: string | null;
     phone?: string | null;
     description?: string | null;
+    facilities?: string[] | null;
     deposit_amount?: number | string | null;
+    is_transit_enabled?: boolean;
+    transit_3h?: number | string | null;
+    transit_6h?: number | string | null;
+    transit_12h?: number | string | null;
+    transit_24h?: number | string | null;
+    hourly_rate?: number | string | null;
     image?: string | null;
     image_url?: string | null;
     images?: string[] | null;

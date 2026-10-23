@@ -170,6 +170,7 @@ class AvailableRoomsController extends Controller
                 'availability_status' => $availabilityStatus,
                 'price_range' => $priceRange,
                 'deposit_amount' => (float) (($property->deposit_amount && $property->deposit_amount > 0) ? $property->deposit_amount : 500000),
+                'facilities' => is_array($property->facilities) ? $property->facilities : [],
             ];
         });
 

@@ -1,5 +1,5 @@
 import { Link, router } from '@inertiajs/react';
-import { ExternalLink, MapPin } from 'lucide-react';
+import { ExternalLink, MapPin, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Badge } from '@/components/ui/badge';
@@ -204,6 +204,22 @@ export default function PropertyDetailSheet({
                                     <p className="mt-1 text-sm whitespace-pre-line text-foreground/90">
                                         {property.description}
                                     </p>
+                                </div>
+                            )}
+
+                            {property.facilities && Array.isArray(property.facilities) && property.facilities.length > 0 && (
+                                <div>
+                                    <p className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1.5">
+                                        <Sparkles className="size-3.5 text-amber-500" />
+                                        Fasilitas Properti ({property.facilities.length})
+                                    </p>
+                                    <div className="mt-2 flex flex-wrap gap-1.5">
+                                        {property.facilities.map((fac, idx) => (
+                                            <Badge key={idx} variant="secondary" className="text-xs py-0.5 px-2 font-normal">
+                                                {fac}
+                                            </Badge>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
 

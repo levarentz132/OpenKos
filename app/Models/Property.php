@@ -34,7 +34,14 @@ use Illuminate\Support\Str;
     'image',
     'images',
     'video',
+    'facilities',
     'is_active',
+    'is_transit_enabled',
+    'transit_3h',
+    'transit_6h',
+    'transit_12h',
+    'transit_24h',
+    'hourly_rate',
 ])]
 class Property extends Model
 {
@@ -48,8 +55,15 @@ class Property extends Model
     {
         return [
             'is_active' => 'boolean',
+            'is_transit_enabled' => 'boolean',
             'deposit_amount' => 'decimal:2',
             'images' => 'array',
+            'facilities' => 'array',
+            'transit_3h' => 'decimal:2',
+            'transit_6h' => 'decimal:2',
+            'transit_12h' => 'decimal:2',
+            'transit_24h' => 'decimal:2',
+            'hourly_rate' => 'decimal:2',
         ];
     }
 

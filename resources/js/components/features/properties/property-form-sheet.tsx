@@ -1,7 +1,16 @@
 import { router, useForm, usePage } from '@inertiajs/react';
-import { Image as ImageIcon, Upload, Video as VideoIcon, X } from 'lucide-react';
+import {
+    Check,
+    Image as ImageIcon,
+    Plus,
+    Sparkles,
+    Upload,
+    Video as VideoIcon,
+    X,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { InputError, PhoneInput, SearchableSelect } from '@/components/shared';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,6 +31,28 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { store, update } from '@/routes/properties';
 import type { Property, PropertyTypeOption, Region } from '@/types';
+
+const PRESET_FACILITIES = [
+    'WiFi Fiber Cepat',
+    'AC Dingin',
+    'Kamar Mandi Dalam',
+    'Water Heater (Air Panas)',
+    'Kasur Springbed & Bantal',
+    'Lemari Pakaian & Meja Kerja',
+    'Smart TV (Netflix Ready)',
+    'CCTV & Keamanan 24 Jam',
+    'Parkir Motor Aman',
+    'Parkir Mobil Luas',
+    'Dapur Bersama & Kompor',
+    'Akses Kunci Gerbang 24 Jam',
+    'Kulkas Bersama',
+    'Dispenser Air Minum',
+    'Mesin Cuci / Area Jemur',
+    'Ruang Santai / Ruang Tamu',
+    'Balkon Luar / Teras',
+    'Termasuk Listrik & Air',
+    'Penjaga Kos Standby',
+];
 
 export default function PropertyFormSheet({
     property,
@@ -69,6 +100,20 @@ export default function PropertyFormSheet({
     const [newGalleryPreviews, setNewGalleryPreviews] = useState<string[]>([]);
     const [removedGalleryPaths, setRemovedGalleryPaths] = useState<string[]>([]);
 
+    const [customFacility, setCustomFacility] = useState('');
+
+    const initialFacilities: string[] = Array.isArray(property?.facilities)
+        ? property.facilities
+        : (typeof property?.facilities === 'string'
+            ? (() => {
+                  try {
+                      return JSON.parse(property.facilities);
+                  } catch {
+                      return [];
+                  }
+              })()
+            : []);
+
     const { data, setData, reset, processing, errors } = useForm({
         name: property?.name ?? '',
         type: property?.type ?? propertyTypes[0]?.slug ?? '',
@@ -76,6 +121,7 @@ export default function PropertyFormSheet({
         address: property?.address ?? '',
         address_url: property?.address_url ?? '',
         description: property?.description ?? '',
+        facilities: initialFacilities as string[],
         deposit_amount: property?.deposit_amount ?? 500000,
         region_id: property?.region_id ?? property?.region?.id ?? null,
         city_id: property?.city_id ?? city?.id ?? null,
@@ -105,6 +151,36 @@ export default function PropertyFormSheet({
         setNewGalleryFiles([]);
         setNewGalleryPreviews([]);
         setRemovedGalleryPaths([]);
+        setCustomFacility('');
+
+        const nextFacilities: string[] = Array.isArray(property?.facilities)
+            ? property.facilities
+            : (typeof property?.facilities === 'string'
+                ? (() => {
+                      try {
+                          return JSON.parse(property.facilities);
+                      } catch {
+                          return [];
+                      }
+                  })()
+                : []);
+
+        setData((prev) => ({
+            ...prev,
+            name: property?.name ?? '',
+            type: property?.type ?? propertyTypes[0]?.slug ?? '',
+            slug: property?.slug ?? '',
+            address: property?.address ?? '',
+            address_url: property?.address_url ?? '',
+            description: property?.description ?? '',
+            facilities: nextFacilities,
+            deposit_amount: property?.deposit_amount ?? 500000,
+            region_id: property?.region_id ?? property?.region?.id ?? null,
+            city_id: property?.city_id ?? city?.id ?? null,
+            kecamatan: property?.kecamatan ?? '',
+            postal_code: property?.postal_code ?? '',
+            phone: property?.phone ?? '',
+        }));
     }, [property]);
 
     function handleOpenChange(next: boolean) {
@@ -117,6 +193,7 @@ export default function PropertyFormSheet({
             setNewGalleryFiles([]);
             setNewGalleryPreviews([]);
             setRemovedGalleryPaths([]);
+            setCustomFacility('');
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
@@ -127,6 +204,44 @@ export default function PropertyFormSheet({
                 videoInputRef.current.value = '';
             }
         }
+    }
+
+    function handleToggleFacility(facilityName: string) {
+        const current = Array.isArray(data.facilities) ? [...data.facilities] : [];
+        const index = current.indexOf(facilityName);
+        if (index > -1) {
+            current.splice(index, 1);
+        } else {
+            current.push(facilityName);
+        }
+        setData('facilities', current);
+    }
+
+    function handleAddCustomFacility() {
+        const trimmed = customFacility.trim();
+        if (!trimmed) return;
+        const current = Array.isArray(data.facilities) ? [...data.facilities] : [];
+        if (!current.includes(trimmed)) {
+            current.push(trimmed);
+            setData('facilities', current);
+        }
+        setCustomFacility('');
+    }
+
+    function handleRemoveFacility(facilityName: string) {
+        const current = Array.isArray(data.facilities) ? [...data.facilities] : [];
+        const filtered = current.filter((item) => item !== facilityName);
+        setData('facilities', filtered);
+    }
+
+    function handleSelectAllPresets() {
+        const current = Array.isArray(data.facilities) ? [...data.facilities] : [];
+        const merged = Array.from(new Set([...current, ...PRESET_FACILITIES]));
+        setData('facilities', merged);
+    }
+
+    function handleClearFacilities() {
+        setData('facilities', []);
     }
 
     function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -661,6 +776,129 @@ export default function PropertyFormSheet({
                                 Nilai deposit awal yang akan ditagihkan ke penyewa saat checkout pertama kali dan dicatat lunas pada kontrak sewa.
                             </p>
                             <InputError message={errors.deposit_amount} />
+                        </div>
+
+                        {/* Facilities (Amenities) Section */}
+                        <div className="grid gap-3 p-4 rounded-xl border border-border/80 bg-muted/20">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Sparkles className="size-4 text-amber-500" />
+                                    <Label className="text-sm font-semibold">
+                                        Fasilitas Properti (Amenities)
+                                    </Label>
+                                </div>
+                                <Badge variant="outline" className="text-xs font-medium">
+                                    {(data.facilities || []).length} Fasilitas Dipilih
+                                </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                                Pilih fasilitas yang tersedia di kos/properti ini. Fasilitas ini akan langsung tampil di halaman detail properti, peta lokasi, dan katalog kamar untuk tamu.
+                            </p>
+
+                            {/* Quick toggle recommendation chips */}
+                            <div className="space-y-1.5">
+                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                    <span className="font-medium">Rekomendasi Cepat:</span>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleSelectAllPresets}
+                                            className="text-[11px] text-primary hover:underline cursor-pointer"
+                                        >
+                                            Pilih Semua
+                                        </button>
+                                        <span>•</span>
+                                        <button
+                                            type="button"
+                                            onClick={handleClearFacilities}
+                                            className="text-[11px] text-destructive hover:underline cursor-pointer"
+                                        >
+                                            Hapus Semua
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
+                                    {PRESET_FACILITIES.map((preset) => {
+                                        const isSelected = (data.facilities || []).includes(preset);
+                                        return (
+                                            <button
+                                                key={preset}
+                                                type="button"
+                                                onClick={() => handleToggleFacility(preset)}
+                                                className={`text-xs px-2.5 py-1 rounded-full border transition-all cursor-pointer flex items-center gap-1 ${
+                                                    isSelected
+                                                        ? 'bg-primary text-primary-foreground border-primary font-medium shadow-xs'
+                                                        : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                                                }`}
+                                            >
+                                                {isSelected && <Check className="size-3 shrink-0" />}
+                                                {preset}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Custom facility input */}
+                            <div className="space-y-1.5 pt-2 border-t border-border/60">
+                                <Label htmlFor="custom-facility" className="text-xs font-medium text-muted-foreground">
+                                    Tambah Fasilitas Kustom Lainnya:
+                                </Label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        id="custom-facility"
+                                        type="text"
+                                        value={customFacility}
+                                        onChange={(e) => setCustomFacility(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleAddCustomFacility();
+                                            }
+                                        }}
+                                        placeholder="Contoh: Kolam Renang, Rooftop, Gym..."
+                                        className="h-8 text-xs"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={handleAddCustomFacility}
+                                        className="h-8 px-3 text-xs shrink-0 cursor-pointer"
+                                    >
+                                        <Plus className="size-3.5 mr-1" />
+                                        Tambah
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Selected facilities chips with remove button */}
+                            {(data.facilities || []).length > 0 && (
+                                <div className="space-y-1.5 pt-2 border-t border-border/60">
+                                    <span className="text-xs font-medium text-muted-foreground block">
+                                        Fasilitas Aktif ({data.facilities.length}):
+                                    </span>
+                                    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1.5 bg-background/60 rounded-lg border border-border/50">
+                                        {data.facilities.map((fac: string, idx: number) => (
+                                            <span
+                                                key={idx}
+                                                className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md bg-secondary text-secondary-foreground border border-border font-medium"
+                                            >
+                                                <span>{fac}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveFacility(fac)}
+                                                    className="hover:text-destructive text-muted-foreground rounded-xs transition-colors cursor-pointer"
+                                                    title={`Hapus ${fac}`}
+                                                >
+                                                    <X className="size-3" />
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            <InputError message={errors.facilities as string | undefined} />
                         </div>
 
                         <div className="grid gap-2">
