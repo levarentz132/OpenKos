@@ -6,13 +6,21 @@ import laravel from 'laravel-vite-plugin';
 import { bunny } from 'laravel-vite-plugin/fonts';
 import { defineConfig } from 'vite';
 
-// Ensure PHP 8.4 (WinGet/Links) takes precedence over older XAMPP PHP in PATH on Windows
+// Ensure PHP 8.4 takes precedence in PATH
 if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
     const wingetLinksPath = `${process.env.LOCALAPPDATA}\\Microsoft\\WinGet\\Links`;
     if (!process.env.PATH?.startsWith(wingetLinksPath)) {
         process.env.PATH = `${wingetLinksPath};${process.env.PATH}`;
     }
+} else if (process.platform === 'linux') {
+    // aaPanel PHP 8.4 directory
+    const aapanelPhp84 = '/www/server/php/84/bin';
+    if (process.env.PATH && !process.env.PATH.includes(aapanelPhp84)) {
+        process.env.PATH = `${aapanelPhp84}:${process.env.PATH}`;
+    }
 }
+
+const phpBinary = process.env.PHP_BINARY || 'php';
 
 export default defineConfig({
     plugins: [
@@ -34,6 +42,7 @@ export default defineConfig({
         tailwindcss(),
         wayfinder({
             formVariants: true,
+            command: `${phpBinary} artisan wayfinder:generate`,
         }),
     ],
 });
