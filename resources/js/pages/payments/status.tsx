@@ -118,7 +118,7 @@ export default function PaymentStatusPage({
                             <div className="flex items-center justify-between text-sm border-t border-border/40 pt-2">
                                 <span className="text-muted-foreground">Total Nominal</span>
                                 <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
-                                    {formatPrice(amount, 'IDR')}
+                                    {formatPrice(amount ? String(amount) : null)}
                                 </span>
                             </div>
                         )}

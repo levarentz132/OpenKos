@@ -120,6 +120,9 @@ class OtpVerificationService
             'email_verified' => false,
             'email_verified_at' => null,
             'device_name' => $data['device_name'] ?? 'api-client',
+            'bank_name' => $data['bank_name'] ?? null,
+            'bank_account_number' => $data['bank_account_number'] ?? null,
+            'bank_account_holder' => $data['bank_account_holder'] ?? null,
             'created_at' => now()->timestamp,
         ];
 
@@ -383,6 +386,9 @@ class OtpVerificationService
                 'phone' => $pending['phone'],
                 'password' => $pending['password'], // Pre-hashed
                 'id_card_number' => $uniqueId,
+                'bank_name' => $pending['bank_name'] ?? null,
+                'bank_account_number' => $pending['bank_account_number'] ?? null,
+                'bank_account_holder' => $pending['bank_account_holder'] ?? null,
                 'email_verified_at' => $isEmailVerified ? now() : null,
                 'phone_verified_at' => $isPhoneVerified ? now() : null,
                 'is_active' => true,
@@ -991,6 +997,9 @@ class OtpVerificationService
                     'phone' => $normalizedPhone,
                     'password' => Hash::make($data['password']),
                     'id_card_number' => $existing->id_card_number ?: $uniqueId,
+                    'bank_name' => $data['bank_name'] ?? $existing->bank_name,
+                    'bank_account_number' => $data['bank_account_number'] ?? $existing->bank_account_number,
+                    'bank_account_holder' => $data['bank_account_holder'] ?? $existing->bank_account_holder,
                     'phone_verified_at' => now(),
                     'is_active' => true,
                 ])->save();
@@ -1004,6 +1013,9 @@ class OtpVerificationService
                 'phone' => $normalizedPhone,
                 'password' => Hash::make($data['password']),
                 'id_card_number' => $uniqueId,
+                'bank_name' => $data['bank_name'] ?? null,
+                'bank_account_number' => $data['bank_account_number'] ?? null,
+                'bank_account_holder' => $data['bank_account_holder'] ?? null,
                 'phone_verified_at' => now(),
                 'email_verified_at' => null,
                 'is_active' => true,

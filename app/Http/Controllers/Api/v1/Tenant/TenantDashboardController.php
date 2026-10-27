@@ -218,6 +218,9 @@ class TenantDashboardController extends TenantBaseController
                 'phone' => $tenant->phone,
                 'email' => $user->email,
                 'phone_verified' => $user->hasVerifiedPhone(),
+                'bank_name' => $tenant->bank_name,
+                'bank_account_number' => $tenant->bank_account_number,
+                'bank_account_holder' => $tenant->bank_account_holder,
             ],
             'active_lease' => $activeLease ? [
                 'id' => $activeLease->id,
@@ -256,6 +259,41 @@ class TenantDashboardController extends TenantBaseController
             'next_action' => $nextAction,
             'recent_invoices' => $recentInvoices,
             'recent_tickets' => $recentTickets,
+        ]);
+    }
+
+    /**
+     * Update tenant profile info (e.g. bank account details).
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $tenant = $this->getTenant($request);
+
+        if (! $tenant) {
+            return response()->json(['message' => 'Profil penyewa tidak ditemukan.'], 404);
+        }
+
+        $validated = $request->validate([
+            'name' => ['nullable', 'string', 'max:255'],
+            'bank_name' => ['nullable', 'string', 'max:50'],
+            'bank_account_number' => ['nullable', 'string', 'max:50'],
+            'bank_account_holder' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $tenant->update(array_filter($validated, fn ($val) => ! is_null($val)));
+
+        return response()->json([
+            'message' => 'Profil berhasil diperbarui.',
+            'tenant' => [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+                'phone' => $tenant->phone,
+                'email' => $request->user()->email,
+                'phone_verified' => $request->user()->hasVerifiedPhone(),
+                'bank_name' => $tenant->bank_name,
+                'bank_account_number' => $tenant->bank_account_number,
+                'bank_account_holder' => $tenant->bank_account_holder,
+            ],
         ]);
     }
 }

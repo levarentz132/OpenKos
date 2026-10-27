@@ -20,6 +20,9 @@ class RegisterRequest extends FormRequest
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'device_name' => ['nullable', 'string', 'max:255'],
             'otp' => ['nullable', 'string', 'max:10'],
+            'bank_name' => ['nullable', 'string', 'max:50'],
+            'bank_account_number' => ['nullable', 'string', 'max:50'],
+            'bank_account_holder' => ['nullable', 'string', 'max:255'],
         ];
     }
 

@@ -69,6 +69,28 @@ class PaymentWebhookController extends Controller
             ], 200);
         }
 
+        if ($bookingOrder && in_array($result->status, [
+            \OpenKOS\Core\Enums\PaymentStatus::Failed,
+            \OpenKOS\Core\Enums\PaymentStatus::Expired,
+            \OpenKOS\Core\Enums\PaymentStatus::Canceled,
+        ], true)) {
+            if ($bookingOrder->status === \App\Models\BookingOrder::STATUS_PENDING) {
+                $bookingOrder->update([
+                    'status' => \App\Models\BookingOrder::STATUS_CANCELLED,
+                    'notes' => ($bookingOrder->notes ? $bookingOrder->notes . ' | ' : '') . 'DOKU Payment status: ' . $result->status->value,
+                ]);
+            }
+
+            \Illuminate\Support\Facades\Log::info('Payment webhook received failure for booking order, marked as cancelled.', [
+                'gateway' => $gateway,
+                'booking_order_id' => $bookingOrder->id,
+                'reference' => $bookingOrder->reference,
+                'payment_status' => $result->status->value,
+            ]);
+
+            return response()->json(['status' => 'cancelled'], 200);
+        }
+
         $processed = $apply->execute($gateway, $result);
 
         Log::info('Payment webhook processed.', [

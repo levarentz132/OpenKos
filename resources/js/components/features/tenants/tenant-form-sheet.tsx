@@ -38,6 +38,9 @@ export default function TenantFormSheet({
             email: tenant?.user?.email ?? '',
             send_invite: false,
             id_card_number: tenant?.id_card_number ?? '',
+            bank_name: tenant?.bank_name ?? '',
+            bank_account_number: tenant?.bank_account_number ?? '',
+            bank_account_holder: tenant?.bank_account_holder ?? '',
             emergency_contact_phone: tenant?.emergency_contact_phone ?? '',
             emergency_contact_name: tenant?.emergency_contact_name ?? '',
             notes: tenant?.notes ?? '',
@@ -166,6 +169,51 @@ export default function TenantFormSheet({
                                 placeholder="e.g. 3273010203040005"
                             />
                             <InputError message={errors.id_card_number} />
+                        </div>
+
+                        {/* Bank Account Information */}
+                        <div className="rounded-lg border border-border/70 bg-muted/20 p-3.5 space-y-3">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Bank Account Info (Rekening Bank)
+                            </p>
+                            <div className="grid gap-2">
+                                <Label htmlFor="bank_name">Bank Name</Label>
+                                <Input
+                                    id="bank_name"
+                                    value={data.bank_name}
+                                    onChange={(e) =>
+                                        setData('bank_name', e.target.value)
+                                    }
+                                    placeholder="e.g. BCA, Mandiri, BRI, BNI"
+                                />
+                                <InputError message={errors.bank_name} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="bank_account_number">Bank Account Number (No. Rekening)</Label>
+                                <Input
+                                    id="bank_account_number"
+                                    value={data.bank_account_number}
+                                    onChange={(e) =>
+                                        setData('bank_account_number', e.target.value)
+                                    }
+                                    placeholder="e.g. 1234567890"
+                                />
+                                <InputError message={errors.bank_account_number} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="bank_account_holder">Account Holder Name (Nama Pemilik)</Label>
+                                <Input
+                                    id="bank_account_holder"
+                                    value={data.bank_account_holder}
+                                    onChange={(e) =>
+                                        setData('bank_account_holder', e.target.value)
+                                    }
+                                    placeholder="e.g. Budi Santoso"
+                                />
+                                <InputError message={errors.bank_account_holder} />
+                            </div>
                         </div>
 
                         <div className="grid gap-2">

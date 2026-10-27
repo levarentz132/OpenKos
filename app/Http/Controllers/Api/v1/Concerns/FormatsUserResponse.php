@@ -35,6 +35,9 @@ trait FormatsUserResponse
                     'name' => $subject->name,
                     'phone' => $phone,
                     'id_card_number' => $subject->id_card_number,
+                    'bank_name' => $subject->bank_name,
+                    'bank_account_number' => $subject->bank_account_number,
+                    'bank_account_holder' => $subject->bank_account_holder,
                 ],
             ];
         }
@@ -56,6 +59,9 @@ trait FormatsUserResponse
                 'name' => $subject->tenant->name,
                 'phone' => $subject->tenant->phone,
                 'id_card_number' => $subject->tenant->id_card_number,
+                'bank_name' => $subject->tenant->bank_name,
+                'bank_account_number' => $subject->tenant->bank_account_number,
+                'bank_account_holder' => $subject->tenant->bank_account_holder,
             ] : null,
         ];
     }

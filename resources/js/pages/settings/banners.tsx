@@ -362,7 +362,7 @@ export default function Banners({ settings }: BannerSettingsProps) {
                                                 alt={`Slide ${index + 1}`}
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                                                 onError={(e) => {
-                                                    (e.target as HTMLElement).src = 'https://via.placeholder.com/400x225?text=Image+Not+Found';
+                                                    (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x225?text=Image+Not+Found';
                                                 }}
                                             />
                                         </div>

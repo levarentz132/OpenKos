@@ -110,8 +110,9 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
     // Tenant Portal Data API (Secured with Sanctum)
     Route::middleware('auth:sanctum')->prefix('tenant')->name('tenant.')->group(function () {
-        // Dashboard Overview
+        // Dashboard Overview & Profile
         Route::get('dashboard', [TenantDashboardController::class, 'index'])->name('dashboard');
+        Route::put('profile', [TenantDashboardController::class, 'updateProfile'])->name('profile.update');
 
         // Leases
         Route::get('leases', [TenantLeaseController::class, 'index'])->name('leases.index');

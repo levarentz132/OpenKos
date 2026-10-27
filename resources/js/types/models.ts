@@ -7,6 +7,9 @@ export type Tenant = {
     phone_verified_at?: string | null;
     email_verified_at?: string | null;
     id_card_number: string | null;
+    bank_name?: string | null;
+    bank_account_number?: string | null;
+    bank_account_holder?: string | null;
     emergency_contact_name: string | null;
     emergency_contact_phone: string | null;
     notes: string | null;

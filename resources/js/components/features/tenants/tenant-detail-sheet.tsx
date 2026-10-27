@@ -264,6 +264,26 @@ export default function TenantDetailSheet({
                                 </p>
                             </div>
 
+                            <div className="rounded-lg border bg-muted/30 p-3.5 space-y-2">
+                                <p className="text-xs font-medium text-muted-foreground uppercase">
+                                    Bank Account Info (Nomor Rekening)
+                                </p>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div>
+                                        <span className="text-xs text-muted-foreground block">Bank</span>
+                                        <span className="font-semibold">{tenant.bank_name || '—'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-muted-foreground block">No. Rekening</span>
+                                        <span className="font-mono font-bold text-amber-500">{tenant.bank_account_number || '—'}</span>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <span className="text-xs text-muted-foreground block">Atas Nama</span>
+                                        <span>{tenant.bank_account_holder || '—'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-xs font-medium text-muted-foreground uppercase">
