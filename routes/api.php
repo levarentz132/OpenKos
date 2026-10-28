@@ -29,35 +29,39 @@ Route::get('settings', [\App\Http\Controllers\Api\v1\WebsiteSettingController::c
 Route::get('banners', [\App\Http\Controllers\Api\v1\WebsiteSettingController::class, 'banners']);
 
 Route::prefix('v1')->name('api.v1.')->group(function () {
-    // Website Branding, Banner, & General Settings
-    Route::get('settings', [\App\Http\Controllers\Api\v1\WebsiteSettingController::class, 'index'])->name('settings.index');
-    Route::get('banners', [\App\Http\Controllers\Api\v1\WebsiteSettingController::class, 'banners'])->name('banners.index');
+    // Website Branding, Banner, & General Settings (60 req/min, whitelisted for n8n/admin via API key)
+    Route::middleware('throttle:api-public')->group(function () {
+        Route::get('settings', [\App\Http\Controllers\Api\v1\WebsiteSettingController::class, 'index'])->name('settings.index');
+        Route::get('banners', [\App\Http\Controllers\Api\v1\WebsiteSettingController::class, 'banners'])->name('banners.index');
 
-    Route::get('available-rooms', [AvailableRoomsController::class, 'index'])->name('available-rooms');
-    Route::get('properties/{property:slug}/available-rooms', [AvailableRoomsController::class, 'forProperty'])->name('properties.available-rooms');
+        Route::get('available-rooms', [AvailableRoomsController::class, 'index'])->name('available-rooms');
+        Route::get('properties/{property:slug}/available-rooms', [AvailableRoomsController::class, 'forProperty'])->name('properties.available-rooms');
 
-    // AI Specialized Endpoints (Search, Full Details, & Function Calling Schema)
-    Route::prefix('ai')->name('ai.')->group(function () {
-        Route::get('search', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'search'])->name('search');
-        Route::get('rooms', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'search'])->name('rooms');
-        Route::get('locations', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'locations'])->name('locations');
-        Route::get('areas', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'locations'])->name('areas');
-        Route::get('rooms/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'show'])->name('rooms.show');
-        Route::get('properties/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'show'])->name('properties.show');
-        Route::get('booking-link/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'bookingLink'])->name('booking_link');
-        Route::get('rooms/{id}/booking-link', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'bookingLink'])->name('rooms.booking_link');
-        Route::get('schema', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'schema'])->name('schema');
+        // AI Specialized Endpoints (Search, Full Details, & Function Calling Schema)
+        Route::prefix('ai')->name('ai.')->group(function () {
+            Route::get('search', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'search'])->name('search');
+            Route::get('rooms', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'search'])->name('rooms');
+            Route::get('locations', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'locations'])->name('locations');
+            Route::get('areas', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'locations'])->name('areas');
+            Route::get('rooms/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'show'])->name('rooms.show');
+            Route::get('properties/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'show'])->name('properties.show');
+            Route::get('booking-link/{id}', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'bookingLink'])->name('booking_link');
+            Route::get('rooms/{id}/booking-link', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'bookingLink'])->name('rooms.booking_link');
+            Route::get('schema', [\App\Http\Controllers\Api\v1\AiRoomController::class, 'schema'])->name('schema');
+        });
     });
 
-    // Room Booking Orders & Cart
-    Route::post('orders', [BookingOrderController::class, 'store'])->name('orders.store');
-    Route::post('bookings', [BookingOrderController::class, 'store'])->name('bookings.store');
+    // Room Booking Orders & Cart (25 req/min - Anti-Spam protection)
+    Route::middleware('throttle:25,1')->group(function () {
+        Route::post('orders', [BookingOrderController::class, 'store'])->name('orders.store');
+        Route::post('bookings', [BookingOrderController::class, 'store'])->name('bookings.store');
 
-    Route::prefix('cart')->name('cart.')->group(function () {
-        Route::get('/', [CartController::class, 'index'])->name('index');
-        Route::post('/', [CartController::class, 'store'])->name('store');
-        Route::delete('{bookingOrder}', [CartController::class, 'destroy'])->name('destroy');
-        Route::post('{bookingOrder}/checkout', [CartController::class, 'checkout'])->name('checkout');
+        Route::prefix('cart')->name('cart.')->group(function () {
+            Route::get('/', [CartController::class, 'index'])->name('index');
+            Route::post('/', [CartController::class, 'store'])->name('store');
+            Route::delete('{bookingOrder}', [CartController::class, 'destroy'])->name('destroy');
+            Route::post('{bookingOrder}/checkout', [CartController::class, 'checkout'])->name('checkout');
+        });
     });
 
     // Developer & Testing Sandbox Endpoints
@@ -71,12 +75,13 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         // Anti-Bot Security Captcha
         Route::get('captcha', [AuthController::class, 'captcha'])->name('captcha');
 
-        // Google Sign-In & Instant Registration (No OTP needed)
-        Route::post('google', [GoogleAuthController::class, 'auth'])->name('google');
-        Route::get('google/redirect', [GoogleAuthController::class, 'redirect'])->name('google.redirect');
-        Route::get('google/callback', [GoogleAuthController::class, 'callback'])->name('google.callback');
+        // Rate-limited Auth endpoints (15 req/min per IP - Anti-Brute-Force & Spam)
+        Route::middleware('throttle:15,1')->group(function () {
+            // Google Sign-In & Instant Registration (No OTP needed)
+            Route::post('google', [GoogleAuthController::class, 'auth'])->name('google');
+            Route::get('google/redirect', [GoogleAuthController::class, 'redirect'])->name('google.redirect');
+            Route::get('google/callback', [GoogleAuthController::class, 'callback'])->name('google.callback');
 
-        Route::middleware('throttle:10,1')->group(function () {
             Route::post('register', [AuthController::class, 'register'])->name('register');
             Route::post('login', [AuthController::class, 'login'])->name('login');
             Route::post('check-status', [AuthController::class, 'checkStatus'])->name('check-status');

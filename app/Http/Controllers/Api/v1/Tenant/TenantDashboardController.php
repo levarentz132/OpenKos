@@ -216,8 +216,11 @@ class TenantDashboardController extends TenantBaseController
                 'id' => $tenant->id,
                 'name' => $tenant->name,
                 'phone' => $tenant->phone,
-                'email' => $user->email,
-                'phone_verified' => $user->hasVerifiedPhone(),
+                'email' => $tenant->email ?: $user->email,
+                'phone_verified' => $tenant->hasVerifiedPhone(),
+                'id_card_number' => $tenant->id_card_number,
+                'emergency_contact_name' => $tenant->emergency_contact_name,
+                'emergency_contact_phone' => $tenant->emergency_contact_phone,
                 'bank_name' => $tenant->bank_name,
                 'bank_account_number' => $tenant->bank_account_number,
                 'bank_account_holder' => $tenant->bank_account_holder,
@@ -267,6 +270,7 @@ class TenantDashboardController extends TenantBaseController
      */
     public function updateProfile(Request $request): JsonResponse
     {
+        $user = $request->user();
         $tenant = $this->getTenant($request);
 
         if (! $tenant) {
@@ -275,21 +279,48 @@ class TenantDashboardController extends TenantBaseController
 
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'id_card_number' => ['nullable', 'string', 'max:50'],
+            'emergency_contact_name' => ['nullable', 'string', 'max:255'],
+            'emergency_contact_phone' => ['nullable', 'string', 'max:50'],
             'bank_name' => ['nullable', 'string', 'max:50'],
             'bank_account_number' => ['nullable', 'string', 'max:50'],
             'bank_account_holder' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $tenant->update(array_filter($validated, fn ($val) => ! is_null($val)));
+        $updates = array_filter($validated, fn ($val) => ! is_null($val));
+        if (! empty($updates)) {
+            $tenant->update($updates);
+
+            if ($user) {
+                $userUpdates = [];
+                if (isset($validated['name'])) {
+                    $userUpdates['name'] = $validated['name'];
+                }
+                if (isset($validated['phone'])) {
+                    $userUpdates['phone'] = $validated['phone'];
+                }
+                if (isset($validated['email'])) {
+                    $userUpdates['email'] = $validated['email'];
+                }
+                if (! empty($userUpdates)) {
+                    $user->update($userUpdates);
+                }
+            }
+        }
 
         return response()->json([
-            'message' => 'Profil berhasil diperbarui.',
+            'message' => 'Informasi profil berhasil diperbarui.',
             'tenant' => [
                 'id' => $tenant->id,
                 'name' => $tenant->name,
                 'phone' => $tenant->phone,
-                'email' => $request->user()->email,
-                'phone_verified' => $request->user()->hasVerifiedPhone(),
+                'email' => $tenant->email ?: ($user?->email),
+                'phone_verified' => $tenant->hasVerifiedPhone(),
+                'id_card_number' => $tenant->id_card_number,
+                'emergency_contact_name' => $tenant->emergency_contact_name,
+                'emergency_contact_phone' => $tenant->emergency_contact_phone,
                 'bank_name' => $tenant->bank_name,
                 'bank_account_number' => $tenant->bank_account_number,
                 'bank_account_holder' => $tenant->bank_account_holder,
