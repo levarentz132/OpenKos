@@ -70,7 +70,7 @@ class AuthController extends Controller
         );
 
         // 2. Staged Pending Registration (Pre-OTP generation)
-        $otpChannel = $validated['otp_channel'] ?? (! empty($validated['phone']) ? 'whatsapp' : 'email');
+        $otpChannel = $validated['otp_channel'] ?? (! empty($validated['email']) ? 'email' : 'whatsapp');
 
         $result = $this->otpService->createPendingRegistration($validated, $otpChannel);
 
@@ -141,39 +141,18 @@ class AuthController extends Controller
     public function login(LoginRequest $request): JsonResponse
     {
         $validated = $request->validated();
-        $login = trim((string) $validated['login']);
-        $cleaned = preg_replace('/[^0-9]/', '', $login);
-        $normalized62 = str_starts_with($cleaned, '0') ? '62' . substr($cleaned, 1) : $cleaned;
-        $normalized08 = str_starts_with($cleaned, '62') ? '0' . substr($cleaned, 2) : $cleaned;
-        $phoneVariants = array_unique(array_filter([
-            $login,
-            $cleaned,
-            $normalized62,
-            $normalized08,
-            "+{$normalized62}",
-            "+{$cleaned}",
-        ]));
+        $email = strtolower(trim((string) $validated['login']));
 
-        // 1. First check tenants table directly
+        // 1. First check tenants table directly by email
         /** @var Tenant|null $tenant */
         $tenant = Tenant::query()
-            ->where(function ($q) use ($login, $phoneVariants) {
-                $q->whereIn('phone', $phoneVariants);
-                if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
-                    $q->orWhere('email', strtolower($login));
-                }
-            })
+            ->where('email', $email)
             ->first();
 
-        // 2. Fallback check on users table for legacy tenant records
+        // 2. Fallback check on users table for legacy tenant records by email
         if (! $tenant) {
             $user = User::query()
-                ->where(function ($q) use ($login, $phoneVariants) {
-                    $q->whereIn('phone', $phoneVariants);
-                    if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
-                        $q->orWhere('email', strtolower($login));
-                    }
-                })
+                ->where('email', $email)
                 ->first();
 
             if ($user && $user->isOwner()) {
@@ -189,7 +168,7 @@ class AuthController extends Controller
 
         if (! $tenant || ! Hash::check($validated['password'], $tenant->password ?? $tenant->user?->password)) {
             throw ValidationException::withMessages([
-                'login' => ['These credentials do not match our records.'],
+                'login' => ['Kombinasi alamat email dan kata sandi Anda tidak cocok.'],
             ]);
         }
 

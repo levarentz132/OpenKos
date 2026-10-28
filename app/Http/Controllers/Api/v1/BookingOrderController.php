@@ -41,6 +41,13 @@ class BookingOrderController extends Controller
             'cart_token' => ['nullable', 'string', 'max:100'],
         ]);
 
+        \Illuminate\Support\Facades\Log::info('[BookingOrder] store received', [
+            'unit_id' => $validated['unit_id'] ?? null,
+            'name' => $validated['name'] ?? null,
+            'phone' => $validated['phone'] ?? null,
+            'start_date' => $validated['start_date'] ?? null,
+        ]);
+
         $unit = Unit::with(['property', 'rates'])->findOrFail($validated['unit_id']);
 
         if (in_array($unit->status, [UnitStatus::Maintenance, UnitStatus::Unavailable, UnitStatus::Occupied], true)
