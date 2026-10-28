@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AvailableRoomsController;
 use App\Http\Controllers\Api\v1\AuthController;
 use App\Http\Controllers\Api\v1\BookingOrderController;
 use App\Http\Controllers\Api\v1\CartController;
+use App\Http\Controllers\Api\v1\GoogleAuthController;
 use App\Http\Controllers\Api\v1\OtpController;
 use App\Http\Controllers\Api\v1\PhoneVerificationController;
 use App\Http\Controllers\Api\v1\Tenant\TenantDashboardController;
@@ -69,6 +70,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::prefix('auth')->name('auth.')->group(function () {
         // Anti-Bot Security Captcha
         Route::get('captcha', [AuthController::class, 'captcha'])->name('captcha');
+
+        // Google Sign-In & Instant Registration (No OTP needed)
+        Route::post('google', [GoogleAuthController::class, 'auth'])->name('google');
+        Route::get('google/redirect', [GoogleAuthController::class, 'redirect'])->name('google.redirect');
+        Route::get('google/callback', [GoogleAuthController::class, 'callback'])->name('google.callback');
 
         Route::middleware('throttle:10,1')->group(function () {
             Route::post('register', [AuthController::class, 'register'])->name('register');

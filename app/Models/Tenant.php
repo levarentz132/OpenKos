@@ -30,6 +30,8 @@ use Laravel\Sanctum\HasApiTokens;
     'bank_name',
     'bank_account_number',
     'bank_account_holder',
+    'google_id',
+    'avatar',
     'emergency_contact_name',
     'emergency_contact_phone',
     'notes',

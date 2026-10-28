@@ -38,6 +38,7 @@ class WebsiteSettingController extends Controller
                 'promo_text' => '',
                 'logo_image' => '',
                 'whatsapp_number' => '628123456789',
+                'google_client_id' => config('services.google.client_id') ?? env('GOOGLE_CLIENT_ID', ''),
                 'banners' => [],
                 'facilities_premium' => []
             ];
