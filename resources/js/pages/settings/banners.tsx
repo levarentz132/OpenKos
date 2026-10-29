@@ -11,7 +11,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Trash2, Image as ImageIcon, Sparkles, Megaphone, Eye, Upload, Loader2, Check } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Sparkles, Megaphone, Eye, Upload, Loader2, Check, Flame, MapPin, Info, Calendar } from 'lucide-react';
 
 interface BannerSettingsProps {
     settings: {
@@ -25,6 +25,12 @@ interface BannerSettingsProps {
         banners: Array<string | { id?: string | number; image: string; title?: string }>;
         promo_enabled: boolean;
         promo_text: string;
+        promo_ngebut_enabled?: boolean;
+        promo_ngebut_title?: string;
+        promo_ngebut_subtitle?: string;
+        promo_ngebut_badge_text?: string;
+        promo_ngebut_end_date?: string;
+        featured_areas?: string;
     };
 }
 
@@ -46,6 +52,12 @@ export default function Banners({ settings }: BannerSettingsProps) {
         banners: Array.isArray(settings.banners) ? settings.banners.map(b => typeof b === 'string' ? b : b.image) : [],
         promo_enabled: settings.promo_enabled ?? false,
         promo_text: settings.promo_text || '',
+        promo_ngebut_enabled: settings.promo_ngebut_enabled ?? true,
+        promo_ngebut_title: settings.promo_ngebut_title || 'Promo Ngebut Spesial',
+        promo_ngebut_subtitle: settings.promo_ngebut_subtitle || 'Potongan harga eksklusif bulan ini',
+        promo_ngebut_badge_text: settings.promo_ngebut_badge_text || 'Promo Ngebut',
+        promo_ngebut_end_date: settings.promo_ngebut_end_date || '',
+        featured_areas: settings.featured_areas || '',
     });
 
     const handleCoverFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -487,6 +499,122 @@ export default function Banners({ settings }: BannerSettingsProps) {
                                 onChange={(e) => form.setData('promo_text', e.target.value)}
                                 placeholder="Contoh: Gunakan kode FIRSTMO untuk diskon 10% di bulan pertama!"
                             />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* 4. Promo Ngebut Spesial Configuration */}
+                <Card className="border-purple-500/30">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                                <CardTitle className="flex items-center gap-2">
+                                    <Flame className="w-5 h-5 text-rose-500 animate-pulse" />
+                                    <span>Section Promo Ngebut Spesial (Kamar Kosong)</span>
+                                </CardTitle>
+                                <CardDescription>
+                                    Atur judul, keterangan subtitle, label promo, dan timer countdown untuk section promosi ungu di beranda aplikasi.
+                                </CardDescription>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Label htmlFor="promo_ngebut_enabled" className="text-xs font-medium">
+                                    {form.data.promo_ngebut_enabled ? 'Aktif' : 'Nonaktif'}
+                                </Label>
+                                <Switch
+                                    id="promo_ngebut_enabled"
+                                    checked={form.data.promo_ngebut_enabled}
+                                    onCheckedChange={(checked) => form.setData('promo_ngebut_enabled', checked)}
+                                />
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                        {/* Notice: Only Empty Rooms */}
+                        <div className="flex items-start gap-3 p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-900 dark:text-purple-200">
+                            <Info className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+                            <div className="text-xs space-y-1">
+                                <p className="font-bold text-sm">Khusus Kamar Kosong (Ready):</p>
+                                <p className="leading-relaxed">
+                                    Sistem secara otomatis <strong>hanya menampilkan kamar yang masih kosong (tersedia)</strong> di dalam section Promo Ngebut ini. Properti yang kamarnya penuh (0 kamar) akan otomatis disembunyikan dari seksi ini.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="promo_ngebut_title">Judul Section Promo</Label>
+                                <Input
+                                    id="promo_ngebut_title"
+                                    value={form.data.promo_ngebut_title}
+                                    onChange={(e) => form.setData('promo_ngebut_title', e.target.value)}
+                                    placeholder="Contoh: Promo Ngebut Spesial"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label htmlFor="promo_ngebut_badge_text">Label Badge Ticker</Label>
+                                <Input
+                                    id="promo_ngebut_badge_text"
+                                    value={form.data.promo_ngebut_badge_text}
+                                    onChange={(e) => form.setData('promo_ngebut_badge_text', e.target.value)}
+                                    placeholder="Contoh: Promo Ngebut"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5 md:col-span-2">
+                                <Label htmlFor="promo_ngebut_subtitle">Subtitle / Keterangan Promo</Label>
+                                <Input
+                                    id="promo_ngebut_subtitle"
+                                    value={form.data.promo_ngebut_subtitle}
+                                    onChange={(e) => form.setData('promo_ngebut_subtitle', e.target.value)}
+                                    placeholder="Contoh: Potongan harga eksklusif bulan ini"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5 md:col-span-2">
+                                <Label htmlFor="promo_ngebut_end_date" className="flex items-center gap-1.5">
+                                    <Calendar className="w-4 h-4 text-primary" />
+                                    <span>Target Waktu Berakhir Promo (Countdown Timer)</span>
+                                </Label>
+                                <Input
+                                    id="promo_ngebut_end_date"
+                                    type="datetime-local"
+                                    value={form.data.promo_ngebut_end_date ? form.data.promo_ngebut_end_date.replace(' ', 'T').slice(0, 16) : ''}
+                                    onChange={(e) => form.setData('promo_ngebut_end_date', e.target.value)}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Opsional. Tentukan batas akhir promo untuk menghidupkan jam hitung mundur (countdown). Jika dikosongkan, timer akan berjalan otomatis sebagai flash sale berjalan.
+                                </p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* 5. Regional / Area Categories */}
+                <Card>
+                    <CardHeader>
+                        <div className="space-y-1">
+                            <CardTitle className="flex items-center gap-2">
+                                <MapPin className="w-5 h-5 text-amber-500" />
+                                <span>Kategori Filter Daerah (Beranda Aplikasi)</span>
+                            </CardTitle>
+                            <CardDescription>
+                                Filter kategori di beranda aplikasi kini menggunakan kategori daerah / wilayah.
+                            </CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="featured_areas">Daftar Pilihan Daerah Khusus (Opsional)</Label>
+                            <Input
+                                id="featured_areas"
+                                value={form.data.featured_areas}
+                                onChange={(e) => form.setData('featured_areas', e.target.value)}
+                                placeholder="Contoh: Jakarta Barat, Jakarta Pusat, Jakarta Selatan, Tangerang, Kebon Jeruk, Grogol"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Pisahkan nama daerah dengan tanda koma (,). Kosongkan kolom ini jika ingin sistem menampilkan dan mendeteksi seluruh daerah secara otomatis dari data properti yang terdaftar.
+                            </p>
                         </div>
                     </CardContent>
                 </Card>

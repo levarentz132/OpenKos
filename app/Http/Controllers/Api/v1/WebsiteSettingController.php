@@ -40,7 +40,13 @@ class WebsiteSettingController extends Controller
                 'whatsapp_number' => '628123456789',
                 'google_client_id' => config('services.google.client_id') ?? env('GOOGLE_CLIENT_ID', ''),
                 'banners' => [],
-                'facilities_premium' => []
+                'facilities_premium' => [],
+                'promo_ngebut_enabled' => true,
+                'promo_ngebut_title' => 'Promo Ngebut Spesial',
+                'promo_ngebut_subtitle' => 'Potongan harga eksklusif bulan ini',
+                'promo_ngebut_badge_text' => 'Promo Ngebut',
+                'promo_ngebut_end_date' => '',
+                'featured_areas' => '',
             ];
 
             try {

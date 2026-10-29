@@ -32,6 +32,12 @@ class BannerSettingController extends Controller
             'banners',
             'promo_enabled',
             'promo_text',
+            'promo_ngebut_enabled',
+            'promo_ngebut_title',
+            'promo_ngebut_subtitle',
+            'promo_ngebut_badge_text',
+            'promo_ngebut_end_date',
+            'featured_areas',
         ]);
 
         $bannerImage = (string) ($settings['banner_image'] ?? 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1920&q=80');
@@ -67,6 +73,12 @@ class BannerSettingController extends Controller
                 'banners' => $normalizedBanners,
                 'promo_enabled' => filter_var($settings['promo_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'promo_text' => (string) ($settings['promo_text'] ?? ''),
+                'promo_ngebut_enabled' => filter_var($settings['promo_ngebut_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                'promo_ngebut_title' => (string) ($settings['promo_ngebut_title'] ?? 'Promo Ngebut Spesial'),
+                'promo_ngebut_subtitle' => (string) ($settings['promo_ngebut_subtitle'] ?? 'Potongan harga eksklusif bulan ini'),
+                'promo_ngebut_badge_text' => (string) ($settings['promo_ngebut_badge_text'] ?? 'Promo Ngebut'),
+                'promo_ngebut_end_date' => (string) ($settings['promo_ngebut_end_date'] ?? ''),
+                'featured_areas' => (string) ($settings['featured_areas'] ?? ''),
             ],
         ]);
     }
@@ -88,6 +100,12 @@ class BannerSettingController extends Controller
             'new_slide_files.*' => ['nullable', 'image', 'max:10240'],
             'promo_enabled' => ['sometimes', 'boolean'],
             'promo_text' => ['nullable', 'string', 'max:500'],
+            'promo_ngebut_enabled' => ['sometimes', 'boolean'],
+            'promo_ngebut_title' => ['nullable', 'string', 'max:150'],
+            'promo_ngebut_subtitle' => ['nullable', 'string', 'max:255'],
+            'promo_ngebut_badge_text' => ['nullable', 'string', 'max:50'],
+            'promo_ngebut_end_date' => ['nullable', 'string', 'max:100'],
+            'featured_areas' => ['nullable', 'string', 'max:500'],
         ]);
 
         if ($request->hasFile('banner_image_file')) {
