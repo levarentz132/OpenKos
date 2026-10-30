@@ -256,8 +256,13 @@ export default function AssignUnitSheet({
                                 Section 1 — Who
                             </h3>
 
-                            <div className="mb-3 rounded-md border bg-muted/30 px-3 py-2 text-sm">
-                                {tenant?.name ?? 'Unknown tenant'}
+                            <div className="mb-3 flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                                <span className="font-medium">{tenant?.name ?? 'Unknown tenant'}</span>
+                                {tenant && (
+                                    <span className="rounded border px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                                        {tenant.tenant_code ?? `TNT-${String(tenant.id).padStart(4, '0')}`}
+                                    </span>
+                                )}
                             </div>
 
                             <div className="grid gap-2">

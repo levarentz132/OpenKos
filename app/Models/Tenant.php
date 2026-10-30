@@ -19,6 +19,7 @@ use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable([
     'user_id',
+    'tenant_code',
     'name',
     'phone',
     'email',
@@ -43,6 +44,45 @@ class Tenant extends Model implements AuthenticatableContract
     use Auditable, Authenticatable, HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     protected array $auditableMask = ['phone', 'id_card_number', 'emergency_contact_phone'];
+
+    /**
+     * Always append unique tenant code and combined display name.
+     *
+     * @var list<string>
+     */
+    protected $appends = [
+        'tenant_code',
+        'unique_name',
+    ];
+
+    protected static function booted(): void
+    {
+        static::created(function (Tenant $tenant): void {
+            if (empty($tenant->getRawOriginal('tenant_code')) && $tenant->id) {
+                $code = sprintf('TNT-%04d', $tenant->id);
+                if (static::withTrashed()->where('tenant_code', $code)->where('id', '!=', $tenant->id)->exists()) {
+                    $code = sprintf('TNT-%04d-%s', $tenant->id, strtoupper( substr(md5((string) $tenant->id), 0, 3) ));
+                }
+                $tenant->forceFill(['tenant_code' => $code])->saveQuietly();
+            }
+        });
+    }
+
+    public function getTenantCodeAttribute(?string $value): string
+    {
+        if (! empty($value)) {
+            return $value;
+        }
+
+        return $this->id ? sprintf('TNT-%04d', $this->id) : 'TNT-NEW';
+    }
+
+    public function getUniqueNameAttribute(): string
+    {
+        $code = $this->tenant_code;
+
+        return $code ? "{$this->name} ({$code})" : (string) $this->name;
+    }
 
     protected function casts(): array
     {

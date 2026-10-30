@@ -47,7 +47,7 @@ export default function AssignTenantSheet({
     onOpenChange: (open: boolean) => void;
 }) {
     const { tenants } = usePage<{
-        tenants: { id: number; name: string; phone: string }[];
+        tenants: { id: number; tenant_code?: string; name: string; phone: string }[];
     }>().props;
     const [hasDeposit, setHasDeposit] = useState(false);
     const [overridePrice, setOverridePrice] = useState(false);
@@ -60,6 +60,9 @@ export default function AssignTenantSheet({
         return (tenants ?? []).filter(
             (t) =>
                 t.name.toLowerCase().includes(query) ||
+                (t.tenant_code ?? `TNT-${String(t.id).padStart(4, '0')}`)
+                    .toLowerCase()
+                    .includes(query) ||
                 (t.phone && t.phone.toLowerCase().includes(query)),
         );
     }, [tenants, tenantSearch]);
@@ -235,15 +238,13 @@ export default function AssignTenantSheet({
                                             return (
                                                 <label
                                                     key={t.id}
-                                                    className={`flex cursor-pointer items-center gap-3 border-b px-3 py-2 text-sm last:border-0 hover:bg-muted/50 ${
-                                                        isSelected
+                                                    className={`flex cursor-pointer items-center gap-3 border-b px-3 py-2 text-sm last:border-0 hover:bg-muted/50 ${isSelected
                                                             ? 'bg-blue-50 dark:bg-blue-950'
                                                             : ''
-                                                    } ${
-                                                        atCapacity
+                                                        } ${atCapacity
                                                             ? 'cursor-not-allowed opacity-50'
                                                             : ''
-                                                    }`}
+                                                        }`}
                                                 >
                                                     <input
                                                         type="checkbox"
@@ -256,6 +257,9 @@ export default function AssignTenantSheet({
                                                     />
                                                     <span className="font-medium">
                                                         {t.name}
+                                                    </span>
+                                                    <span className="rounded border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                                                        {t.tenant_code ?? `TNT-${String(t.id).padStart(4, '0')}`}
                                                     </span>
                                                     {t.phone && (
                                                         <span className="text-xs text-muted-foreground">
@@ -296,19 +300,18 @@ export default function AssignTenantSheet({
                             </div>
 
                             {unit?.active_rates &&
-                            unit.active_rates.length > 0 ? (
+                                unit.active_rates.length > 0 ? (
                                 <div className="mt-4 grid gap-2">
                                     <Label>Unit Rate Options</Label>
                                     <div className="space-y-1">
                                         {unit.active_rates.map((rate) => (
                                             <label
                                                 key={`${rate.billing_interval}-${rate.billing_unit}`}
-                                                className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm transition-colors ${
-                                                    data.unit_rate_id ===
-                                                    rate.id
+                                                className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm transition-colors ${data.unit_rate_id ===
+                                                        rate.id
                                                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
                                                         : 'hover:bg-muted/50'
-                                                }`}
+                                                    }`}
                                             >
                                                 <input
                                                     type="radio"
@@ -326,7 +329,7 @@ export default function AssignTenantSheet({
                                                         {rate.billing_interval}{' '}
                                                         {rate.billing_unit}
                                                         {rate.billing_interval >
-                                                        1
+                                                            1
                                                             ? 's'
                                                             : ''}
                                                     </span>

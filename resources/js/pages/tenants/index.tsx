@@ -234,6 +234,17 @@ export default function Index({
             label: 'Name',
             sortable: true,
             className: 'font-medium',
+            render: (t) => (
+                <div className="flex items-center gap-2">
+                    <span className="font-medium">{t.name}</span>
+                    <Badge
+                        variant="outline"
+                        className="h-5 px-1.5 font-mono text-[10px] font-medium text-muted-foreground"
+                    >
+                        {t.tenant_code ?? `TNT-${String(t.id).padStart(4, '0')}`}
+                    </Badge>
+                </div>
+            ),
         },
         {
             key: 'phone',
@@ -285,8 +296,8 @@ export default function Index({
                 const status = t.deleted_at
                     ? 'archived'
                     : t.is_active
-                      ? 'active'
-                      : 'inactive';
+                        ? 'active'
+                        : 'inactive';
 
                 return <StatusBadge domain="tenant" value={status} />;
             },
@@ -451,7 +462,7 @@ export default function Index({
                             value={table.searchValue}
                             onChange={table.onSearchChange}
                             onClear={table.clearSearch}
-                            placeholder="Search by name, phone, or ID card..."
+                            placeholder="Search by name, code (TNT-...), phone, or ID card..."
                         />
                     }
                 />
@@ -485,14 +496,14 @@ export default function Index({
                 onDocuments={openDocuments}
                 onInvite={
                     viewingTenant?.user_id ||
-                    !permissions.includes('tenants.invite')
+                        !permissions.includes('tenants.invite')
                         ? undefined
                         : () => {
-                              if (viewingTenant) {
-                                  setDetailOpen(false);
-                                  setInviteTenant(viewingTenant);
-                              }
-                          }
+                            if (viewingTenant) {
+                                setDetailOpen(false);
+                                setInviteTenant(viewingTenant);
+                            }
+                        }
                 }
                 onResend={
                     viewingTenant && permissions.includes('tenants.invite')
@@ -502,9 +513,9 @@ export default function Index({
                 onDisableAccess={
                     viewingTenant && permissions.includes('tenants.invite')
                         ? () => {
-                              setDetailOpen(false);
-                              setDisableConfirm(viewingTenant);
-                          }
+                            setDetailOpen(false);
+                            setDisableConfirm(viewingTenant);
+                        }
                         : undefined
                 }
             />
@@ -535,32 +546,32 @@ export default function Index({
                 lease={
                     moveOutTenant
                         ? {
-                              id:
-                                  (
-                                      moveOutTenant as WorkspaceTenant & {
-                                          leases?: Lease[];
-                                      }
-                                  ).leases?.[0]?.id ?? 0,
-                              tenants: [
-                                  {
-                                      id: moveOutTenant.id,
-                                      name: moveOutTenant.name,
-                                      phone: moveOutTenant.phone,
-                                      pivot: { is_primary: true },
-                                  },
-                              ],
-                              primary_tenant: {
-                                  id: moveOutTenant.id,
-                                  name: moveOutTenant.name,
-                                  phone: moveOutTenant.phone,
-                              },
-                              unit:
-                                  (
-                                      moveOutTenant as WorkspaceTenant & {
-                                          leases?: Lease[];
-                                      }
-                                  ).leases?.[0]?.unit ?? null,
-                          }
+                            id:
+                                (
+                                    moveOutTenant as WorkspaceTenant & {
+                                        leases?: Lease[];
+                                    }
+                                ).leases?.[0]?.id ?? 0,
+                            tenants: [
+                                {
+                                    id: moveOutTenant.id,
+                                    name: moveOutTenant.name,
+                                    phone: moveOutTenant.phone,
+                                    pivot: { is_primary: true },
+                                },
+                            ],
+                            primary_tenant: {
+                                id: moveOutTenant.id,
+                                name: moveOutTenant.name,
+                                phone: moveOutTenant.phone,
+                            },
+                            unit:
+                                (
+                                    moveOutTenant as WorkspaceTenant & {
+                                        leases?: Lease[];
+                                    }
+                                ).leases?.[0]?.unit ?? null,
+                        }
                         : null
                 }
                 availableUnits={_availableUnits}

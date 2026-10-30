@@ -111,6 +111,7 @@ class TenantController extends Controller
             ->columns([
                 Column::make('name', 'Name')->sortable()->searchable(function (Builder $q, string $search): void {
                     $q->where(DB::raw('lower(name)'), 'like', '%'.mb_strtolower($search).'%')
+                        ->orWhere(DB::raw('lower(tenant_code)'), 'like', '%'.mb_strtolower($search).'%')
                         ->orWhere(DB::raw('lower(phone)'), 'like', '%'.mb_strtolower($search).'%')
                         ->orWhere(DB::raw('lower(id_card_number)'), 'like', '%'.mb_strtolower($search).'%');
                 }),

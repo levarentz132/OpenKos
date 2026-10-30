@@ -1,6 +1,8 @@
 export type Tenant = {
     id: number;
     user_id: number | null;
+    tenant_code?: string;
+    unique_name?: string;
     name: string;
     phone: string | null;
     email?: string | null;
@@ -29,6 +31,8 @@ export type Tenant = {
 
 export type TenantInfo = {
     id: number;
+    tenant_code?: string;
+    unique_name?: string;
     name: string;
     phone: string | null;
     pivot?: { is_primary: boolean };

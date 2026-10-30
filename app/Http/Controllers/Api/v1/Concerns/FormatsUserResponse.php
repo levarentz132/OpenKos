@@ -20,6 +20,8 @@ trait FormatsUserResponse
 
             return [
                 'id' => $subject->id,
+                'tenant_code' => $subject->tenant_code,
+                'unique_name' => $subject->unique_name,
                 'name' => $subject->name,
                 'email' => $email,
                 'email_verified' => ! is_null($emailVerifiedAt),
@@ -34,6 +36,8 @@ trait FormatsUserResponse
                 'has_tenant_profile' => true,
                 'tenant' => [
                     'id' => $subject->id,
+                    'tenant_code' => $subject->tenant_code,
+                    'unique_name' => $subject->unique_name,
                     'name' => $subject->name,
                     'phone' => $phone,
                     'avatar' => $subject->avatar ?? $subject->user?->avatar,
@@ -48,6 +52,8 @@ trait FormatsUserResponse
 
         return [
             'id' => $subject->id,
+            'tenant_code' => $subject->tenant?->tenant_code,
+            'unique_name' => $subject->tenant?->unique_name ?? $subject->name,
             'name' => $subject->name,
             'email' => $subject->email,
             'email_verified' => ! is_null($subject->email_verified_at),
@@ -60,6 +66,8 @@ trait FormatsUserResponse
             'has_tenant_profile' => $subject->hasTenantProfile(),
             'tenant' => $subject->tenant ? [
                 'id' => $subject->tenant->id,
+                'tenant_code' => $subject->tenant->tenant_code,
+                'unique_name' => $subject->tenant->unique_name,
                 'name' => $subject->tenant->name,
                 'phone' => $subject->tenant->phone,
                 'id_card_number' => $subject->tenant->id_card_number,

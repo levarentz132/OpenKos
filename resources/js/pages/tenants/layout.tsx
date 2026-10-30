@@ -13,10 +13,13 @@ export function TenantLayout({
     activeTab: string;
     children: ReactNode;
 }) {
+    const code = tenant.tenant_code ?? `TNT-${String(tenant.id).padStart(4, '0')}`;
+    const subtitleParts = [code, tenant.phone].filter(Boolean);
+
     return (
         <EntityWorkspaceLayout
             title={tenant.name}
-            subtitle={tenant.phone ?? undefined}
+            subtitle={subtitleParts.join(' • ') || undefined}
             backRoute="/tenants"
             backLabel="All tenants"
         >
