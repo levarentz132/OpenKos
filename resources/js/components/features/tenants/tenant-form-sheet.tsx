@@ -35,7 +35,7 @@ export default function TenantFormSheet({
         useForm({
             name: tenant?.name ?? '',
             phone: tenant?.phone ?? '',
-            email: tenant?.user?.email ?? '',
+            email: tenant?.email ?? tenant?.user?.email ?? '',
             send_invite: false,
             id_card_number: tenant?.id_card_number ?? '',
             bank_name: tenant?.bank_name ?? '',

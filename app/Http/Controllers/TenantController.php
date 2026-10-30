@@ -110,11 +110,15 @@ class TenantController extends Controller
         $table = Table::make()
             ->columns([
                 Column::make('name', 'Name')->sortable()->searchable(function (Builder $q, string $search): void {
-                    $q->where(DB::raw('lower(name)'), 'like', '%'.mb_strtolower($search).'%')
-                        ->orWhere(DB::raw('lower(tenant_code)'), 'like', '%'.mb_strtolower($search).'%')
-                        ->orWhere(DB::raw('lower(phone)'), 'like', '%'.mb_strtolower($search).'%')
-                        ->orWhere(DB::raw('lower(id_card_number)'), 'like', '%'.mb_strtolower($search).'%');
+                    $s = '%'.mb_strtolower($search).'%';
+                    $q->where(DB::raw('lower(name)'), 'like', $s)
+                        ->orWhere(DB::raw('lower(tenant_code)'), 'like', $s)
+                        ->orWhere(DB::raw('lower(email)'), 'like', $s)
+                        ->orWhere(DB::raw('lower(phone)'), 'like', $s)
+                        ->orWhere(DB::raw('lower(id_card_number)'), 'like', $s)
+                        ->orWhereHas('user', fn (Builder $u) => $u->where(DB::raw('lower(email)'), 'like', $s));
                 }),
+                Column::make('email', 'Email')->sortable(),
                 Column::make('phone', 'Phone')->sortable(),
             ])
             ->filters([
@@ -235,7 +239,8 @@ class TenantController extends Controller
     public function store(StoreTenantRequest $request, InviteTenant $invite): RedirectResponse
     {
         $tenant = DB::transaction(function () use ($request, $invite) {
-            $tenant = Tenant::create($request->safe()->except(['email', 'send_invite']));
+            $data = $request->safe()->except(['send_invite']);
+            $tenant = Tenant::create($data);
 
             if ($email = $request->validated('email')) {
                 $invite->execute($tenant, $email, $request->boolean('send_invite'));
@@ -253,7 +258,11 @@ class TenantController extends Controller
     {
         $this->authorize('update', $tenant);
 
-        $tenant->update($request->safe()->except(['email', 'send_invite']));
+        $data = $request->safe()->except(['send_invite']);
+        if (empty($data['email']) && $tenant->email) {
+            unset($data['email']);
+        }
+        $tenant->update($data);
 
         $email = $request->validated('email');
 

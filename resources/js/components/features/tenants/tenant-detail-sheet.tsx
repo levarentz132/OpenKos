@@ -135,7 +135,7 @@ export default function TenantDetailSheet({
                                 <span className="ml-2">App access:</span>
                                 <StatusBadge
                                     domain="app_access"
-                                    value={appAccessStatus(tenant.user)}
+                                    value={appAccessStatus(tenant.user, tenant)}
                                 />
                             </div>
 
@@ -253,13 +253,23 @@ export default function TenantDetailSheet({
                                 )}
                             </div>
 
-                            <div>
-                                <p className="text-xs font-medium text-muted-foreground uppercase">
-                                    Phone
-                                </p>
-                                <p className="mt-1 text-sm">
-                                    {tenant.phone ?? '—'}
-                                </p>
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div>
+                                    <p className="text-xs font-medium text-muted-foreground uppercase">
+                                        Email
+                                    </p>
+                                    <p className="mt-1 text-sm break-all">
+                                        {tenant.email ?? tenant.user?.email ?? '—'}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-muted-foreground uppercase">
+                                        Phone
+                                    </p>
+                                    <p className="mt-1 text-sm">
+                                        {tenant.phone ?? '—'}
+                                    </p>
+                                </div>
                             </div>
 
                             <div>

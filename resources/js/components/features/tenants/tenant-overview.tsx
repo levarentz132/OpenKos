@@ -70,7 +70,15 @@ export default function TenantOverview({
                 )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="rounded-lg border bg-muted/30 p-4">
+                    <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                        Email
+                    </p>
+                    <p className="mt-1 text-sm break-all">
+                        {tenant.email ?? tenant.user?.email ?? '—'}
+                    </p>
+                </div>
                 <div className="rounded-lg border bg-muted/30 p-4">
                     <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                         Phone

@@ -247,6 +247,49 @@ export default function Index({
             ),
         },
         {
+            key: 'email',
+            label: 'Email',
+            sortable: true,
+            render: (t) => {
+                const email = t.email ?? t.user?.email;
+                if (!email) {
+                    return <span className="text-muted-foreground">—</span>;
+                }
+
+                const isVerified = Boolean(
+                    t.email_verified_at || t.user?.email_verified_at || t.google_id,
+                );
+
+                return (
+                    <div className="flex flex-col gap-1 items-start sm:flex-row sm:items-center sm:gap-2">
+                        <span className="text-muted-foreground">{email}</span>
+                        {t.google_id ? (
+                            <Badge
+                                variant="outline"
+                                className="h-5 px-1.5 text-[11px] font-medium bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800"
+                            >
+                                Google
+                            </Badge>
+                        ) : isVerified ? (
+                            <Badge
+                                variant="outline"
+                                className="h-5 px-1.5 text-[11px] font-medium bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
+                            >
+                                Verified
+                            </Badge>
+                        ) : (
+                            <Badge
+                                variant="outline"
+                                className="h-5 px-1.5 text-[11px] font-medium bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
+                            >
+                                Unverified
+                            </Badge>
+                        )}
+                    </div>
+                );
+            },
+        },
+        {
             key: 'phone',
             label: 'Phone',
             sortable: true,
@@ -306,7 +349,7 @@ export default function Index({
             key: '_app_access',
             label: 'App Access',
             render: (t) => {
-                const status = appAccessStatus(t.user);
+                const status = appAccessStatus(t.user, t);
 
                 return status === 'none' ? (
                     <span className="text-muted-foreground">—</span>
@@ -462,7 +505,7 @@ export default function Index({
                             value={table.searchValue}
                             onChange={table.onSearchChange}
                             onClear={table.clearSearch}
-                            placeholder="Search by name, code (TNT-...), phone, or ID card..."
+                            placeholder="Search by name, code (TNT-...), email, phone, or ID card..."
                         />
                     }
                 />

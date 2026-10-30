@@ -36,7 +36,9 @@ export default function TenantAppAccessSection({
     const [disableConfirm, setDisableConfirm] = useState(false);
 
     const user = tenant.user;
-    const status = appAccessStatus(user);
+    const status = appAccessStatus(user, tenant);
+    const displayEmail = tenant.email ?? user?.email;
+    const displayLastLogin = tenant.last_login_at ?? user?.last_login_at;
 
     function handleResend() {
         router.post(tenants.resendInvitation(tenant.id).url);
@@ -132,35 +134,37 @@ export default function TenantAppAccessSection({
                 </div>
             )}
 
-            {status === 'active' && user && (
+            {status === 'active' && (user || displayEmail) && (
                 <div className="space-y-3">
                     <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">
-                            {user.email}
+                            {displayEmail ?? tenant.phone}
                         </span>
                         <StatusBadge domain="app_access" value="active" />
                     </div>
-                    {user.last_login_at && (
+                    {displayLastLogin && (
                         <p className="text-xs text-muted-foreground">
-                            Last login: {formatDate(user.last_login_at)}
+                            Last login: {formatDate(displayLastLogin)}
                         </p>
                     )}
-                    <div className="flex gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleResend}
-                        >
-                            Resend Invitation
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setDisableConfirm(true)}
-                        >
-                            Disable Access
-                        </Button>
-                    </div>
+                    {user && (
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleResend}
+                            >
+                                Resend Invitation
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setDisableConfirm(true)}
+                            >
+                                Disable Access
+                            </Button>
+                        </div>
+                    )}
                 </div>
             )}
 

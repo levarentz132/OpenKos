@@ -14,7 +14,8 @@ export function TenantLayout({
     children: ReactNode;
 }) {
     const code = tenant.tenant_code ?? `TNT-${String(tenant.id).padStart(4, '0')}`;
-    const subtitleParts = [code, tenant.phone].filter(Boolean);
+    const email = tenant.email ?? tenant.user?.email;
+    const subtitleParts = [code, email, tenant.phone].filter(Boolean);
 
     return (
         <EntityWorkspaceLayout
