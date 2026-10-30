@@ -238,15 +238,13 @@ export default function AssignTenantSheet({
                                             return (
                                                 <label
                                                     key={t.id}
-                                                    className={`flex cursor-pointer items-center gap-3 border-b px-3 py-2 text-sm last:border-0 hover:bg-muted/50 ${
-                                                        isSelected
-                                                            ? 'bg-blue-50 dark:bg-blue-950'
-                                                            : ''
-                                                    } ${
-                                                        atCapacity
+                                                    className={`flex cursor-pointer items-center gap-3 border-b px-3 py-2 text-sm last:border-0 hover:bg-muted/50 ${isSelected
+                                                        ? 'bg-blue-50 dark:bg-blue-950'
+                                                        : ''
+                                                        } ${atCapacity
                                                             ? 'cursor-not-allowed opacity-50'
                                                             : ''
-                                                    }`}
+                                                        }`}
                                                 >
                                                     <input
                                                         type="checkbox"
@@ -257,7 +255,7 @@ export default function AssignTenantSheet({
                                                         disabled={atCapacity}
                                                         className="size-4"
                                                     />
-                                                     <span className="font-medium">
+                                                    <span className="font-medium">
                                                         {t.name}
                                                     </span>
                                                     <span className="rounded border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
@@ -302,19 +300,18 @@ export default function AssignTenantSheet({
                             </div>
 
                             {unit?.active_rates &&
-                            unit.active_rates.length > 0 ? (
+                                unit.active_rates.length > 0 ? (
                                 <div className="mt-4 grid gap-2">
                                     <Label>Unit Rate Options</Label>
                                     <div className="space-y-1">
                                         {unit.active_rates.map((rate) => (
                                             <label
                                                 key={`${rate.billing_interval}-${rate.billing_unit}`}
-                                                className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm transition-colors ${
-                                                    data.unit_rate_id ===
+                                                className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm transition-colors ${data.unit_rate_id ===
                                                     rate.id
-                                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
-                                                        : 'hover:bg-muted/50'
-                                                }`}
+                                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                                                    : 'hover:bg-muted/50'
+                                                    }`}
                                             >
                                                 <input
                                                     type="radio"
@@ -332,7 +329,7 @@ export default function AssignTenantSheet({
                                                         {rate.billing_interval}{' '}
                                                         {rate.billing_unit}
                                                         {rate.billing_interval >
-                                                        1
+                                                            1
                                                             ? 's'
                                                             : ''}
                                                     </span>

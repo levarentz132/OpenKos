@@ -36,8 +36,8 @@ export default function TenantDetailSheet({
     onDisableAccess,
 }: {
     tenant?:
-        | (WorkspaceTenant & { leases?: Lease[]; documents?: TenantDocument[] })
-        | null;
+    | (WorkspaceTenant & { leases?: Lease[]; documents?: TenantDocument[] })
+    | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onEdit: () => void;
@@ -122,8 +122,8 @@ export default function TenantDetailSheet({
                                     const status = isArchived
                                         ? 'archived'
                                         : tenant.is_active
-                                          ? 'active'
-                                          : 'inactive';
+                                            ? 'active'
+                                            : 'inactive';
 
                                     return (
                                         <StatusBadge
@@ -179,72 +179,72 @@ export default function TenantDetailSheet({
                                         </div>
                                         {(activeLease.tenants ?? []).length >
                                             1 && (
-                                            <div className="border-t pt-2">
-                                                {activeLease.primary_tenant
-                                                    ?.id === tenant.id ? (
-                                                    <>
-                                                        <p className="mb-1 text-xs text-muted-foreground">
-                                                            Co-tenants
-                                                        </p>
-                                                        <div className="space-y-1">
-                                                            {activeLease.tenants
-                                                                .filter(
-                                                                    (t) =>
-                                                                        !t.pivot
-                                                                            ?.is_primary,
-                                                                )
-                                                                .map((t) => (
-                                                                    <div
-                                                                        key={
-                                                                            t.id
-                                                                        }
-                                                                        className="flex items-center justify-between text-sm"
-                                                                    >
-                                                                        <span>
-                                                                            {
-                                                                                t.name
+                                                <div className="border-t pt-2">
+                                                    {activeLease.primary_tenant
+                                                        ?.id === tenant.id ? (
+                                                        <>
+                                                            <p className="mb-1 text-xs text-muted-foreground">
+                                                                Co-tenants
+                                                            </p>
+                                                            <div className="space-y-1">
+                                                                {activeLease.tenants
+                                                                    .filter(
+                                                                        (t) =>
+                                                                            !t.pivot
+                                                                                ?.is_primary,
+                                                                    )
+                                                                    .map((t) => (
+                                                                        <div
+                                                                            key={
+                                                                                t.id
                                                                             }
-                                                                        </span>
-                                                                        {t.phone && (
-                                                                            <span className="text-xs text-muted-foreground">
+                                                                            className="flex items-center justify-between text-sm"
+                                                                        >
+                                                                            <span>
                                                                                 {
-                                                                                    t.phone
+                                                                                    t.name
                                                                                 }
                                                                             </span>
-                                                                        )}
-                                                                    </div>
-                                                                ))}
-                                                        </div>
-                                                    </>
-                                                ) : activeLease.primary_tenant ? (
-                                                    <>
-                                                        <p className="mb-1 text-xs text-muted-foreground">
-                                                            Main tenant
-                                                        </p>
-                                                        <div className="flex items-center justify-between text-sm">
-                                                            <span>
-                                                                {
-                                                                    activeLease
-                                                                        .primary_tenant
-                                                                        .name
-                                                                }
-                                                            </span>
-                                                            {activeLease
-                                                                .primary_tenant
-                                                                .phone && (
-                                                                <span className="text-xs text-muted-foreground">
+                                                                            {t.phone && (
+                                                                                <span className="text-xs text-muted-foreground">
+                                                                                    {
+                                                                                        t.phone
+                                                                                    }
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                            </div>
+                                                        </>
+                                                    ) : activeLease.primary_tenant ? (
+                                                        <>
+                                                            <p className="mb-1 text-xs text-muted-foreground">
+                                                                Main tenant
+                                                            </p>
+                                                            <div className="flex items-center justify-between text-sm">
+                                                                <span>
                                                                     {
                                                                         activeLease
                                                                             .primary_tenant
-                                                                            .phone
+                                                                            .name
                                                                     }
                                                                 </span>
-                                                            )}
-                                                        </div>
-                                                    </>
-                                                ) : null}
-                                            </div>
-                                        )}
+                                                                {activeLease
+                                                                    .primary_tenant
+                                                                    .phone && (
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            {
+                                                                                activeLease
+                                                                                    .primary_tenant
+                                                                                    .phone
+                                                                            }
+                                                                        </span>
+                                                                    )}
+                                                            </div>
+                                                        </>
+                                                    ) : null}
+                                                </div>
+                                            )}
                                     </div>
                                 ) : (
                                     <p className="text-sm text-muted-foreground">
