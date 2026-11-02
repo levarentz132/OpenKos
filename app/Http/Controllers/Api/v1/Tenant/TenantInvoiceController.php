@@ -26,6 +26,13 @@ class TenantInvoiceController extends TenantBaseController
     public function index(Request $request): JsonResponse
     {
         $tenant = $this->requireTenant($request);
+        $activeLeases = $tenant->leases()->where('leases.status', \App\Enums\LeaseStatus::Active->value)->get();
+        if ($activeLeases->isNotEmpty()) {
+            $generator = app(\App\Actions\Invoices\GenerateInvoices::class);
+            foreach ($activeLeases as $activeLease) {
+                $generator->execute($activeLease);
+            }
+        }
         $leaseIds = $tenant->leases()->pluck('leases.id');
 
         // Auto-reconcile any pending gateway attempts for tenant's unpaid invoices

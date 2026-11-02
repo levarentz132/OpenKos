@@ -180,7 +180,7 @@ class Lease extends Model
         $query->where('status', LeaseStatus::Active->value);
     }
 
-    public function schedule(?int $months = 12): Collection
+    public function schedule(?int $months = 12, ?\Carbon\CarbonInterface $horizon = null): Collection
     {
         if (! $this->rent_amount || ! $this->rent_due_day || ! $this->start_date) {
             return collect();
@@ -194,9 +194,13 @@ class Lease extends Model
             BillingUnit::Month => $interval,
             default => 0,
         };
+        $defaultEnd = now()->startOfMonth()->addMonthsNoOverflow(max(0, ($months ?? 12) - 1));
+        if ($horizon && $horizon->copy()->startOfMonth()->gt($defaultEnd)) {
+            $defaultEnd = $horizon->copy()->startOfMonth();
+        }
         $end = $this->end_date
             ? Carbon::parse($this->end_date)->startOfMonth()
-            : now()->startOfMonth()->addMonthsNoOverflow(max(0, $months - 1));
+            : $defaultEnd;
 
         $cursor = $start->copy()->startOfMonth();
 

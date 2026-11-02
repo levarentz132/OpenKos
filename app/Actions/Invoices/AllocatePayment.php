@@ -51,7 +51,12 @@ class AllocatePayment
                 if ($invoice->status === InvoiceStatus::Paid
                     && ($priorStatuses[$invoice->id] ?? null) !== InvoiceStatus::Paid->value
                 ) {
-                    DB::afterCommit(fn () => InvoiceFullyPaid::dispatch($invoice));
+                    DB::afterCommit(function () use ($invoice) {
+                        InvoiceFullyPaid::dispatch($invoice);
+                        if ($invoice->lease) {
+                            app(GenerateInvoices::class)->execute($invoice->lease);
+                        }
+                    });
                 }
             }
         });

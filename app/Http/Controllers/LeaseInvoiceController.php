@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Invoices\ApplyLateFees;
+use App\Actions\Invoices\GenerateInvoices;
 use App\Enums\InvoiceStatus;
+use App\Enums\LeaseStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Invoice;
 use App\Models\Lease;
@@ -27,9 +29,13 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeaseInvoiceController extends Controller
 {
-    public function index(Request $request, Lease $lease): Response
+    public function index(Request $request, Lease $lease, GenerateInvoices $generateInvoices): Response
     {
         $this->authorize('view', $lease);
+
+        if ($lease->status === LeaseStatus::Active) {
+            $generateInvoices->execute($lease);
+        }
 
         $table = Table::make()
             ->columns([

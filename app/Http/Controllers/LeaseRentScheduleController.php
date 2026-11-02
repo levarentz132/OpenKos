@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Invoices\GenerateInvoices;
 use App\Enums\InvoiceStatus;
+use App\Enums\LeaseStatus;
 use App\Enums\Role;
 use App\Models\Invoice;
 use App\Models\Lease;
@@ -10,10 +12,14 @@ use Illuminate\Http\JsonResponse;
 
 class LeaseRentScheduleController extends Controller
 {
-    public function __invoke(Lease $lease): JsonResponse
+    public function __invoke(Lease $lease, GenerateInvoices $generateInvoices): JsonResponse
     {
         if (! request()->user()->hasRole(Role::Owner->value)) {
             $this->authorize('view', $lease);
+        }
+
+        if ($lease->status === LeaseStatus::Active) {
+            $generateInvoices->execute($lease);
         }
 
         $schedule = $lease->invoices()

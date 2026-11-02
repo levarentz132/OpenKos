@@ -51,7 +51,8 @@ class GenerateInvoices
             return 0;
         }
 
-        $horizon = now()->addMonthsNoOverflow(2)->endOfMonth();
+        $baseHorizon = now()->addMonthsNoOverflow(2)->endOfMonth();
+        $maxHorizon = $baseHorizon->copy();
         $candidates = [];
 
         foreach ($leases as $lockedLease) {
@@ -61,8 +62,31 @@ class GenerateInvoices
                 ->where('type', 'deposit')
                 ->exists();
 
-            foreach ($lockedLease->schedule() as $period) {
-                if ($period->period_start->gt($horizon)) {
+            // Roll the billing horizon forward from the latest paid/partial period
+            // so paying early or continuing past 3 months always generates the next periods.
+            $latestPaidPeriod = Invoice::query()
+                ->where('lease_id', $lockedLease->getKey())
+                ->whereIn('status', [InvoiceStatus::Paid->value, InvoiceStatus::Partial->value])
+                ->max('period_start');
+
+            $leaseHorizon = $baseHorizon->copy();
+            if ($latestPaidPeriod) {
+                $stepMonths = max(1, (int) ($lockedLease->billing_interval ?? 1));
+                $paidHorizon = \Carbon\Carbon::parse($latestPaidPeriod)
+                    ->startOfMonth()
+                    ->addMonthsNoOverflow($stepMonths * 3)
+                    ->endOfMonth();
+                if ($paidHorizon->gt($leaseHorizon)) {
+                    $leaseHorizon = $paidHorizon;
+                }
+            }
+
+            if ($leaseHorizon->gt($maxHorizon)) {
+                $maxHorizon = $leaseHorizon->copy();
+            }
+
+            foreach ($lockedLease->schedule(12, $leaseHorizon) as $period) {
+                if ($period->period_start->gt($leaseHorizon)) {
                     continue;
                 }
 
@@ -93,7 +117,7 @@ class GenerateInvoices
         $minimumPeriod = collect($candidates)->min('period_start')->toDateString();
         $existingKeys = Invoice::query()
             ->whereIn('lease_id', $leaseIds)
-            ->whereBetween('period_start', [$minimumPeriod, $horizon])
+            ->whereBetween('period_start', [$minimumPeriod, $maxHorizon])
             ->get(['lease_id', 'period_start'])
             ->mapWithKeys(fn (Invoice $invoice): array => [
                 $this->periodKey($invoice->lease_id, $invoice->period_start) => true,
@@ -131,7 +155,7 @@ class GenerateInvoices
         ]);
         $persistedInvoices = Invoice::query()
             ->whereIn('lease_id', $newCandidates->pluck('lease_id')->unique()->values())
-            ->whereBetween('period_start', [$minimumPeriod, $horizon])
+            ->whereBetween('period_start', [$minimumPeriod, $maxHorizon])
             ->get()
             ->keyBy(fn (Invoice $invoice): string => $this->periodKey($invoice->lease_id, $invoice->period_start));
 
