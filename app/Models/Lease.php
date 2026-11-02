@@ -198,9 +198,15 @@ class Lease extends Model
         if ($horizon && $horizon->copy()->startOfMonth()->gt($defaultEnd)) {
             $defaultEnd = $horizon->copy()->startOfMonth();
         }
-        $end = $this->end_date
+
+        // If the lease is still Active (not terminated), continue billing up to the rolling horizon
+        // even if an initial end_date was set and its bills are done.
+        $isOngoingActive = $this->status === LeaseStatus::Active && $this->termination_date === null;
+        $end = ($this->end_date && ! $isOngoingActive)
             ? Carbon::parse($this->end_date)->startOfMonth()
-            : $defaultEnd;
+            : ($this->termination_date
+                ? Carbon::parse($this->termination_date)->startOfMonth()
+                : $defaultEnd);
 
         $cursor = $start->copy()->startOfMonth();
 
@@ -222,7 +228,7 @@ class Lease extends Model
                 $dueDate = $start->copy();
             }
 
-            if ($this->end_date) {
+            if ($this->end_date && ! $isOngoingActive) {
                 $endDateCarbon = Carbon::parse($this->end_date);
                 if ($periodEnd > $endDateCarbon) {
                     $periodEnd = $endDateCarbon;

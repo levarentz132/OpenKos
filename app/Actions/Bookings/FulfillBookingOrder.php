@@ -122,8 +122,9 @@ class FulfillBookingOrder
             }
 
             // 2. Prepare lease data (Monthly Rent + Security Deposit)
+            // Keep endDate null so active monthly leases continue billing month-to-month until move-out
             $startDate = $lockedOrder->start_date;
-            $endDate = $lockedOrder->end_date?->toDateString();
+            $endDate = null;
             $settledDateObj = $occurredAt ? (is_string($occurredAt) ? new \DateTimeImmutable($occurredAt) : $occurredAt) : now();
             $settledDateStr = $settledDateObj instanceof \DateTimeInterface ? $settledDateObj->format('Y-m-d H:i:s') : (string) $settledDateObj;
 
