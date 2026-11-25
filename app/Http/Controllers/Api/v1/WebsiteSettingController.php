@@ -153,5 +153,5 @@ class WebsiteSettingController extends Controller
         Cache::forget('website_public_settings_v1');
         Cache::forget('website_public_banners_v1');
     }
-}
+}   
 
